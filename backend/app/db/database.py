@@ -208,6 +208,15 @@ CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match ON match_predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_odds_match ON bookmaker_odds(match_id);
 CREATE INDEX IF NOT EXISTS idx_odds_value ON bookmaker_odds(is_value_bet) WHERE is_value_bet = TRUE;
+
+CREATE TABLE IF NOT EXISTS api_cache (
+    key        VARCHAR(255) PRIMARY KEY,
+    cache_type VARCHAR(50),
+    data       TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cache_expires ON api_cache(expires_at);
 """
 
 

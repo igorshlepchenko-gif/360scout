@@ -17,7 +17,7 @@ load_dotenv()
 from app.engine.prediction_model import (
     PredictionEngine, MatchContext, calculate_value, calculate_consensus
 )
-from app.cache import get as cache_get, set as cache_set, stats as cache_stats
+from app.cache import get as cache_get, set as cache_set, stats as cache_stats, clear_all as cache_clear_all
 from app.db.repository import save_match_prediction, get_track_record, update_match_result
 
 router = APIRouter(prefix="/api/live", tags=["live"])
@@ -67,7 +67,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     async with httpx.AsyncClient(timeout=30) as client:   # 30s for production
         # 1. חיים עכשיו — cache 2 דקות בלבד
         live_key = "fixtures:live:all"
-        live = cache_get(live_key, "live")
+        live = await cache_get(live_key, "live")
         if live is None:
             try:
                 r = await client.get(
@@ -76,7 +76,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                     params={"live": "all"}
                 )
                 live = r.json().get("response", [])
-                cache_set(live_key, live, "live")
+                await cache_set(live_key, live, "live")
             except Exception as e:
                 logger.warning(f"Live fetch failed: {e}")
                 live = []
@@ -90,7 +90,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
         # 2. מתוכננים היום — cache 60 דקות
         if len(all_fixtures) < 5:
             sched_key = f"fixtures:scheduled:{today}"
-            scheduled = cache_get(sched_key, "fixtures")
+            scheduled = await cache_get(sched_key, "fixtures")
             if scheduled is None:
                 try:
                     r = await client.get(
@@ -99,7 +99,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                         params={"date": today, "status": "NS"}
                     )
                     scheduled = r.json().get("response", [])
-                    cache_set(sched_key, scheduled, "fixtures")
+                    await cache_set(sched_key, scheduled, "fixtures")
                 except Exception as e:
                     logger.warning(f"Today scheduled failed: {e}")
                     scheduled = []
@@ -114,7 +114,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
         if len(all_fixtures) < 5:
             from_date   = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
             recent_key  = f"fixtures:recent:{from_date}:{today}"
-            finished = cache_get(recent_key, "fixtures")
+            finished = await cache_get(recent_key, "fixtures")
             if finished is None:
                 try:
                     r = await client.get(
@@ -123,7 +123,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                         params={"from": from_date, "to": today, "status": "FT"}
                     )
                     finished = r.json().get("response", [])
-                    cache_set(recent_key, finished, "fixtures")
+                    await cache_set(recent_key, finished, "fixtures")
                 except Exception as e:
                     logger.warning(f"Recent finished failed: {e}")
                     finished = []
@@ -181,7 +181,7 @@ async def fetch_weather_for_city(city: str) -> dict:
         return _default_weather()
 
     cache_key = f"weather:{city.lower().strip()}"
-    cached = cache_get(cache_key, "weather")
+    cached = await cache_get(cache_key, "weather")
     if cached is not None:
         return cached
 
@@ -205,7 +205,7 @@ async def fetch_weather_for_city(city: str) -> dict:
                 "weather_condition":   d.get("weather", [{}])[0].get("main", "Clear"),
                 "source":              "live",
             }
-            cache_set(cache_key, result, "weather")
+            await cache_set(cache_key, result, "weather")
             return result
         except Exception:
             return _default_weather()
@@ -225,7 +225,7 @@ def _default_weather() -> dict:
 async def fetch_all_odds() -> list:
     """משוך יחסים — עם cache של 15 דקות"""
     cache_key = "odds:soccer:eu:h2h"
-    cached = cache_get(cache_key, "odds")
+    cached = await cache_get(cache_key, "odds")
     if cached is not None:
         return cached
 
@@ -243,7 +243,7 @@ async def fetch_all_odds() -> list:
             if r.status_code != 200:
                 return []
             data = r.json()
-            cache_set(cache_key, data, "odds")
+            await cache_set(cache_key, data, "odds")
             return data
         except Exception:
             return []
@@ -334,12 +334,12 @@ def calculate_injury_impact(injuries: list, team_id: int) -> float:
 async def fetch_team_stats_cached(team_id: int, league_id: int, season: int) -> dict:
     """סטטיסטיקות קבוצה עם cache 6 שעות — חוסך קריאות API"""
     cache_key = f"team_stats:{team_id}:{league_id}:{season}"
-    cached = cache_get(cache_key, "stats")
+    cached = await cache_get(cache_key, "stats")
     if cached is not None:
         return cached
     result = await fetch_team_form(team_id, league_id, season)
     if result:
-        cache_set(cache_key, result, "stats")
+        await cache_set(cache_key, result, "stats")
     return result or {}
 
 
@@ -347,7 +347,7 @@ async def fetch_h2h_cached(home_id: int, away_id: int) -> list:
     """היסטוריית H2H עם cache 6 שעות — 10 משחקים אחרונים"""
     key_a, key_b = min(home_id, away_id), max(home_id, away_id)
     cache_key = f"h2h:{key_a}:{key_b}"
-    cached = cache_get(cache_key, "stats")
+    cached = await cache_get(cache_key, "stats")
     if cached is not None:
         return cached
     async with httpx.AsyncClient(timeout=15) as client:
@@ -358,7 +358,7 @@ async def fetch_h2h_cached(home_id: int, away_id: int) -> list:
                 params={"h2h": f"{home_id}-{away_id}", "last": 10}
             )
             data = r.json().get("response", [])
-            cache_set(cache_key, data, "stats")
+            await cache_set(cache_key, data, "stats")
             return data
         except Exception:
             return []
@@ -674,29 +674,27 @@ async def get_hot_signals():
 
 @router.get("/cache/stats")
 async def get_cache_stats():
-    """סטטיסטיקות ה-cache — כמה קריאות API נחסכו"""
-    from app.cache import stats as cache_stats, CACHE_MINUTES, TTL_MAP
-    s = cache_stats()
+    """סטטיסטיקות ה-cache"""
+    from app.cache import TTL_MAP, CACHE_MINUTES
+    s = await cache_stats()
     return {
         "status": "ok",
         "cache":  s,
         "ttl_settings": {
-            "live_matches_min":     TTL_MAP["live"] // 60,
-            "fixtures_min":         TTL_MAP["fixtures"] // 60,
-            "odds_min":             TTL_MAP["odds"] // 60,
-            "weather_min":          TTL_MAP["weather"] // 60,
-            "configured_ttl_min":   CACHE_MINUTES,
+            "live_matches_min": TTL_MAP["live"] // 60,
+            "fixtures_min":     TTL_MAP["fixtures"] // 60,
+            "odds_min":         TTL_MAP["odds"] // 60,
+            "weather_min":      TTL_MAP["weather"] // 60,
+            "configured_ttl_min": CACHE_MINUTES,
         },
-        "tip": "כל קריאה שנשמרת ב-cache חוסכת 1 מתוך 100 הקריאות היומיות שלך"
     }
 
 
 @router.delete("/cache/clear")
 async def clear_cache():
-    """מחק את כל ה-cache — שימושי לאחר עדכון API keys"""
-    from app.cache import clear_all
-    count = clear_all()
-    return {"status": "ok", "cleared_files": count, "message": f"נמחקו {count} קבצי cache"}
+    """מחק את כל ה-cache"""
+    count = await cache_clear_all()
+    return {"status": "ok", "cleared_files": count, "message": f"נמחקו {count} entries"}
 
 
 @router.get("/track-record")
@@ -708,11 +706,77 @@ async def get_track_record_api(limit: int = 50):
 
 @router.post("/results/{fixture_id}")
 async def submit_match_result(fixture_id: int, home_score: int, away_score: int):
-    """
-    עדכן תוצאה אמיתית למשחק שנגמר.
-    מחשב אוטומטית האם הניבוי היה נכון ומעדכן את ה-Track Record.
-    """
+    """עדכן תוצאה ידנית למשחק שנגמר"""
     ok = await update_match_result(fixture_id, home_score, away_score)
     if ok:
         return {"status": "success", "message": f"תוצאה נשמרה: {home_score}-{away_score}"}
-    return {"status": "error", "message": "משחק לא נמצא ב-DB — ייתכן שלא נוצר ניבוי מראש"}
+    return {"status": "error", "message": "משחק לא נמצא ב-DB"}
+
+
+@router.post("/results/auto-update")
+async def auto_update_results():
+    """
+    מושך תוצאות אמיתיות מ-API-Football עבור כל משחקים שנגמרו ב-DB
+    ומעדכן את ה-Track Record אוטומטית.
+    """
+    from app.db.database import get_db
+    pool = await get_db()
+    if pool is None:
+        return {"status": "error", "message": "DB not connected"}
+
+    # מצא משחקים ב-DB שסטטוסם scheduled ו-match_date כבר עבר
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT api_football_id FROM matches
+            WHERE status = 'scheduled'
+              AND match_date < NOW() - INTERVAL '2 hours'
+              AND api_football_id IS NOT NULL
+            LIMIT 20
+        """)
+
+    if not rows:
+        return {"status": "ok", "updated": 0, "message": "אין משחקים לעדכון"}
+
+    fixture_ids = [r["api_football_id"] for r in rows]
+    updated = 0
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        for fid in fixture_ids:
+            try:
+                r = await client.get(
+                    f"{API_FOOTBALL_BASE}/fixtures",
+                    headers={"x-apisports-key": API_FOOTBALL_KEY},
+                    params={"id": fid}
+                )
+                data = r.json().get("response", [])
+                if not data:
+                    continue
+
+                fix    = data[0].get("fixture", {})
+                goals  = data[0].get("goals", {})
+                status = fix.get("status", {}).get("short", "")
+
+                # רק משחקים שנגמרו
+                if status not in ("FT", "AET", "PEN"):
+                    continue
+
+                home_score = goals.get("home")
+                away_score = goals.get("away")
+
+                if home_score is None or away_score is None:
+                    continue
+
+                ok = await update_match_result(fid, int(home_score), int(away_score))
+                if ok:
+                    updated += 1
+
+            except Exception as e:
+                logger.error(f"Auto-update failed for fixture {fid}: {e}")
+                continue
+
+    return {
+        "status":  "success",
+        "checked": len(fixture_ids),
+        "updated": updated,
+        "message": f"עודכנו {updated} תוצאות",
+    }

@@ -6,13 +6,11 @@ async function getLiveMatches() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 28000);
-
     const res = await fetch(`${API_URL}/api/live/matches?limit=8`, {
-      next: { revalidate: 300 }, // cache 5 דקות — לא ייקרא ל-API בכל טעינה
+      next: { revalidate: 120 },
       signal: controller.signal,
     });
     clearTimeout(timeout);
-
     const data = await res.json();
     if (data.status === "success" && data.count > 0) {
       return { matches: data.matches, mode: data.display_mode ?? "live", isReal: true };
@@ -26,21 +24,29 @@ async function getLiveMatches() {
 
 async function getDemoData() {
   try {
-    const res = await fetch(`${API_URL}/api/matches/demo`, {
-      cache: "no-store",
-    });
+    const res = await fetch(`${API_URL}/api/matches/demo`, { cache: "no-store" });
     return await res.json();
-  } catch {
-    return null;
-  }
+  } catch { return null; }
+}
+
+async function getTrackStats() {
+  try {
+    const res = await fetch(`${API_URL}/api/live/track-record?limit=100`, {
+      next: { revalidate: 300 },
+    });
+    const data = await res.json();
+    return data.summary ?? null;
+  } catch { return null; }
 }
 
 export default async function Home() {
-  const [liveResult, demo] = await Promise.all([getLiveMatches(), getDemoData()]);
+  const [liveResult, demo, trackStats] = await Promise.all([
+    getLiveMatches(), getDemoData(), getTrackStats()
+  ]);
   const liveMatches = liveResult.matches;
   const displayMode = liveResult.mode;
   const isRealData  = liveResult.isReal;
-  const hasLive = liveMatches.length > 0;
+  const hasLive     = liveMatches.length > 0;
 
   const pageTitle =
     displayMode === "live"      ? "משחקים חיים עכשיו 🔴" :
@@ -51,16 +57,24 @@ export default async function Home() {
     m.value_bets && Object.values(m.value_bets as Record<string, any>).some((v: any) => v?.is_value_bet)
   ).length;
 
+  const lockCount = liveMatches.filter((m: any) =>
+    m.consensus?.type === "LOCK"
+  ).length;
+
   const modeLabel =
     displayMode === "live"      ? "בזמן אמת" :
     displayMode === "scheduled" ? "להיום" :
     hasLive                     ? "7 ימים אחרונים" : "Demo";
 
+  // סטטיסטיקות — מה-DB אם זמין, אחרת ברירות מחדל
+  const accuracy  = trackStats?.total > 0 ? `${trackStats.accuracy}%` : "—";
+  const accSub    = trackStats?.total > 0 ? `${trackStats.correct}/${trackStats.total} ניבויים` : "מצטבר נתונים";
+
   const stats = [
-    { label: "דיוק האלגוריתם",     value: "64.2%",                          sub: "+2.1% החודש",         color: "text-emerald-400" },
-    { label: "הימורי ערך שנמצאו",  value: valueBetCount > 0 ? `${valueBetCount} ⚡` : "0",  sub: "מהמשחקים הנוכחיים",  color: "text-amber-400" },
-    { label: "משחקים בניתוח",       value: liveMatches.length.toString(),    sub: modeLabel,              color: "text-blue-400" },
-    { label: "נעילות קונסנזוס",    value: "7",                              sub: "הסכמה מלאה השבוע",    color: "text-purple-400" },
+    { label: "דיוק האלגוריתם",    value: accuracy,                                          sub: accSub,                    color: "text-emerald-400" },
+    { label: "הימורי ערך שנמצאו", value: valueBetCount > 0 ? `${valueBetCount} ⚡` : "0",   sub: "מהמשחקים הנוכחיים",       color: "text-amber-400"  },
+    { label: "משחקים בניתוח",      value: liveMatches.length.toString(),                     sub: modeLabel,                 color: "text-blue-400"   },
+    { label: "נעילות קונסנזוס",   value: lockCount > 0 ? lockCount.toString() : "0",        sub: "הסכמה מלאה במשחקים הנוכחיים", color: "text-purple-400" },
   ];
 
   const navItems = [
@@ -181,10 +195,10 @@ export default async function Home() {
                   <span style={{ fontSize: 20 }}>⚠️</span>
                   <div>
                     <div style={{ color: "#f59e0b", fontWeight: 700, fontSize: 13 }}>
-                      מגבלת API יומית הושגה (100/100 קריאות)
+                      אין משחקים זמינים כרגע
                     </div>
                     <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
-                      המפתח מתאפס מחר בחצות · מוצג Demo · ה-World Cup 2026 מתחיל בחודש הבא
+                      הדף מתרענן אוטומטית · מוצג Demo · המונדיאל 2026 מתחיל 11/6
                     </div>
                   </div>
                 </div>
