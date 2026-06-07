@@ -34,11 +34,12 @@ app = FastAPI(
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://360scout.com",
-    os.getenv("FRONTEND_URL", ""),          # Vercel production URL
-    os.getenv("VERCEL_URL", ""),            # injected automatically by Vercel
+    "https://analyst365.net",
+    "https://www.analyst365.net",
+    "https://360scout.vercel.app",
+    os.getenv("FRONTEND_URL", ""),
+    os.getenv("VERCEL_URL", ""),
 ]
-# filter empty strings
 ALLOWED_ORIGINS = [o for o in ALLOWED_ORIGINS if o]
 
 app.add_middleware(
