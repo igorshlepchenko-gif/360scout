@@ -71,6 +71,31 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/debug")
+async def debug():
+    """בדיקת env vars ו-API connectivity"""
+    import httpx
+    key = os.getenv("API_FOOTBALL_KEY", "NOT_SET")
+    key_preview = key[:8] + "..." if len(key) > 8 else key
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                "https://v3.football.api-sports.io/status",
+                headers={"x-apisports-key": key}
+            )
+            api_data = r.json()
+    except Exception as e:
+        api_data = {"error": str(e)}
+
+    return {
+        "key_preview":  key_preview,
+        "key_set":      key != "NOT_SET",
+        "app_env":      os.getenv("APP_ENV", "not_set"),
+        "api_response": api_data,
+    }
+
+
 @app.get("/api/telegram/test")
 async def telegram_test():
     """בדוק חיבור Telegram"""
