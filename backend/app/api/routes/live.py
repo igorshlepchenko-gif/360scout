@@ -64,7 +64,7 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     today = datetime.now().strftime("%Y-%m-%d")
     all_fixtures = []
 
-    async with httpx.AsyncClient(timeout=8) as client:   # max 8 שניות לכל קריאה
+    async with httpx.AsyncClient(timeout=30) as client:   # 30s for production
         # 1. חיים עכשיו — cache 2 דקות בלבד
         live_key = "fixtures:live:all"
         live = cache_get(live_key, "live")
@@ -185,7 +185,7 @@ async def fetch_weather_for_city(city: str) -> dict:
     if cached is not None:
         return cached
 
-    async with httpx.AsyncClient(timeout=5) as client:   # max 5 שניות
+    async with httpx.AsyncClient(timeout=20) as client:
         try:
             r = await client.get(
                 f"{OPENWEATHER_BASE}/weather",
@@ -229,7 +229,7 @@ async def fetch_all_odds() -> list:
     if cached is not None:
         return cached
 
-    async with httpx.AsyncClient(timeout=5) as client:   # max 5 שניות — אחרי זה ממשיך ללא odds
+    async with httpx.AsyncClient(timeout=20) as client:
         try:
             r = await client.get(
                 f"{ODDS_API_BASE}/sports/soccer/odds",
