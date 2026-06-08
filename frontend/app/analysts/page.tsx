@@ -34,7 +34,7 @@ interface AnalystPrediction {
 
 const NAV = [
   { label: "סיגנלים חמים",      href: "/" },
-  { label: "כל המשחקים",        href: "/" },
+  { label: "כל המשחקים",        href: "/matches" },
   { label: "ביצועים היסטוריים", href: "/track-record" },
   { label: "אנליסטים",          href: "/analysts", active: true },
 ];
@@ -167,8 +167,8 @@ export default function AnalystsPage() {
         background: "rgba(11,14,20,0.95)", backdropFilter: "blur(12px)", zIndex: 50,
       }}>
         <a href="/" style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.5px", textDecoration: "none", direction: "ltr" }}>
-          <span style={{ color: "#10b981" }}>360</span>
-          <span style={{ color: "white" }}>SCOUT</span>
+          <span style={{ color: "#10b981" }}>ANALYST</span>
+          <span style={{ color: "white" }}>365</span>
         </a>
         <div style={{ display: "flex", gap: 28 }}>
           {NAV.map(item => (

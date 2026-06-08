@@ -77,7 +77,8 @@ async def job_fetch_live_matches():
             for i, city in enumerate(cities)
         }
 
-        saved = 0
+        saved       = 0
+        alerts_sent = 0
         for f in fixtures:
             try:
                 city    = f.get("fixture", {}).get("venue", {}).get("city") or "London"
@@ -86,10 +87,29 @@ async def job_fetch_live_matches():
                 if result:
                     await save_match_prediction(result)
                     saved += 1
+
+                    # שלח התראת Telegram אם יש Value Bet חזק
+                    vb = result.get("value_bets") or {}
+                    for outcome, vb_data in vb.items():
+                        if vb_data and vb_data.get("rating") in ("STRONG", "MODERATE"):
+                            try:
+                                from app.tasks.data_fetcher import send_value_bet_alert
+                                match_meta = {
+                                    "home_team":   result.get("home_team", ""),
+                                    "away_team":   result.get("away_team", ""),
+                                    "match_date":  result.get("match_date", ""),
+                                    "league":      result.get("league", ""),
+                                    "confidence":  result.get("prediction", {}).get("confidence", 0),
+                                    "monte_carlo": result.get("prediction", {}).get("monte_carlo", {}),
+                                }
+                                await send_value_bet_alert(match_meta, outcome, vb_data)
+                                alerts_sent += 1
+                            except Exception as te:
+                                logger.debug(f"[Scheduler] Telegram alert error: {te}")
             except Exception as e:
                 logger.debug(f"[Scheduler] Match save error: {e}")
 
-        logger.info(f"[Scheduler] Saved {saved}/{len(fixtures)} predictions")
+        logger.info(f"[Scheduler] Saved {saved}/{len(fixtures)} predictions | Telegram alerts: {alerts_sent}")
 
     except Exception as e:
         logger.error(f"[Scheduler] job_fetch_live_matches error: {e}", exc_info=True)

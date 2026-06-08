@@ -79,7 +79,7 @@ export default async function Home() {
 
   const navItems = [
     { label: "סיגנלים חמים",      href: "/",             active: true  },
-    { label: "כל המשחקים",        href: "/",             active: false },
+    { label: "כל המשחקים",        href: "/matches",      active: false },
     { label: "ביצועים היסטוריים", href: "/track-record", active: false },
     { label: "אנליסטים",          href: "/analysts",     active: false },
   ];
@@ -100,11 +100,11 @@ export default async function Home() {
         backdropFilter: "blur(12px)",
         zIndex: 50,
       }}>
-        {/* Logo — שמאל (ב-RTL זה ימין) */}
-        <div style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.5px", direction: "ltr" }}>
-          <span style={{ color: "#10b981" }}>360</span>
-          <span style={{ color: "white" }}>SCOUT</span>
-        </div>
+        {/* Logo */}
+        <a href="/" style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.5px", direction: "ltr", textDecoration: "none" }}>
+          <span style={{ color: "#10b981" }}>ANALYST</span>
+          <span style={{ color: "white" }}>365</span>
+        </a>
 
         {/* Nav links */}
         <div style={{ display: "flex", gap: 28 }}>
@@ -219,7 +219,7 @@ export default async function Home() {
 
         {/* Footer */}
         <div style={{ marginTop: 48, textAlign: "center", color: "#374151", fontSize: 12 }}>
-          360SCOUT — למטרות מחקר בלבד. אין לראות בתכנים המלצה פיננסית.
+          ANALYST365 — למטרות מחקר בלבד. אין לראות בתכנים המלצה פיננסית.
         </div>
       </main>
     </div>
