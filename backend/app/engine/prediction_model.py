@@ -93,7 +93,7 @@ class PredictionEngine:
 
         final = self._to_three_way(raw_home, raw_away)
         mc    = self._monte_carlo(final, n=10000)
-        conf  = self._confidence(stats, env, human, psych)
+        conf  = self._confidence(stats, env, human, psych, final)
 
         return {
             "match_id":   ctx.match_id,
@@ -249,13 +249,37 @@ class PredictionEngine:
         }
 
     # ------------------------------------------------------------------ #
-    #  Confidence — how much do modules agree?                            #
+    #  Confidence — שילוב בין בהירות הניצחון + הסכמת מודולים             #
     # ------------------------------------------------------------------ #
-    def _confidence(self, *modules) -> float:
+    def _confidence(self, *args) -> float:
+        """
+        ביטחון אמיתי = 70% בהירות ניצחון + 30% הסכמת מודולים
+
+        בהירות: הפרש בין ההסתברות הגבוהה לשנייה.
+          - פרש 1%  (42 vs 43) → ~30%
+          - פרש 20% (55 vs 35) → ~60%
+          - פרש 40% (65 vs 25) → ~80%
+
+        הסכמה: סטיית תקן נמוכה בין המודולים → הסכמה גבוהה.
+        """
+        # הפרד את final מהמודולים
+        *modules, final = args
+
+        # ─── Factor 1: בהירות הניצחון ───────────────────────────────────
+        probs = sorted([final["home"], final["draw"], final["away"]], reverse=True)
+        clarity = probs[0] - probs[1]          # פרש בין מקום 1 ל-2
+        clarity_score = min(clarity / 0.28, 1.0)  # 28% פרש = ניקוד מלא
+
+        # ─── Factor 2: הסכמת מודולים ────────────────────────────────────
         home_probs = [m["home"] for m in modules]
-        std = np.std(home_probs)
-        # Low std = high agreement = high confidence
-        return max(20.0, min(99.0, 100 - std * 300))
+        std = float(np.std(home_probs))
+        agreement_score = max(0.0, 1.0 - std * 5.0)
+
+        # ─── שילוב ──────────────────────────────────────────────────────
+        combined = 0.70 * clarity_score + 0.30 * agreement_score
+        confidence = combined * 65 + 15          # טווח: 15% – 80%
+
+        return round(max(15.0, min(80.0, confidence)), 1)
 
     # ------------------------------------------------------------------ #
     #  Key Factors — what's driving the prediction                        #
