@@ -91,7 +91,7 @@ class PredictionEngine:
             psych["away"]  * w["psychology"]
         )
 
-        final = self._to_three_way(raw_home, raw_away)
+        final = self._to_three_way(raw_home, raw_away, ctx)
         mc    = self._monte_carlo(final, n=10000)
         conf  = self._confidence(stats, env, human, psych, final, mc, ctx)
 
@@ -350,8 +350,50 @@ class PredictionEngine:
         d = 1.0 - h - a
         return {"home": round(h, 4), "draw": round(max(d, 0.05), 4), "away": round(a, 4)}
 
-    def _to_three_way(self, raw_home: float, raw_away: float) -> dict:
-        return self._normalize_two(raw_home, raw_away)
+    def _to_three_way(self, raw_home: float, raw_away: float,
+                      ctx: "MatchContext | None" = None) -> dict:
+        """
+        המרה לשלוש תוצאות עם הסתברות תיקו עצמאית.
+
+        תיקו מבוסס על:
+        - קרבת xG (ממוצע בפוטבול: ~26%)
+        - שלב הטורניר (נוקאאוט = פחות תיקואים)
+        - לחץ המשחק
+        """
+        # ─── חישוב הסתברות תיקו עצמאי ────────────────────────────────
+        xg_home = ctx.xg_home if ctx else 1.3
+        xg_away = ctx.xg_away if ctx else 1.1
+        xg_diff = abs(xg_home - xg_away)
+
+        # xG שווה = יותר תיקואים, פרש גדול = פחות (טווח: 14%–30%)
+        base_draw = max(0.14, 0.30 - xg_diff * 0.07)
+
+        # נוקאאוט / גמר — שחקנים לא מסתפקים בתיקו
+        if ctx and ctx.tournament_stage in ("knockout", "final"):
+            base_draw *= 0.60
+
+        # לחץ גבוה (חייבים לנצח) — פחות תיקואים
+        if ctx and ctx.pressure_index > 0.7:
+            base_draw *= 0.85
+
+        # ─── חלוקת השאר בין בית לאורחים ────────────────────────────────
+        remaining = 1.0 - base_draw
+        h = float(np.clip(raw_home, 0.01, 0.99))
+        a = float(np.clip(raw_away, 0.01, 0.99))
+        total_raw = h + a
+        if total_raw > 0:
+            home = remaining * h / total_raw
+            away = remaining * a / total_raw
+        else:
+            home = away = remaining / 2
+
+        # ─── נרמול סופי ──────────────────────────────────────────────────
+        total = home + base_draw + away
+        return {
+            "home": round(home  / total, 4),
+            "draw": round(base_draw / total, 4),
+            "away": round(away  / total, 4),
+        }
 
 
 # ============================================================
