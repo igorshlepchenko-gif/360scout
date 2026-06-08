@@ -214,71 +214,127 @@ export default function MatchCard({
       )}
 
       {/* ── HEADER ── */}
-      <div style={{ padding: "20px 24px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ padding: "16px 20px 14px" }}>
 
-          {/* Teams */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {/* Away */}
-            <div style={{ textAlign: "center" }}>
-              <TeamLogo logo={awayLogo} name={awayTeam} size={44} />
-              <div style={{ fontSize: 12, fontWeight: 800, color: awayWin ? "#ef4444" : "white", marginTop: 6, maxWidth: 90, lineHeight: 1.2 }}>
-                {awayTeam}
-              </div>
-              <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>אורחים</div>
-            </div>
-
-            {/* VS + date */}
-            <div style={{ textAlign: "center", minWidth: 60 }}>
-              <div style={{ fontSize: 10, color: "#475569", fontWeight: 700, letterSpacing: 1 }}>VS</div>
-              {matchDate && (
-                <div style={{ fontSize: 9, color: "#334155", marginTop: 4, lineHeight: 1.4 }}>
-                  {matchDate.split(" ")[0]}<br />{matchDate.split(" ")[1]}
-                </div>
+        {/* League + badge row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.badge}`}>
+            {cfg.label}
+          </span>
+          {league && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {leagueLogo && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={leagueLogo} alt={league} width={12} height={12}
+                  style={{ objectFit: "contain", opacity: 0.6 }} />
               )}
+              <span style={{ fontSize: 10, color: "#374151" }}>{league}</span>
             </div>
+          )}
+          {matchDate && (
+            <span style={{ fontSize: 10, color: "#334155", direction: "ltr" }}>
+              {matchDate.split(" ")[0]} {matchDate.split(" ")[1]}
+            </span>
+          )}
+        </div>
 
-            {/* Home */}
-            <div style={{ textAlign: "center" }}>
-              <TeamLogo logo={homeLogo} name={homeTeam} size={44} />
-              <div style={{ fontSize: 12, fontWeight: 800, color: homeWin ? "#10b981" : "white", marginTop: 6, maxWidth: 90, lineHeight: 1.2 }}>
+        {/* ── SCOREBOARD ROW: Home | Center | Away ── */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 14,
+        }}>
+
+          {/* HOME — שמאל */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <TeamLogo logo={homeLogo} name={homeTeam} size={48} />
+            <div>
+              <div style={{
+                fontSize: 13, fontWeight: 800, lineHeight: 1.2,
+                color: homeWin ? "#10b981" : "white",
+                maxWidth: 110,
+              }}>
                 {homeTeam}
               </div>
-              <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>בית</div>
+              <div style={{ fontSize: 9, color: "#475569", marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
+                בית
+              </div>
             </div>
           </div>
 
-          {/* Right side: badge + confidence ring */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
-            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.badge}`}>
-              {cfg.label}
-            </span>
-            <ConfidenceRing value={prediction.confidence} />
-            {league && (
-              <div style={{ fontSize: 9, color: "#334155", maxWidth: 90, lineHeight: 1.3, textAlign: "right" }}>
-                {leagueLogo && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={leagueLogo} alt={league} width={12} height={12}
-                    style={{ display: "inline", marginLeft: 3, verticalAlign: "middle" }} />
-                )}
-                {league}
+          {/* CENTER — אחוזים + ביטחון */}
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            {/* 3 probability pills */}
+            <div style={{ display: "flex", gap: 4 }}>
+              {([
+                { key: "home", val: displayProbs.home, color: "#10b981", bg: "rgba(16,185,129,0.12)" },
+                { key: "draw", val: displayProbs.draw, color: "#94a3b8", bg: "rgba(148,163,184,0.08)" },
+                { key: "away", val: displayProbs.away, color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+              ] as const).map(p => (
+                <div key={p.key} style={{
+                  background: p.bg,
+                  border: `1px solid ${p.color}30`,
+                  borderRadius: 8,
+                  padding: "5px 8px",
+                  textAlign: "center",
+                  minWidth: 44,
+                }}>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: p.color, lineHeight: 1 }}>
+                    {pct0(p.val)}
+                  </div>
+                  <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
+                    {p.key === "home" ? "בית" : p.key === "draw" ? "תיקו" : "אורחים"}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Confidence */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              background: "rgba(255,255,255,0.04)", borderRadius: 99,
+              padding: "3px 10px",
+            }}>
+              <div style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444",
+                boxShadow: `0 0 4px ${prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444"}`,
+              }} />
+              <span style={{
+                fontSize: 11, fontWeight: 700,
+                color: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444",
+              }}>
+                {prediction.confidence}%
+              </span>
+              <span style={{ fontSize: 9, color: "#475569" }}>ביטחון</span>
+            </div>
+          </div>
+
+          {/* AWAY — ימין */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+            <div style={{ textAlign: "left" }}>
+              <div style={{
+                fontSize: 13, fontWeight: 800, lineHeight: 1.2,
+                color: awayWin ? "#ef4444" : "white",
+                maxWidth: 110,
+              }}>
+                {awayTeam}
               </div>
-            )}
+              <div style={{ fontSize: 9, color: "#475569", marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
+                אורחים
+              </div>
+            </div>
+            <TeamLogo logo={awayLogo} name={awayTeam} size={48} />
           </div>
         </div>
 
         {/* ── PROB BAR ── */}
-        <div>
-          <div style={{ height: 8, borderRadius: 99, overflow: "hidden", display: "flex", gap: 2, background: "rgba(255,255,255,0.04)" }}>
-            <AnimatedBar value={displayProbs.home} color="bg-emerald-500" delay={0} />
-            <AnimatedBar value={displayProbs.draw} color="bg-slate-500"   delay={100} />
-            <AnimatedBar value={displayProbs.away} color="bg-rose-500"    delay={200} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11 }}>
-            <span style={{ color: "#10b981", fontWeight: 700 }}>בית {pct0(displayProbs.home)}</span>
-            <span style={{ color: "#64748b" }}>תיקו {pct0(displayProbs.draw)}</span>
-            <span style={{ color: "#ef4444", fontWeight: 700 }}>אורחים {pct0(displayProbs.away)}</span>
-          </div>
+        <div style={{ height: 6, borderRadius: 99, overflow: "hidden", display: "flex", gap: 1.5, background: "rgba(255,255,255,0.04)" }}>
+          <AnimatedBar value={displayProbs.home} color="bg-emerald-500" delay={0} />
+          <AnimatedBar value={displayProbs.draw} color="bg-slate-600"   delay={100} />
+          <AnimatedBar value={displayProbs.away} color="bg-rose-500"    delay={200} />
         </div>
       </div>
 
