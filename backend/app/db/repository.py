@@ -171,7 +171,9 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
 async def get_track_record(limit: int = 50) -> dict:
     """
     מחזיר סטטיסטיקות Track Record מה-DB.
-    כולל סיכום כללי + רשימת ניבויים אחרונים עם תוצאות.
+    כולל:
+    - ניבויים שנגמרו עם תוצאות (prediction_results)
+    - ניבויים pending שעדיין לא נגמרו (match_predictions בלבד)
     """
     pool = await get_db()
     if pool is None:
@@ -179,25 +181,26 @@ async def get_track_record(limit: int = 50) -> dict:
 
     try:
         async with pool.acquire() as conn:
-            # סטטיסטיקה כללית
+            # סטטיסטיקה כללית — רק מניבויים שנגמרו
             summary = await conn.fetchrow("""
                 SELECT
-                    COUNT(*)                                          AS total,
-                    COUNT(*) FILTER (WHERE pr.was_correct)           AS correct,
-                    COUNT(*) FILTER (WHERE bo.is_value_bet)          AS value_bets,
+                    COUNT(*)                                                    AS total,
+                    COUNT(*) FILTER (WHERE pr.was_correct)                     AS correct,
+                    COUNT(*) FILTER (WHERE bo.is_value_bet)                    AS value_bets,
                     COUNT(*) FILTER (WHERE bo.is_value_bet AND pr.was_correct) AS vb_correct
                 FROM prediction_results pr
                 JOIN matches m ON m.id = pr.match_id
                 LEFT JOIN bookmaker_odds bo ON bo.match_id = m.id
             """)
 
-            # ניבויים אחרונים
-            rows = await conn.fetch("""
+            # ניבויים שנגמרו עם תוצאות
+            resolved = await conn.fetch("""
                 SELECT
                     m.home_team_name,
                     m.away_team_name,
                     m.league_name,
                     m.match_date,
+                    m.api_football_id  AS fixture_id,
                     pr.predicted_outcome,
                     pr.actual_outcome,
                     pr.was_correct,
@@ -208,30 +211,64 @@ async def get_track_record(limit: int = 50) -> dict:
                     mp.final_prob_home,
                     mp.final_prob_draw,
                     mp.final_prob_away,
-                    mp.confidence_score
+                    mp.confidence_score,
+                    'finished'         AS status
                 FROM prediction_results pr
                 JOIN matches m ON m.id = pr.match_id
                 LEFT JOIN match_predictions mp ON mp.match_id = m.id
                 LEFT JOIN bookmaker_odds bo ON bo.match_id = m.id
                 ORDER BY pr.archived_at DESC
                 LIMIT $1
-            """, limit)
+            """, limit // 2)
+
+            # ניבויים pending — בנויים אבל עדיין לא נגמרו
+            pending = await conn.fetch("""
+                SELECT
+                    m.home_team_name,
+                    m.away_team_name,
+                    m.league_name,
+                    m.match_date,
+                    m.api_football_id  AS fixture_id,
+                    NULL::text         AS predicted_outcome,
+                    NULL::text         AS actual_outcome,
+                    NULL::boolean      AS was_correct,
+                    FALSE              AS value_bet_hit,
+                    bo.odds_home,
+                    bo.odds_draw,
+                    bo.odds_away,
+                    mp.final_prob_home,
+                    mp.final_prob_draw,
+                    mp.final_prob_away,
+                    mp.confidence_score,
+                    'pending'          AS status
+                FROM match_predictions mp
+                JOIN matches m ON m.id = mp.match_id
+                LEFT JOIN prediction_results pr ON pr.match_id = m.id
+                LEFT JOIN bookmaker_odds bo ON bo.match_id = m.id
+                WHERE pr.match_id IS NULL
+                ORDER BY mp.calculated_at DESC
+                LIMIT $1
+            """, limit // 2)
 
             total   = summary["total"]   or 0
             correct = summary["correct"] or 0
             vb      = summary["value_bets"] or 0
             vb_ok   = summary["vb_correct"] or 0
 
+            # מיין: ניבויים שנגמרו קודם, אחר כך pending
+            recent = [dict(r) for r in resolved] + [dict(r) for r in pending]
+
             return {
                 "summary": {
-                    "total":       total,
-                    "correct":     correct,
-                    "accuracy":    round(correct / total * 100, 1) if total else 0,
-                    "value_bets":  vb,
-                    "vb_correct":  vb_ok,
-                    "vb_accuracy": round(vb_ok / vb * 100, 1) if vb else 0,
+                    "total":        total,
+                    "correct":      correct,
+                    "accuracy":     round(correct / total * 100, 1) if total else 0,
+                    "value_bets":   vb,
+                    "vb_correct":   vb_ok,
+                    "vb_accuracy":  round(vb_ok / vb * 100, 1) if vb else 0,
+                    "pending":      len(pending),
                 },
-                "recent": [dict(r) for r in rows],
+                "recent": recent,
             }
 
     except Exception as e:
