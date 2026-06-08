@@ -93,7 +93,7 @@ class PredictionEngine:
 
         final = self._to_three_way(raw_home, raw_away)
         mc    = self._monte_carlo(final, n=10000)
-        conf  = self._confidence(stats, env, human, psych, final)
+        conf  = self._confidence(stats, env, human, psych, final, mc, ctx)
 
         return {
             "match_id":   ctx.match_id,
@@ -249,37 +249,59 @@ class PredictionEngine:
         }
 
     # ------------------------------------------------------------------ #
-    #  Confidence — שילוב בין בהירות הניצחון + הסכמת מודולים             #
+    #  Confidence — נוסחה מלאה: דומיננטיות + פרש + MC + נתונים + הסכמה  #
     # ------------------------------------------------------------------ #
     def _confidence(self, *args) -> float:
         """
-        ביטחון אמיתי = 70% בהירות ניצחון + 30% הסכמת מודולים
+        4 גורמים:
+        1. דומיננטיות  (40%) — כמה גבוהה ההסתברות הגבוהה ביחס ל-33%
+        2. פרש עליון   (30%) — פרש בין מקום 1 למקום 2
+        3. MC התכנסות  (20%) — Monte Carlo מסכים עם final
+        4. עושר נתונים (10%) — H2H / צורה / פציעות אמיתיים
 
-        בהירות: הפרש בין ההסתברות הגבוהה לשנייה.
-          - פרש 1%  (42 vs 43) → ~30%
-          - פרש 20% (55 vs 35) → ~60%
-          - פרש 40% (65 vs 25) → ~80%
-
-        הסכמה: סטיית תקן נמוכה בין המודולים → הסכמה גבוהה.
+        טווח תוצאה: 20%–90%
         """
-        # הפרד את final מהמודולים
-        *modules, final = args
+        *modules_plus, ctx = args
+        *modules, final, mc = modules_plus
 
-        # ─── Factor 1: בהירות הניצחון ───────────────────────────────────
-        probs = sorted([final["home"], final["draw"], final["away"]], reverse=True)
-        clarity = probs[0] - probs[1]          # פרש בין מקום 1 ל-2
-        clarity_score = min(clarity / 0.28, 1.0)  # 28% פרש = ניקוד מלא
+        # ─── 1. דומיננטיות ───────────────────────────────────────────────
+        max_p = max(final["home"], final["draw"], final["away"])
+        dominance = (max_p - 0.333) / 0.667        # 0 (כפות) → 1 (וודאי)
+        dominance_score = min(dominance * 1.5, 1.0)
 
-        # ─── Factor 2: הסכמת מודולים ────────────────────────────────────
-        home_probs = [m["home"] for m in modules]
-        std = float(np.std(home_probs))
-        agreement_score = max(0.0, 1.0 - std * 5.0)
+        # ─── 2. פרש עליון ────────────────────────────────────────────────
+        probs_sorted = sorted([final["home"], final["draw"], final["away"]], reverse=True)
+        gap = probs_sorted[0] - probs_sorted[1]
+        gap_score = min(gap / 0.22, 1.0)           # 22% פרש = ניקוד מלא
 
-        # ─── שילוב ──────────────────────────────────────────────────────
-        combined = 0.70 * clarity_score + 0.30 * agreement_score
-        confidence = combined * 65 + 15          # טווח: 15% – 80%
+        # ─── 3. Monte Carlo התכנסות ───────────────────────────────────────
+        # MC_winner תואם final_winner → ביטחון עולה
+        final_winner = max(final, key=final.get)
+        mc_winner    = max(mc,    key=lambda k: mc[k] if k != "simulations" else 0)
+        mc_agree     = 1.0 if final_winner == mc_winner else 0.3
+        mc_strength  = mc.get(final_winner, 0)      # עד כמה MC בטוח
+        mc_score     = mc_agree * min(mc_strength * 2.0, 1.0)
 
-        return round(max(15.0, min(80.0, confidence)), 1)
+        # ─── 4. עושר נתונים ──────────────────────────────────────────────
+        data_score = 0.0
+        if ctx is not None:
+            if ctx.h2h_advantage != 0.0:           data_score += 0.30  # H2H אמיתי
+            if ctx.form_home != 0.0:               data_score += 0.20  # צורה אמיתית
+            if ctx.home_injury_impact != 0.0 or ctx.away_injury_impact != 0.0:
+                                                   data_score += 0.25  # פציעות
+            if ctx.temperature != 20.0:            data_score += 0.15  # מזג אוויר חי
+            if ctx.referee_home_bias != 0.0:       data_score += 0.10  # שופט
+        data_score = min(data_score, 1.0)
+
+        # ─── שילוב ───────────────────────────────────────────────────────
+        combined = (
+            0.40 * dominance_score +
+            0.30 * gap_score       +
+            0.20 * mc_score        +
+            0.10 * data_score
+        )
+        confidence = combined * 70 + 20            # טווח: 20%–90%
+        return round(max(20.0, min(90.0, confidence)), 1)
 
     # ------------------------------------------------------------------ #
     #  Key Factors — what's driving the prediction                        #
