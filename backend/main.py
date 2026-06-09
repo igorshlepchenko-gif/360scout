@@ -69,34 +69,6 @@ async def root():
     }
 
 
-@app.get("/api/db-status")
-async def db_status():
-    """בדוק אילו טבלאות קיימות ב-DB"""
-    from app.db.database import get_db, get_last_error, dsn_scheme
-    pool = await get_db()
-    if pool is None:
-        return {
-            "connected": False,
-            "dsn_scheme": dsn_scheme(),
-            "last_error": get_last_error(),
-        }
-    try:
-        async with pool.acquire() as conn:
-            tables = await conn.fetch("""
-                SELECT tablename FROM pg_tables
-                WHERE schemaname = 'public'
-                ORDER BY tablename
-            """)
-            count = await conn.fetchval("SELECT COUNT(*) FROM match_predictions") if any(t["tablename"] == "match_predictions" for t in tables) else -1
-            return {
-                "connected": True,
-                "tables": [t["tablename"] for t in tables],
-                "predictions_count": count,
-            }
-    except Exception as e:
-        return {"connected": True, "error": str(e)}
-
-
 @app.get("/health")
 async def health():
     from app.scheduler import _scheduler

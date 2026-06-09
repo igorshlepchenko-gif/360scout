@@ -8,7 +8,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 import httpx
 from dotenv import load_dotenv
 
@@ -550,7 +550,7 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
 # ============================================================
 
 @router.get("/matches")
-async def get_live_matches(days: int = 1, limit: int = 20):
+async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, limit: int = 20):
     """
     משחקים אמיתיים עם חיזויים — לימים הקרובים.
     days=1 → היום + מחר
@@ -614,8 +614,8 @@ async def get_live_matches(days: int = 1, limit: int = 20):
         -(m.get("prediction", {}).get("confidence", 0))
     ))
 
-    # שמור ניבויים ל-DB ברקע (לא חוסם את התגובה)
-    asyncio.create_task(_save_predictions_bg(matches))
+    # שמור ניבויים ל-DB ברקע (BackgroundTasks — לא נקטע כשהתגובה חוזרת)
+    background_tasks.add_task(_save_predictions_bg, matches)
 
     return {
         "status":       "success",
@@ -633,26 +633,6 @@ async def _save_predictions_bg(matches: list) -> None:
             await save_match_prediction(m)
         except Exception as e:
             logger.debug(f"BG save failed for {m.get('home_team')}: {e}")
-
-
-@router.get("/debug-save")
-async def debug_save():
-    """בדיקה — מושך משחק אחד ושומר אותו סינכרונית, מחזיר את השגיאה האמיתית"""
-    import traceback
-    try:
-        fixtures = await fetch_todays_fixtures()
-        if not fixtures:
-            return {"ok": False, "reason": "no fixtures"}
-        all_odds = await fetch_all_odds()
-        f        = fixtures[0]
-        city     = f.get("fixture", {}).get("venue", {}).get("city") or "London"
-        weather  = await fetch_weather_for_city(city)
-        result   = build_match_analysis_sync(f, all_odds if isinstance(all_odds, list) else [], weather)
-        uuid     = await save_match_prediction(result)
-        from app.db.repository import get_last_save_error
-        return {"ok": uuid is not None, "uuid": uuid, "match": f"{result.get('home_team')} vs {result.get('away_team')}", "save_error": get_last_save_error()}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-800:]}
 
 
 @router.get("/matches/{fixture_id}")
