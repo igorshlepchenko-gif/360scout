@@ -72,10 +72,14 @@ async def root():
 @app.get("/api/db-status")
 async def db_status():
     """בדוק אילו טבלאות קיימות ב-DB"""
-    from app.db.database import get_db
+    from app.db.database import get_db, get_last_error, dsn_scheme
     pool = await get_db()
     if pool is None:
-        return {"connected": False, "error": "no pool"}
+        return {
+            "connected": False,
+            "dsn_scheme": dsn_scheme(),
+            "last_error": get_last_error(),
+        }
     try:
         async with pool.acquire() as conn:
             tables = await conn.fetch("""

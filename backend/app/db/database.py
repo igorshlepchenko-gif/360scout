@@ -14,13 +14,28 @@ logger = logging.getLogger(__name__)
 
 # ── Pool singleton ──────────────────────────────────────────────────────────
 _pool: asyncpg.Pool | None = None
+_last_error: str | None = None
+
+
+def get_last_error() -> str | None:
+    return _last_error
+
+
+def dsn_scheme() -> str:
+    """החזר רק את ה-scheme של ה-DSN (לדיבוג, ללא חשיפת סיסמה)"""
+    raw = os.getenv("DATABASE_URL", "")
+    return raw.split("://", 1)[0] if "://" in raw else "(empty)"
 
 
 def _build_dsn() -> str:
-    """המר DATABASE_URL מ-SQLAlchemy format ל-asyncpg format"""
+    """המר DATABASE_URL לפורמט asyncpg תקין"""
     url = os.getenv("DATABASE_URL", "")
-    # מסיר את "postgresql+asyncpg://" ומחזיר "postgresql://..."
-    return url.replace("postgresql+asyncpg://", "postgresql://")
+    # SQLAlchemy format → asyncpg
+    url = url.replace("postgresql+asyncpg://", "postgresql://")
+    # Railway / Heroku משתמשים ב-"postgres://" — asyncpg צריך "postgresql://"
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    return url
 
 
 MIGRATION_SQL = """
@@ -223,23 +238,30 @@ CREATE INDEX IF NOT EXISTS idx_cache_expires ON api_cache(expires_at);
 async def init_db() -> None:
     """אתחל את ה-connection pool וריצת migration — נקרא מ-startup של FastAPI"""
     global _pool
+    global _last_error
     if _pool is not None:
         return
     dsn = _build_dsn()
+    if not dsn:
+        _last_error = "DATABASE_URL is empty"
+        logger.error(_last_error)
+        return
     try:
         _pool = await asyncpg.create_pool(
             dsn=dsn,
-            min_size=2,
+            min_size=1,
             max_size=10,
             command_timeout=60,
         )
-        logger.info("DB pool initialized (min=2 max=10)")
+        logger.info("DB pool initialized")
         # Run migration on every startup — all statements use IF NOT EXISTS so it's safe
         async with _pool.acquire() as conn:
             await conn.execute(MIGRATION_SQL)
             logger.info("DB migration complete")
+        _last_error = None
     except Exception as e:
-        logger.error(f"DB init failed: {e}")
+        _last_error = f"{type(e).__name__}: {e}"
+        logger.error(f"DB init failed: {_last_error}")
         _pool = None
 
 
