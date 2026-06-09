@@ -649,7 +649,8 @@ async def debug_save():
         weather  = await fetch_weather_for_city(city)
         result   = build_match_analysis_sync(f, all_odds if isinstance(all_odds, list) else [], weather)
         uuid     = await save_match_prediction(result)
-        return {"ok": uuid is not None, "uuid": uuid, "match": f"{result.get('home_team')} vs {result.get('away_team')}"}
+        from app.db.repository import get_last_save_error
+        return {"ok": uuid is not None, "uuid": uuid, "match": f"{result.get('home_team')} vs {result.get('away_team')}", "save_error": get_last_save_error()}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-800:]}
 

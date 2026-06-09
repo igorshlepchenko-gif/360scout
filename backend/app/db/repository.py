@@ -160,8 +160,18 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
         return str(match_uuid)
 
     except Exception as e:
-        logger.error(f"save_match_prediction failed: {e}")
+        import traceback
+        global _last_save_error
+        _last_save_error = f"{type(e).__name__}: {e} | {traceback.format_exc()[-500:]}"
+        logger.error(f"save_match_prediction failed: {_last_save_error}")
         return None
+
+
+_last_save_error: Optional[str] = None
+
+
+def get_last_save_error() -> Optional[str]:
+    return _last_save_error
 
 
 # ────────────────────────────────────────────────────────────────────────────
