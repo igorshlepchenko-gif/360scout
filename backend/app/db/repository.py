@@ -90,7 +90,7 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                     key_factors,      calculated_at
                 ) VALUES (
                     $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-                    $11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+                    $11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20
                 )
                 ON CONFLICT (match_id) DO UPDATE
                     SET final_prob_home  = EXCLUDED.final_prob_home,
@@ -118,7 +118,7 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                 mc.get("draw"),
                 mc.get("simulations", 10000),
                 prediction.get("confidence"),
-                prediction.get("key_factors", []),
+                json.dumps(prediction.get("key_factors", [])),
                 datetime.utcnow(),
             )
 
