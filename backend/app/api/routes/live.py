@@ -635,6 +635,25 @@ async def _save_predictions_bg(matches: list) -> None:
             logger.debug(f"BG save failed for {m.get('home_team')}: {e}")
 
 
+@router.get("/debug-save")
+async def debug_save():
+    """בדיקה — מושך משחק אחד ושומר אותו סינכרונית, מחזיר את השגיאה האמיתית"""
+    import traceback
+    try:
+        fixtures = await fetch_todays_fixtures()
+        if not fixtures:
+            return {"ok": False, "reason": "no fixtures"}
+        all_odds = await fetch_all_odds()
+        f        = fixtures[0]
+        city     = f.get("fixture", {}).get("venue", {}).get("city") or "London"
+        weather  = await fetch_weather_for_city(city)
+        result   = build_match_analysis_sync(f, all_odds if isinstance(all_odds, list) else [], weather)
+        uuid     = await save_match_prediction(result)
+        return {"ok": uuid is not None, "uuid": uuid, "match": f"{result.get('home_team')} vs {result.get('away_team')}"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-800:]}
+
+
 @router.get("/matches/{fixture_id}")
 async def get_match_details(fixture_id: int):
     """ניתוח מפורט למשחק ספציפי לפי fixture ID"""
