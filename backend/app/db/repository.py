@@ -118,7 +118,7 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                 mc.get("draw"),
                 mc.get("simulations", 10000),
                 prediction.get("confidence"),
-                json.dumps(prediction.get("key_factors", [])),
+                prediction.get("key_factors", []),
                 datetime.utcnow(),
             )
 
