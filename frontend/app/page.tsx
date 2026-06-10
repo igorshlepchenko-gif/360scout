@@ -1,4 +1,5 @@
 import MatchCard from "@/components/MatchCard";
+import TelegramCTABanner from "@/components/TelegramCTABanner";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
@@ -217,8 +218,13 @@ export default async function Home() {
           )}
         </div>
 
+        {/* Telegram community CTA */}
+        <div style={{ marginTop: 48 }}>
+          <TelegramCTABanner />
+        </div>
+
         {/* Footer */}
-        <div style={{ marginTop: 48, textAlign: "center", color: "#374151", fontSize: 12 }}>
+        <div style={{ marginTop: 32, textAlign: "center", color: "#374151", fontSize: 12 }}>
           ANALYST365 — למטרות מחקר בלבד. אין לראות בתכנים המלצה פיננסית.
         </div>
       </main>

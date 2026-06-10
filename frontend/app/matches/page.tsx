@@ -1,8 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Info } from "lucide-react";
+import FilterSortBar, { MatchFilter, MatchSort } from "@/components/FilterSortBar";
+import AlgorithmBreakdownModal, { Prediction } from "@/components/AlgorithmBreakdownModal";
+import TelegramCTABanner from "@/components/TelegramCTABanner";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+// ליגות בכירות — API-Football IDs
+const MAJOR_LEAGUE_IDS = [1, 2, 3, 39, 140, 135, 78, 61];
+const MAJOR_LEAGUE_KEYWORDS = ["champions", "premier", "liga", "serie a", "bundesliga", "ligue 1", "world cup", "מונדיאל", "אלופות", "פרמייר"];
 
 interface Match {
   fixture_id: number;
@@ -11,12 +19,21 @@ interface Match {
   home_logo: string;
   away_logo: string;
   league: string;
+  league_id?: number;
   league_logo: string;
   match_date: string;
-  prediction: { final: { home: number; draw: number; away: number }; confidence: number; monte_carlo: { home: number; draw: number; away: number } };
+  prediction: Prediction;
   value_bets: Record<string, { is_value_bet: boolean; rating: string; edge_percent: number; bookmaker_odds: number }> | null;
   consensus: { type: string };
   weather: { temperature_celsius: number; weather_condition: string; source: string };
+}
+
+const HIGH_CONF_THRESHOLD = 65;
+
+function isMajorLeague(m: Match): boolean {
+  if (m.league_id && MAJOR_LEAGUE_IDS.includes(m.league_id)) return true;
+  const l = (m.league ?? "").toLowerCase();
+  return MAJOR_LEAGUE_KEYWORDS.some(k => l.includes(k));
 }
 
 const NAV = [
@@ -34,9 +51,10 @@ const CONSENSUS_HE: Record<string, string> = { LOCK: "נעילה 🔒", ALGORITH
 export default function MatchesPage() {
   const [matches, setMatches]     = useState<Match[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [filter, setFilter]       = useState<"all" | "value" | "lock">("all");
-  const [sortBy, setSortBy]       = useState<"confidence" | "date" | "edge">("confidence");
+  const [filter, setFilter]       = useState<MatchFilter>("all");
+  const [sortBy, setSortBy]       = useState<MatchSort>("confidence");
   const [limit, setLimit]         = useState(20);
+  const [modalMatch, setModalMatch] = useState<Match | null>(null);
 
   const fetchMatches = useCallback(async () => {
     setLoading(true);
@@ -52,8 +70,10 @@ export default function MatchesPage() {
 
   // filter
   const filtered = matches.filter(m => {
-    if (filter === "value") return m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet);
-    if (filter === "lock")  return m.consensus?.type === "LOCK";
+    if (filter === "value")     return m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet);
+    if (filter === "lock")      return m.consensus?.type === "LOCK";
+    if (filter === "high_conf") return (m.prediction?.confidence ?? 0) >= HIGH_CONF_THRESHOLD;
+    if (filter === "major")     return isMajorLeague(m);
     return true;
   });
 
@@ -71,6 +91,14 @@ export default function MatchesPage() {
 
   const valueBetCount = matches.filter(m => m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet)).length;
   const lockCount     = matches.filter(m => m.consensus?.type === "LOCK").length;
+
+  const counts = {
+    all:       matches.length,
+    value:     valueBetCount,
+    lock:      lockCount,
+    high_conf: matches.filter(m => (m.prediction?.confidence ?? 0) >= HIGH_CONF_THRESHOLD).length,
+    major:     matches.filter(isMajorLeague).length,
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
@@ -114,38 +142,17 @@ export default function MatchesPage() {
         </div>
 
         {/* Filters + Sort */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
-          {/* Filter */}
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              { key: "all",   label: `הכל (${matches.length})` },
-              { key: "value", label: `⚡ Value Bets (${valueBetCount})` },
-              { key: "lock",  label: `🔒 נעילות (${lockCount})` },
-            ].map(f => (
-              <button key={f.key} onClick={() => setFilter(f.key as typeof filter)} style={{
-                padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                border: filter === f.key ? "1px solid #10b981" : "1px solid rgba(255,255,255,0.1)",
-                background: filter === f.key ? "rgba(16,185,129,0.12)" : "transparent",
-                color: filter === f.key ? "#10b981" : "#64748b",
-              }}>{f.label}</button>
-            ))}
-          </div>
+        <FilterSortBar
+          filter={filter}
+          sort={sortBy}
+          counts={counts}
+          onFilter={setFilter}
+          onSort={setSortBy}
+        />
 
-          <div style={{ marginRight: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ color: "#475569", fontSize: 12 }}>מיין לפי:</span>
-            {[
-              { key: "confidence", label: "ביטחון" },
-              { key: "date",       label: "תאריך" },
-              { key: "edge",       label: "Edge %" },
-            ].map(s => (
-              <button key={s.key} onClick={() => setSortBy(s.key as typeof sortBy)} style={{
-                padding: "5px 12px", borderRadius: 99, fontSize: 12, cursor: "pointer",
-                border: sortBy === s.key ? "1px solid #6366f1" : "1px solid rgba(255,255,255,0.08)",
-                background: sortBy === s.key ? "rgba(99,102,241,0.12)" : "transparent",
-                color: sortBy === s.key ? "#818cf8" : "#64748b",
-              }}>{s.label}</button>
-            ))}
-          </div>
+        {/* Telegram CTA */}
+        <div style={{ marginBottom: 24 }}>
+          <TelegramCTABanner variant="compact" />
         </div>
 
         {/* Table */}
@@ -338,6 +345,13 @@ export default function MatchesPage() {
                           🌡️ {Math.round(m.weather.temperature_celsius)}°C
                         </span>
                       )}
+                      {/* Why? — opens algorithm breakdown */}
+                      <button
+                        onClick={() => setModalMatch(m)}
+                        className="mr-auto flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-semibold text-indigo-300 transition hover:bg-indigo-500/20"
+                      >
+                        <Info className="h-3 w-3" /> למה?
+                      </button>
                     </div>
                   </div>
                 );
@@ -358,6 +372,26 @@ export default function MatchesPage() {
           </>
         )}
       </main>
+
+      {/* Algorithm breakdown modal */}
+      <AlgorithmBreakdownModal
+        open={modalMatch !== null}
+        onClose={() => setModalMatch(null)}
+        homeTeam={modalMatch?.home_team ?? ""}
+        awayTeam={modalMatch?.away_team ?? ""}
+        prediction={modalMatch?.prediction ?? {
+          final: { home: 0, draw: 0, away: 0 },
+          by_module: {
+            stats: { home: 0, draw: 0, away: 0 },
+            environment: { home: 0, draw: 0, away: 0 },
+            human: { home: 0, draw: 0, away: 0 },
+            psychology: { home: 0, draw: 0, away: 0 },
+          },
+          monte_carlo: { home: 0, draw: 0, away: 0, simulations: 0 },
+          confidence: 0,
+          key_factors: [],
+        }}
+      />
     </div>
   );
 }
