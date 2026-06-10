@@ -1,6 +1,6 @@
 "use client";
 
-import { Flame, Lock, Zap, Trophy, LayoutGrid, ArrowDownWideNarrow, Calendar, Target } from "lucide-react";
+import { Lock, Zap, Trophy, LayoutGrid, SlidersHorizontal, Target } from "lucide-react";
 
 export type MatchFilter = "all" | "value" | "lock" | "high_conf" | "major";
 export type MatchSort   = "confidence" | "date" | "edge";
@@ -21,7 +21,7 @@ interface Props {
   onSort: (s: MatchSort) => void;
 }
 
-const FILTERS: { key: MatchFilter; label: string; Icon: typeof Flame; active: string }[] = [
+const FILTERS: { key: MatchFilter; label: string; Icon: typeof LayoutGrid; active: string }[] = [
   { key: "all",       label: "הכל",          Icon: LayoutGrid, active: "border-white/30 bg-white/10 text-white" },
   { key: "high_conf", label: "ביטחון גבוה",  Icon: Target,     active: "border-emerald-500/40 bg-emerald-500/15 text-emerald-400" },
   { key: "value",     label: "Value Bets",   Icon: Zap,        active: "border-amber-500/40 bg-amber-500/15 text-amber-400" },
@@ -29,10 +29,10 @@ const FILTERS: { key: MatchFilter; label: string; Icon: typeof Flame; active: st
   { key: "major",     label: "ליגות בכירות", Icon: Trophy,     active: "border-violet-500/40 bg-violet-500/15 text-violet-400" },
 ];
 
-const SORTS: { key: MatchSort; label: string; Icon: typeof Calendar }[] = [
-  { key: "confidence", label: "ביטחון", Icon: Target },
-  { key: "edge",       label: "Edge %", Icon: Zap },
-  { key: "date",       label: "תאריך",  Icon: Calendar },
+const SORTS: { key: MatchSort; label: string }[] = [
+  { key: "confidence", label: "אחוז ביטחון" },
+  { key: "edge",       label: "Edge % (יתרון)" },
+  { key: "date",       label: "זמן בעיטה" },
 ];
 
 export default function FilterSortBar({ filter, sort, counts, onFilter, onSort }: Props) {
@@ -60,26 +60,22 @@ export default function FilterSortBar({ filter, sort, counts, onFilter, onSort }
         })}
       </div>
 
-      {/* Sort */}
+      {/* Sort — compact dropdown */}
       <div className="mr-auto flex items-center gap-2">
-        <span className="flex items-center gap-1 text-[11px] text-slate-600">
-          <ArrowDownWideNarrow className="h-3.5 w-3.5" /> מיין:
+        <span className="flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-500">
+          <SlidersHorizontal className="h-3.5 w-3.5" /> מיין לפי:
         </span>
-        {SORTS.map(({ key, label, Icon }) => {
-          const isOn = sort === key;
-          return (
-            <button
-              key={key}
-              onClick={() => onSort(key)}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition ${
-                isOn ? "border-indigo-500/40 bg-indigo-500/15 text-indigo-300" : "border-white/8 text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <Icon className="h-3 w-3" />
+        <select
+          value={sort}
+          onChange={(e) => onSort(e.target.value as MatchSort)}
+          className="cursor-pointer rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-200 outline-none transition hover:border-white/20 focus:border-indigo-500/50"
+        >
+          {SORTS.map(({ key, label }) => (
+            <option key={key} value={key} className="bg-[#0F1318] text-slate-200">
               {label}
-            </button>
-          );
-        })}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );

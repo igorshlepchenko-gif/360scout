@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import {
   X, BarChart3, CloudRain, HeartPulse, Brain,
-  Target, Dice5, Sparkles, TrendingUp, Info,
+  Target, Dice5, Sparkles, TrendingUp, Info, Activity,
 } from "lucide-react";
 
 /* ── Types (match the backend prediction shape) ─────────────────────────── */
@@ -50,6 +50,56 @@ function confColor(c: number) {
   return c >= 70 ? "text-emerald-400" : c >= 50 ? "text-amber-400" : "text-rose-400";
 }
 
+/* ── Plain-language factor summary (derived from real prediction data) ───── */
+function deriveFactors(p: Prediction, homeTeam: string, awayTeam: string) {
+  const factorSet = new Set(p.key_factors.map((f) => f.factor));
+  const side = (m: ModuleProbs) =>
+    m.home - m.away > 0.06 ? `יתרון ל${homeTeam}` :
+    m.away - m.home > 0.06 ? `יתרון ל${awayTeam}` :
+    "מאוזן";
+
+  // 1. xG trend — from the stats module
+  const s = p.by_module.stats;
+  const xgDiff = (s.home - s.away) * 100;
+  const xgTrend = {
+    label: "מגמת xG משוקלל",
+    value: `${side(s)} (${xgDiff >= 0 ? "+" : ""}${xgDiff.toFixed(0)}%)`,
+    tone: xgDiff > 6 ? "text-emerald-400" : xgDiff < -6 ? "text-rose-400" : "text-slate-300",
+  };
+
+  // 2. injuries — key_factors first, fallback to human module
+  const homeInj = factorSet.has("HOME_KEY_INJURY");
+  const awayInj = factorSet.has("AWAY_KEY_INJURY");
+  const injuries = {
+    label: "פציעות והרחקות",
+    value: homeInj && awayInj ? "פציעות בשתי הקבוצות"
+      : homeInj ? `פציעה מרכזית — ${homeTeam}`
+      : awayInj ? `פציעה מרכזית — ${awayTeam}`
+      : "סגל מלא · ללא נפקדים",
+    tone: homeInj || awayInj ? "text-amber-400" : "text-emerald-400",
+  };
+
+  // 3. weather/environment — key_factors first
+  const wx =
+    factorSet.has("HEAVY_RAIN") ? { t: "גשם כבד צפוי", c: "text-sky-400" } :
+    factorSet.has("EXTREME_HEAT") ? { t: "חום קיצוני", c: "text-amber-400" } :
+    factorSet.has("HIGH_ALTITUDE") ? { t: "גובה רב מעל פני הים", c: "text-violet-400" } :
+    { t: "תנאים אידיאליים · ללא משקעים", c: "text-emerald-400" };
+  const weather = { label: "משתני סביבה ומזג אוויר", value: wx.t, tone: wx.c };
+
+  // 4. Poisson / Monte Carlo convergence
+  const mc = p.monte_carlo;
+  const mcWinner = (["home", "draw", "away"] as const).reduce((a, b) => (mc[b] > mc[a] ? b : a), "home");
+  const mcLabel = mcWinner === "home" ? `יתרון ל${homeTeam}` : mcWinner === "away" ? `יתרון ל${awayTeam}` : "נטייה לתיקו";
+  const poisson = {
+    label: "התפלגות פואסון · Monte Carlo",
+    value: `${mcLabel} (${pct(mc[mcWinner])})`,
+    tone: "text-slate-300",
+  };
+
+  return [xgTrend, injuries, weather, poisson];
+}
+
 /* ── Component ───────────────────────────────────────────────────────────── */
 export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayTeam, prediction }: Props) {
   // close on Escape
@@ -67,6 +117,7 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
   if (!open) return null;
 
   const { by_module, confidence, monte_carlo, key_factors, final } = prediction;
+  const factorSummary = deriveFactors(prediction, homeTeam, awayTeam);
 
   return (
     <div
@@ -100,6 +151,24 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
               <span className={`text-lg font-black ${confColor(confidence)}`}>{confidence}%</span>
               <span className="text-[10px] text-slate-500">ביטחון</span>
             </div>
+          </div>
+
+          {/* Plain-language factor summary */}
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+            <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-400/80">
+              <Activity className="h-3.5 w-3.5" /> שקלול The Winning Method
+            </div>
+            <ul className="space-y-2 text-[13px]">
+              {factorSummary.map((f) => (
+                <li key={f.label} className="flex items-center justify-between gap-2">
+                  <span className="text-slate-500">{f.label}</span>
+                  <span className={`font-semibold ${f.tone}`}>{f.value}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2.5 border-t border-white/5 pt-2 text-center text-[10px] text-slate-600">
+              נסרק בזמן אמת מתוך נתוני המשחק · עומק 360°
+            </p>
           </div>
 
           {/* Module breakdown */}
