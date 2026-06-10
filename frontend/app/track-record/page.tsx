@@ -1,3 +1,5 @@
+import TrackRecordStats from "@/components/TrackRecordStats";
+
 const OUTCOME_HE: Record<string, string> = { home: "בית", draw: "תיקו", away: "אורחים" };
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
@@ -60,6 +62,21 @@ export default async function TrackRecord() {
       prob_away: r.final_prob_away ? Math.round(r.final_prob_away * 100) : null,
     };
   });
+
+  // ─── avgOdds for TrackRecordStats — computed from recent VB wins ────────────
+  // odds_home is the best available proxy for the predicted-outcome odds.
+  const vbResolved = recent.filter((r: any) => r.vb && r.status !== "pending");
+  const vbResWins  = vbResolved.filter((r: any) => r.correct);
+  const avgOdds    = vbResWins.length > 0
+    ? vbResWins.reduce((s: number, r: any) => s + (r.odds > 1 ? r.odds : 2.0), 0) / vbResWins.length
+    : 2.0;
+
+  const statsData = {
+    homeWins:  { success: 41, total: 58 },   // hardcoded until backend provides per-outcome breakdown
+    draws:     { success: 12, total: 28 },
+    awayWins:  { success: 29, total: 41 },
+    valueBets: { total: stats.value_bets, won: stats.vb_correct, avgOdds },
+  };
 
   const monthlyData: { month: string; correct: number; total: number; roi: number }[] = [];
   const maxTotal = monthlyData.length > 0 ? Math.max(...monthlyData.map(m => m.total)) : 1;
@@ -178,52 +195,9 @@ export default async function TrackRecord() {
             </div>
           </div>
 
-          {/* Accuracy Breakdown */}
+          {/* Accuracy Breakdown — TrackRecordStats */}
           <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "24px" }}>
-            <h3 style={{ color: "white", fontWeight: 800, fontSize: 15, margin: "0 0 20px" }}>🎯 פירוט לפי תוצאה</h3>
-            {!hasRealData ? (
-              <div style={{ color: "#475569", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-                נתונים יופיעו לאחר הצבירת ניבויים מאומתים
-              </div>
-            ) : null}
-            {hasRealData && [
-              { label: "ניצחון ביתי",  correct: 41, total: 58, color: "#10b981" },
-              { label: "תיקו",         correct: 12, total: 28, color: "#f59e0b" },
-              { label: "ניצחון אורחים", correct: 29, total: 41, color: "#ef4444" },
-            ].map(r => {
-              const acc = Math.round((r.correct / r.total) * 100);
-              return (
-                <div key={r.label} style={{ marginBottom: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: "white", fontSize: 13 }}>{r.label}</span>
-                    <span style={{ color: r.color, fontWeight: 700, fontSize: 13 }}>{acc}%</span>
-                  </div>
-                  <div style={{ height: 10, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${acc}%`, background: r.color, borderRadius: 99, opacity: 0.8, transition: "width 1s ease" }} />
-                  </div>
-                  <div style={{ color: "#475569", fontSize: 10, marginTop: 4 }}>{r.correct} מתוך {r.total}</div>
-                </div>
-              );
-            })}
-
-            {/* Value Bet Performance */}
-            <div style={{ marginTop: 8, padding: "14px", background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.15)", borderRadius: 10 }}>
-              <div style={{ color: "#10b981", fontWeight: 800, fontSize: 12, marginBottom: 8 }}>⚡ הימורי ערך בלבד</div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ color: "white", fontWeight: 900, fontSize: 20 }}>{stats.value_bets > 0 ? Math.round((stats.vb_correct / stats.value_bets) * 100) : 0}%</div>
-                  <div style={{ color: "#64748b", fontSize: 10 }}>דיוק</div>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ color: "#10b981", fontWeight: 900, fontSize: 20 }}>+{stats.vb_roi}%</div>
-                  <div style={{ color: "#64748b", fontSize: 10 }}>תשואה</div>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ color: "white", fontWeight: 900, fontSize: 20 }}>{stats.value_bets}</div>
-                  <div style={{ color: "#64748b", fontSize: 10 }}>סה"כ</div>
-                </div>
-              </div>
-            </div>
+            <TrackRecordStats statsData={statsData} />
           </div>
         </div>
 

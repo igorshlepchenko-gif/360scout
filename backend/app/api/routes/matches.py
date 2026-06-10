@@ -5,7 +5,9 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import sys, os
+import sys, os, logging
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 from app.engine.prediction_model import (
@@ -56,6 +58,16 @@ class AnalystPrediction(BaseModel):
     confidence: int
     win_rate: float = 0.55
     analyst_name: str = "Anonymous"
+
+
+class CrossCheckRequest(BaseModel):
+    match_id: str
+    home_team: str
+    away_team: str
+    base_confidence: float  # 0–100
+    prediction: str         # "home" | "draw" | "away"
+    fixture_id: Optional[int] = None   # אם סופק — ניגש ל-API-Football
+    text_summary: Optional[str] = None # fallback לניתוח טקסט
 
 
 # ============================================================
@@ -146,6 +158,81 @@ async def get_consensus(
     analyst_list = [a.model_dump() for a in analysts]
 
     return calculate_consensus(algo_probs, analyst_list)
+
+
+@router.post("/cross-check")
+async def cross_check_prediction(req: CrossCheckRequest):
+    """
+    Cross-reference the algorithm's prediction against real-time signals.
+    Priority: API-Football injuries → text/simulated fallback.
+    """
+    alignment_score = 0.0
+    insights: list[str] = []
+    data_source = "simulated"
+
+    # ── Path 1: real injury data from API-Football ──
+    if req.fixture_id:
+        try:
+            from app.tasks.data_fetcher import fetch_injuries
+            injuries = await fetch_injuries(req.fixture_id)
+            if injuries:
+                data_source = "api-football"
+                for side_he, team_name, sign in [
+                    ("בית",     req.home_team, -3),
+                    ("אורחים",  req.away_team, +2),
+                ]:
+                    side_list = [
+                        i for i in injuries
+                        if team_name.lower()[:5] in i.get("team", {}).get("name", "").lower()
+                    ]
+                    if side_list:
+                        names = [i.get("player", {}).get("name", "שחקן") for i in side_list[:2]]
+                        alignment_score += sign * min(len(side_list), 3)
+                        insights.append(
+                            f"פציעות {side_he}: {', '.join(names)} "
+                            f"({len(side_list)} שחקנים מחוץ לסגל · מקור: API-Football)."
+                        )
+        except Exception as exc:
+            logger.warning("Injury fetch failed for fixture %s: %s", req.fixture_id, exc)
+
+    # ── Path 2: text / simulated fallback ──
+    if not insights:
+        text = (req.text_summary or _simulated_feed(req.home_team)).lower()
+        data_source = "text-analysis" if req.text_summary else "simulated"
+
+        if any(kw in text for kw in ("injury", "bench", "rotation")):
+            alignment_score -= 8
+            insights.append("חדשות חמות: דיווחים על רוטציה בסגל או פציעה של שחקן מפתח ברגע האחרון.")
+        if any(kw in text for kw in ("must win", "tactical advantage")):
+            alignment_score += 7
+            insights.append("אנליסטים מסמנים: יתרון טקטי מובהק למאמן ומוטיבציית שיא במשחק הנוכחי.")
+        if any(kw in text for kw in ("heavy rain", "storm")):
+            alignment_score -= 5
+            insights.append("התרעת מזג אוויר: גשם כבד במגרש עשוי לשבש את סגנון המשחק הרגיל ולהגדיל את אלמנט המזל.")
+
+    final_confidence = min(100.0, max(0.0, req.base_confidence + alignment_score))
+
+    if not insights:
+        insights.append("הצלבה מלאה: נתוני השטח והרכבי הקבוצות תואמים לחלוטין את מודל הדאטה.")
+
+    return {
+        "match_id":              req.match_id,
+        "prediction":            req.prediction,
+        "original_confidence":   req.base_confidence,
+        "adjusted_confidence":   round(final_confidence, 1),
+        "alignment_score":       alignment_score,
+        "expert_summary_hebrew": " ".join(insights),
+        "consensus_reached":     abs(alignment_score) <= 5,
+        "data_source":           data_source,
+    }
+
+
+def _simulated_feed(home_team: str) -> str:
+    """Placeholder — replace with real RapidAPI / RSS fetch."""
+    return (
+        f"Experts highlight a tactical advantage for {home_team}. "
+        "However, late reports indicate heavy rain conditions and potential squad rotation."
+    )
 
 
 @router.get("/demo")

@@ -29,6 +29,15 @@ interface Consensus {
   algo_edge: number;
 }
 
+interface CrossCheckResult {
+  original_confidence:   number;
+  adjusted_confidence:   number;
+  alignment_score:       number;
+  expert_summary_hebrew: string;
+  consensus_reached:     boolean;
+  data_source:           string;
+}
+
 interface MatchCardProps {
   homeTeam:    string;
   awayTeam:    string;
@@ -41,6 +50,8 @@ interface MatchCardProps {
   prediction:  Prediction;
   value_bets?: ValueBets;
   consensus?:  Consensus;
+  fixtureId?:  number;
+  matchId?:    string;
 }
 
 const pct  = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -183,13 +194,41 @@ function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
   );
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 export default function MatchCard({
   homeTeam, awayTeam, homeLogo, awayLogo, league, leagueLogo,
   matchDate, isLive = false,
   prediction, value_bets, consensus,
+  fixtureId, matchId,
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const [crossCheck, setCrossCheck]         = useState<CrossCheckResult | null>(null);
+  const [crossCheckLoading, setCrossCheckLoading] = useState(false);
+
+  const topOutcome = (Object.entries(prediction.final) as [string, number][])
+    .sort((a, b) => b[1] - a[1])[0][0];
+
+  async function runCrossCheck() {
+    setCrossCheckLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/matches/cross-check`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_id:        matchId ?? `${homeTeam}-${awayTeam}`,
+          home_team:       homeTeam,
+          away_team:       awayTeam,
+          base_confidence: prediction.confidence,
+          prediction:      topOutcome,
+          fixture_id:      fixtureId ?? null,
+        }),
+      });
+      setCrossCheck(await res.json());
+    } catch { /* silent */ }
+    finally { setCrossCheckLoading(false); }
+  }
 
   const displayProbs = consensus?.master ?? prediction.final;
   const anyValueBet  = Object.values(value_bets ?? {}).some(v => v?.is_value_bet);
@@ -453,6 +492,107 @@ export default function MatchCard({
                 <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>MC בית</div>
               </div>
             </div>
+
+            {/* ── CROSS-CHECK ── */}
+            {!crossCheck ? (
+              <button
+                onClick={runCrossCheck}
+                disabled={crossCheckLoading}
+                style={{
+                  marginTop: 14,
+                  width: "100%",
+                  padding: "9px 0",
+                  background: crossCheckLoading ? "rgba(99,102,241,0.05)" : "rgba(99,102,241,0.08)",
+                  border: "1px solid rgba(99,102,241,0.25)",
+                  borderRadius: 10,
+                  color: crossCheckLoading ? "#6366f1aa" : "#818cf8",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: crossCheckLoading ? "wait" : "pointer",
+                  transition: "all 0.2s",
+                  letterSpacing: 0.3,
+                }}
+              >
+                {crossCheckLoading ? "⏳ מצלב נתוני שטח..." : "🔬 הצלב עם נתוני שטח"}
+              </button>
+            ) : (
+              <div style={{
+                marginTop: 14,
+                background: crossCheck.consensus_reached
+                  ? "rgba(16,185,129,0.06)"
+                  : "rgba(239,68,68,0.06)",
+                border: `1px solid ${crossCheck.consensus_reached ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.18)"}`,
+                borderRadius: 12,
+                padding: "12px 14px",
+              }}>
+                {/* Header row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>🔬 הצלבה עם נתוני שטח</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700,
+                    color: crossCheck.consensus_reached ? "#10b981" : "#f59e0b",
+                  }}>
+                    {crossCheck.consensus_reached ? "✓ קונסנזוס" : "⚠ פיצול"}
+                  </span>
+                </div>
+
+                {/* Confidence comparison */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: "#64748b" }}>{crossCheck.original_confidence}%</div>
+                    <div style={{ fontSize: 9, color: "#475569" }}>מקורי</div>
+                  </div>
+                  <div style={{ fontSize: 18, color: crossCheck.alignment_score >= 0 ? "#10b981" : "#ef4444" }}>
+                    {crossCheck.alignment_score >= 0 ? "↗" : "↘"}
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{
+                      fontSize: 20, fontWeight: 900,
+                      color: crossCheck.adjusted_confidence > 75 ? "#10b981"
+                           : crossCheck.adjusted_confidence > 55 ? "#f59e0b"
+                           : "#ef4444",
+                    }}>{crossCheck.adjusted_confidence}%</div>
+                    <div style={{ fontSize: 9, color: "#475569" }}>מעודכן</div>
+                  </div>
+                  <div style={{
+                    marginRight: "auto",
+                    fontSize: 11, fontWeight: 700,
+                    color: crossCheck.alignment_score >= 0 ? "#10b981" : "#ef4444",
+                    background: crossCheck.alignment_score >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+                    border: `1px solid ${crossCheck.alignment_score >= 0 ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+                    borderRadius: 99,
+                    padding: "2px 9px",
+                  }}>
+                    {crossCheck.alignment_score >= 0 ? "+" : ""}{crossCheck.alignment_score}%
+                  </div>
+                </div>
+
+                {/* Insights */}
+                <div style={{
+                  fontSize: 11, color: "#94a3b8", lineHeight: 1.6,
+                  borderTop: "1px solid rgba(255,255,255,0.05)",
+                  paddingTop: 8,
+                }}>
+                  {crossCheck.expert_summary_hebrew}
+                </div>
+
+                {/* Source + reset */}
+                <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 9, color: "#334155" }}>
+                    מקור:{" "}
+                    {crossCheck.data_source === "api-football" ? "⚡ API-Football"
+                   : crossCheck.data_source === "text-analysis" ? "📝 ניתוח טקסט"
+                   : "🔮 סימולציה"}
+                  </span>
+                  <button
+                    onClick={() => setCrossCheck(null)}
+                    style={{ fontSize: 9, color: "#334155", background: "none", border: "none", cursor: "pointer" }}
+                  >
+                    × נקה
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

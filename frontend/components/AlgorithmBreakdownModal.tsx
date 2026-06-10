@@ -202,6 +202,9 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
             <div className="mb-2.5 flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-sky-400/90">
                 <ScanSearch className="h-3.5 w-3.5" /> הצלבת מומחים
+                <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-px text-[9px] font-semibold text-slate-400" title="כיסוי המומחים מודמה — אינו נשמר ואינו משפיע על ה-Track Record">
+                  הדמיה
+                </span>
               </span>
               {cross && (
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${VERDICT_CFG[cross.verdict].cls}`}>

@@ -180,6 +180,8 @@ export default async function Home() {
                 prediction={m.prediction}
                 value_bets={m.value_bets}
                 consensus={m.consensus}
+                fixtureId={m.fixture_id}
+                matchId={String(m.fixture_id)}
               />
             ))
           ) : (
@@ -212,6 +214,7 @@ export default async function Home() {
                   prediction={demo.prediction}
                   value_bets={demo.value_bets}
                   consensus={demo.consensus}
+                  matchId="WC2026-demo"
                 />
               )}
             </>
