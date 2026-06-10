@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   X, BarChart3, CloudRain, HeartPulse, Brain,
   Target, Dice5, Sparkles, TrendingUp, Info, Activity,
+  ScanSearch, Newspaper, ArrowLeft, AlertTriangle,
 } from "lucide-react";
+import type { CrossCheckResult, Outcome } from "@/lib/expertCrossCheck";
 
 /* ── Types (match the backend prediction shape) ─────────────────────────── */
 interface ModuleProbs { home: number; draw: number; away: number }
@@ -48,6 +50,21 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 function confColor(c: number) {
   return c >= 70 ? "text-emerald-400" : c >= 50 ? "text-amber-400" : "text-rose-400";
+}
+
+const VERDICT_CFG: Record<CrossCheckResult["verdict"], { label: string; cls: string }> = {
+  STRONG_AGREE:    { label: "קונצנזוס חזק",  cls: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  AGREE:           { label: "הסכמה",          cls: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  NEUTRAL:         { label: "דעות חלוקות",    cls: "text-slate-400 border-slate-500/30 bg-slate-500/10" },
+  DISAGREE:        { label: "אי-הסכמה",       cls: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
+  STRONG_DISAGREE: { label: "התנגדות חזקה",   cls: "text-rose-400 border-rose-500/30 bg-rose-500/10" },
+};
+
+function leanLabel(lean: Outcome | "neutral", home: string, away: string) {
+  if (lean === "home") return home;
+  if (lean === "away") return away;
+  if (lean === "draw") return "תיקו";
+  return "ניטרלי";
 }
 
 /* ── Plain-language factor summary (derived from real prediction data) ───── */
@@ -102,7 +119,13 @@ function deriveFactors(p: Prediction, homeTeam: string, awayTeam: string) {
 
 /* ── Component ───────────────────────────────────────────────────────────── */
 export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayTeam, prediction }: Props) {
-  // close on Escape
+  const { by_module, confidence, monte_carlo, key_factors, final } = prediction;
+
+  // ── Expert cross-check (fetched when the modal opens) ──────────────────────
+  const [cross, setCross] = useState<CrossCheckResult | null>(null);
+  const [crossLoading, setCrossLoading] = useState(false);
+
+  // close on Escape + lock scroll
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -114,9 +137,30 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
     };
   }, [open, onClose]);
 
+  // fetch cross-check whenever the modal opens for a match
+  useEffect(() => {
+    if (!open || !homeTeam || !awayTeam) return;
+    let cancelled = false;
+    setCross(null);
+    setCrossLoading(true);
+    fetch("/api/cross-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        homeTeam, awayTeam,
+        algorithmConfidence: confidence,
+        probabilities: final,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && d.status === "success") setCross(d as CrossCheckResult); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCrossLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, homeTeam, awayTeam, confidence, final]);
+
   if (!open) return null;
 
-  const { by_module, confidence, monte_carlo, key_factors, final } = prediction;
   const factorSummary = deriveFactors(prediction, homeTeam, awayTeam);
 
   return (
@@ -151,6 +195,80 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
               <span className={`text-lg font-black ${confColor(confidence)}`}>{confidence}%</span>
               <span className="text-[10px] text-slate-500">ביטחון</span>
             </div>
+          </div>
+
+          {/* Expert cross-check */}
+          <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.04] p-3">
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-sky-400/90">
+                <ScanSearch className="h-3.5 w-3.5" /> הצלבת מומחים
+              </span>
+              {cross && (
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${VERDICT_CFG[cross.verdict].cls}`}>
+                  {VERDICT_CFG[cross.verdict].label}
+                </span>
+              )}
+            </div>
+
+            {crossLoading && (
+              <div className="py-2 text-center text-[12px] text-slate-500">בודק מקורות מומחים…</div>
+            )}
+
+            {cross && !crossLoading && (
+              <>
+                {/* adjusted confidence */}
+                <div className="mb-3 flex items-center justify-center gap-3 rounded-lg bg-white/[0.03] py-2">
+                  <div className="text-center">
+                    <div className="text-base font-black text-slate-400">{cross.algorithmConfidence}%</div>
+                    <div className="text-[9px] text-slate-600">אלגוריתם</div>
+                  </div>
+                  <ArrowLeft className="h-4 w-4 text-slate-600" />
+                  <div className="text-center">
+                    <div className={`text-lg font-black ${confColor(cross.adjustedConfidence)}`}>{cross.adjustedConfidence}%</div>
+                    <div className="text-[9px] text-slate-600">לאחר מומחים</div>
+                  </div>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${
+                    cross.expertAlignmentScore > 0 ? "bg-emerald-500/15 text-emerald-400"
+                    : cross.expertAlignmentScore < 0 ? "bg-rose-500/15 text-rose-400"
+                    : "bg-slate-500/15 text-slate-400"}`}>
+                    {cross.expertAlignmentScore > 0 ? "+" : ""}{cross.expertAlignmentScore}%
+                  </span>
+                </div>
+
+                {/* source leans */}
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {cross.sources.map((s) => {
+                    const agree = s.lean === cross.algorithmPick;
+                    const neutralish = s.lean === "neutral" || s.lean === "draw";
+                    return (
+                      <span key={s.source} className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] ${
+                        agree ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : neutralish ? "border-slate-500/30 bg-slate-500/10 text-slate-400"
+                        : "border-rose-500/30 bg-rose-500/10 text-rose-400"}`}>
+                        <Newspaper className="h-3 w-3" />
+                        {s.source} · {leanLabel(s.lean, homeTeam, awayTeam)}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* risk factors */}
+                {cross.riskFactors.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {cross.riskFactors.map((r) => (
+                      <span key={r.factor} className="flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">
+                        <AlertTriangle className="h-3 w-3" /> {r.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Hebrew insight */}
+                <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-[12px] leading-relaxed text-slate-300">
+                  {cross.insightSummary}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Plain-language factor summary */}
