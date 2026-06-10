@@ -15,7 +15,7 @@ const PERKS = [
   { Icon: TrendingUp, text: "ניתוחים יומיים + Track Record" },
 ];
 
-export default function TelegramCTABanner({ href = "https://t.me/analyst365", variant = "full" }: Props) {
+export default function TelegramCTABanner({ href = "https://t.me/Malmilyan", variant = "full" }: Props) {
   if (variant === "compact") {
     return (
       <a
