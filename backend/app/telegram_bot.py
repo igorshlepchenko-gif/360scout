@@ -58,13 +58,19 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
     emoji   = {"home": "🏠", "away": "✈️", "draw": "🤝"}.get(outcome, "⚽")
     he_name = {"home": "בית", "away": "אורחים", "draw": "תיקו"}.get(outcome, outcome)
 
+    home_team    = match.get('home_team', '?')
+    away_team    = match.get('away_team', '?')
+    # שם הקבוצה המומלצת — ברור ואינו תלוי בכיווניות BiDi של טלגרם
+    outcome_team = home_team if outcome == "home" else (away_team if outcome == "away" else "תיקו")
+
     text = f"""
 🔥 *התראת VALUE BET* {stars}
 
-⚽ *{match.get('home_team','?')} נגד {match.get('away_team','?')}*
+🏠 *בית:* {home_team}
+✈️ *אורחים:* {away_team}
 🏆 {match.get('league','')} | 📅 {match.get('match_date','')}
 
-{emoji} *תוצאה: {he_name.upper()}*
+{emoji} *תוצאה: {outcome_team} ({he_name})*
 ━━━━━━━━━━━━━━━━━━━━
 📊 המודל שלנו:     `{vb.get('our_prob',0):.1%}`
 📉 שוק:            `{vb.get('implied_prob',0):.1%}`
@@ -72,7 +78,7 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
 📈 יתרון:          *+{vb.get('edge_percent',0):.1f}%*
 ⭐ דירוג:          *{vb.get('rating','?')}*
 ━━━━━━━━━━━━━━━━━━━━
-🎯 רמת ביטחון: {match.get('prediction',{}).get('confidence','?')}%
+🎯 רמת ביטחון: {match.get('confidence','?')}%
 
 _360SCOUT · ניתוח 360 מעלות_
 """

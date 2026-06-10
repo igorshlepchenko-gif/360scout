@@ -317,14 +317,20 @@ async def send_value_bet_alert(match: dict, outcome: str, value_result: dict) ->
     stars  = "⭐" * (3 if value_result["rating"] == "STRONG" else 2 if value_result["rating"] == "MODERATE" else 1)
     emoji  = {"home": "🏠", "away": "✈️", "draw": "🤝"}.get(outcome, "⚽")
 
+    home_team    = match['home_team']
+    away_team    = match['away_team']
+    # Show the recommended team name explicitly — avoids any BiDi rendering ambiguity
+    outcome_team = home_team if outcome == "home" else (away_team if outcome == "away" else "Draw")
+
     message = f"""
 🔥 *VALUE BET DETECTED* {stars}
 
-⚽ *{match['home_team']} vs {match['away_team']}*
+🏠 Home: {home_team}
+✈️ Away: {away_team}
 📅 {match.get('match_date', 'TBD')}
 🏆 {match.get('league', '')}
 
-{emoji} *Outcome: {outcome.upper()}*
+{emoji} *Outcome: {outcome_team}*
 ━━━━━━━━━━━━━━━━━━━━
 📊 Our Model:       `{value_result['our_prob']:.1%}`
 📉 Market Implied:  `{value_result['implied_prob']:.1%}`
@@ -333,7 +339,6 @@ async def send_value_bet_alert(match: dict, outcome: str, value_result: dict) ->
 ⭐ Rating:          *{value_result['rating']}*
 ━━━━━━━━━━━━━━━━━━━━
 🎯 Confidence: {match.get('confidence', 'N/A')}%
-🎲 Monte Carlo: {match.get('monte_carlo', {}).get(outcome, 0):.1%} ({outcome})
 
 _360SCOUT Predictive Engine_
 """
