@@ -1,6 +1,7 @@
 import MatchCard from "@/components/MatchCard";
 import DashboardTabs from "@/components/DashboardTabs";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
+import { getEnhancedMatches } from "@/lib/enhancedMatches";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
@@ -15,7 +16,8 @@ async function getLiveMatches() {
     clearTimeout(timeout);
     const data = await res.json();
     if (data.status === "success" && data.count > 0) {
-      return { matches: data.matches, mode: data.display_mode ?? "live", isReal: true };
+      const matches = await getEnhancedMatches(data.matches);
+      return { matches, mode: data.display_mode ?? "live", isReal: true };
     }
     return { matches: [], mode: "none", isReal: false };
   } catch (e) {
