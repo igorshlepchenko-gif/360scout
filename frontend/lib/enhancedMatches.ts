@@ -102,7 +102,17 @@ export async function getEnhancedMatches(
     }),
   );
 
-  return filterNoOdds
-    ? enhanced.filter(m => m.odds?.odds_home != null)
-    : enhanced;
+  // decimal odds must be > 1 — anything ≤ 1 is corrupt/missing data
+  const validOdds = (m: any) =>
+    m.odds?.odds_home > 1 &&
+    m.odds?.odds_draw > 1 &&
+    m.odds?.odds_away > 1;
+
+  // matches without any odds are kept (prediction still works);
+  // matches with odds present must pass the > 1 check
+  return enhanced.filter(m =>
+    filterNoOdds
+      ? validOdds(m)
+      : !m.odds || validOdds(m),
+  );
 }
