@@ -53,6 +53,14 @@ body {
   .nav-links a { font-size: 12px !important; }
 }
 
+/* ── NavBar responsive ─────────────────────────────────── */
+.nav-hamburger { display: none; }
+
+@media (max-width: 640px) {
+  .nav-desktop-links { display: none !important; }
+  .nav-hamburger     { display: flex !important; }
+}
+
 /* ══════════════════════════════════════════════════════════
    MOBILE  ≤ 640px  — main fixes
 ══════════════════════════════════════════════════════════ */

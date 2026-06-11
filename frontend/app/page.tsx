@@ -87,50 +87,8 @@ export default async function Home() {
 
   const leagueAccuracy = byLeague ?? [];
 
-  const navItems = [
-    { label: "סיגנלים חמים",      href: "/",             active: true  },
-    { label: "כל המשחקים",        href: "/matches",      active: false },
-    { label: "ביצועים היסטוריים", href: "/track-record", active: false },
-    { label: "אנליסטים",          href: "/analysts",     active: false },
-  ];
-
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
-
-      {/* Navbar */}
-      <nav style={{
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        padding: "16px 32px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        position: "sticky",
-        top: 0,
-        background: "rgba(11,14,20,0.95)",
-        backdropFilter: "blur(12px)",
-        zIndex: 50,
-      }}>
-        {/* Logo */}
-        <a href="/" style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.5px", direction: "ltr", textDecoration: "none" }}>
-          <span style={{ color: "#10b981" }}>ANALYST</span>
-          <span style={{ color: "white" }}>365</span>
-        </a>
-
-        {/* Nav links */}
-        <div className="nav-links" style={{ display: "flex", gap: 28 }}>
-          {navItems.map((item) => (
-            <a key={item.label} href={item.href} style={{
-              color: item.active ? "white" : "#64748b",
-              fontSize: 14,
-              fontWeight: item.active ? 600 : 400,
-              textDecoration: "none",
-              transition: "color 0.2s",
-            }}>
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px" }}>
 

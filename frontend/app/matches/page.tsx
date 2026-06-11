@@ -36,13 +36,6 @@ function isMajorLeague(m: Match): boolean {
   return MAJOR_LEAGUE_KEYWORDS.some(k => l.includes(k));
 }
 
-const NAV = [
-  { label: "סיגנלים חמים",      href: "/" },
-  { label: "כל המשחקים",        href: "/matches", active: true },
-  { label: "ביצועים היסטוריים", href: "/track-record" },
-  { label: "אנליסטים",          href: "/analysts" },
-];
-
 const OUTCOME_HE: Record<string, string> = { home: "בית", draw: "תיקו", away: "אורחים" };
 const RATING_COLOR: Record<string, string> = { STRONG: "#10b981", MODERATE: "#f59e0b", WEAK: "#94a3b8" };
 const CONSENSUS_COLOR: Record<string, string> = { LOCK: "#10b981", ALGORITHM_EDGE: "#f59e0b", DIVERGENCE: "#ef4444", ALGORITHM_ONLY: "#475569" };
@@ -113,28 +106,6 @@ export default function MatchesPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
-
-      {/* Navbar */}
-      <nav style={{
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        padding: "16px 24px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        position: "sticky", top: 0,
-        background: "rgba(11,14,20,0.95)", backdropFilter: "blur(12px)", zIndex: 50,
-      }}>
-        <a href="/" style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.5px", textDecoration: "none", direction: "ltr" }}>
-          <span style={{ color: "#10b981" }}>ANALYST</span>
-          <span style={{ color: "white" }}>365</span>
-        </a>
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          {NAV.map(item => (
-            <a key={item.label} href={item.href} style={{
-              color: item.active ? "white" : "#64748b",
-              fontSize: 14, fontWeight: item.active ? 600 : 400, textDecoration: "none",
-            }}>{item.label}</a>
-          ))}
-        </div>
-      </nav>
 
       <main style={{ maxWidth: 1400, margin: "0 auto", padding: "32px 24px" }}>
 
