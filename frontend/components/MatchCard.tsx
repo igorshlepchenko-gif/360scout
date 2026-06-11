@@ -224,6 +224,13 @@ export default function MatchCard({
     .sort((a, b) => b[1] - a[1])[0][0];
 
   const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2" };
+  const PICK_HE: Record<string, string> = { "1": "ניצחון ביתי", "X": "תיקו", "2": "ניצחון אורחים" };
+
+  // Auto-fetch when user expands the card for the first time
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (expanded && !consensusData && !consensusLoading) runConsensusCheck();
+  }, [expanded]);
 
   async function runConsensusCheck() {
     setConsensusLoading(true);
@@ -413,6 +420,22 @@ export default function MatchCard({
           <AnimatedBar value={displayProbs.draw} color="bg-slate-600"   delay={100} />
           <AnimatedBar value={displayProbs.away} color="bg-rose-500"    delay={200} />
         </div>
+
+        {/* ── CONSENSUS LOCK BANNER ── */}
+        {consensusData?.is_consensus_lock && (
+          <div style={{
+            marginTop: 8,
+            background: "rgba(245,158,11,0.08)",
+            border: "1px solid rgba(245,158,11,0.22)",
+            borderRadius: 8,
+            padding: "5px 12px",
+            textAlign: "center",
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#f59e0b", letterSpacing: 0.4 }}>
+              🔥 נעילת קונסנזוס ({consensusData.agreeing_count} אנליסטים)
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── KEY FACTORS ── */}
@@ -489,6 +512,39 @@ export default function MatchCard({
         {expanded && (
           <div style={{ padding: "4px 24px 20px" }}>
             <ModuleChart modules={prediction.by_module} />
+
+            {/* ── ANALYST CONSENSUS SUMMARY ROW ── */}
+            {consensusData ? (
+              <div style={{
+                marginTop: 12,
+                background: consensusData.is_consensus_lock ? "rgba(245,158,11,0.05)" : "rgba(255,255,255,0.02)",
+                border: `1px solid ${consensusData.is_consensus_lock ? "rgba(245,158,11,0.18)" : "rgba(255,255,255,0.06)"}`,
+                borderRadius: 8, padding: "8px 12px",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>הניבוי שלנו</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "white" }}>
+                    {PICK_HE[consensusData.our_pick] ?? consensusData.our_pick}{" "}
+                    <span style={{ color: "#64748b", fontSize: 10, fontWeight: 600 }}>({consensusData.our_pick})</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>הצלבת אנליסטים מהעולם</div>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
+                    {consensusData.consensus_rate}% הסכמה
+                  </div>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>תומכים</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "white" }}>{consensusData.agreeing_count}</div>
+                </div>
+              </div>
+            ) : consensusLoading ? (
+              <div style={{ marginTop: 12, textAlign: "center", color: "#f59e0baa", fontSize: 10, fontWeight: 700 }}>
+                ⏳ בודק קונסנזוס אנליסטים...
+              </div>
+            ) : null}
 
             {/* Consensus row */}
             {consensus?.analysts && (
