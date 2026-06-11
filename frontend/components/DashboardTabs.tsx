@@ -8,23 +8,6 @@ type LeagueAccuracyRow = { league: string; total: number; correct: number; rate:
 
 const IS_WORLD_CUP = (m: any) => /world.?cup|fifa|מונדיאל/i.test(m.league ?? "");
 
-const TAB_STYLE = (active: boolean, accent?: string): React.CSSProperties => ({
-  padding: "8px 18px",
-  borderRadius: 10,
-  border: active
-    ? `1px solid ${accent ?? "rgba(16,185,129,0.4)"}`
-    : "1px solid rgba(255,255,255,0.07)",
-  background: active
-    ? (accent ? "rgba(128,0,32,0.18)" : "rgba(16,185,129,0.1)")
-    : "rgba(255,255,255,0.03)",
-  color: active ? (accent ? "#e07070" : "#10b981") : "#64748b",
-  fontWeight: active ? 700 : 500,
-  fontSize: 13,
-  cursor: "pointer",
-  transition: "all 0.15s",
-  whiteSpace: "nowrap",
-});
-
 export default function DashboardTabs({
   matches,
   leagueAccuracy = [],
@@ -45,20 +28,16 @@ export default function DashboardTabs({
   return (
     <div>
       {/* ── Top tab bar ── */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginBottom: 28,
-          flexWrap: "wrap",
-        }}
-      >
-        <button style={TAB_STYLE(tab === "all")} onClick={() => setTab("all")}>
+      <div className="tabs-navigation">
+        <button
+          className={`tab-btn${tab === "all" ? " active" : ""}`}
+          onClick={() => setTab("all")}
+        >
           כל המשחקים ({matches.length})
         </button>
 
         <button
-          style={TAB_STYLE(tab === "live")}
+          className={`tab-btn${tab === "live" ? " active" : ""}`}
           onClick={() => setTab("live")}
         >
           {liveCount > 0 && (
@@ -79,7 +58,7 @@ export default function DashboardTabs({
         </button>
 
         <button
-          style={TAB_STYLE(tab === "worldcup", "rgba(128,0,32,0.5)")}
+          className={`tab-btn worldcup-tab${tab === "worldcup" ? " active" : ""}`}
           onClick={() => setTab("worldcup")}
         >
           🏆 מונדיאל 2026{wcCount > 0 ? ` (${wcCount})` : ""}
