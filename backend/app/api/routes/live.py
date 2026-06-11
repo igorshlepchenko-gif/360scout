@@ -498,6 +498,14 @@ def build_match_analysis_sync(
         "value_bets":    value_bets if value_bets else None,
         "consensus":     consensus,
         "weather":       weather,
+        # live state — for the LIVE indicator and the in-play tab
+        "_status":       fixture.get("_status"),
+        "elapsed":       fix.get("status", {}).get("elapsed"),
+        "status_short":  fix.get("status", {}).get("short"),
+        "score": {
+            "home": goals.get("home"),
+            "away": goals.get("away"),
+        },
         "injuries": {
             "home_impact": home_injury,
             "away_impact": away_injury,

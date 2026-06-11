@@ -214,7 +214,7 @@ export default async function Home() {
         </div>
 
         {/* Live In-Play value alerts */}
-        <LiveInPlayTab />
+        <LiveInPlayTab matches={liveMatches} />
 
         {/* Telegram community CTA */}
         <div style={{ marginTop: 48 }}>
