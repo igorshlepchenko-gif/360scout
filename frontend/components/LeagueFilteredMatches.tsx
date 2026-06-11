@@ -46,6 +46,14 @@ export default function LeagueFilteredMatches({
   const tabsRef = useRef<HTMLDivElement>(null);
   const [hasOverflow, setHasOverflow] = useState(false);
 
+  // dedupe — the live feed occasionally returns the same fixture twice
+  const seen = new Set<number>();
+  matches = matches.filter(m => {
+    if (seen.has(m.fixture_id)) return false;
+    seen.add(m.fixture_id);
+    return true;
+  });
+
   /* Build tab list — only show groups that have matches */
   const availableGroups = LEAGUE_GROUPS.filter(g =>
     matches.some(m => getGroupKey(m.league ?? "") === g.key)
@@ -170,6 +178,8 @@ export default function LeagueFilteredMatches({
             consensus={m.consensus}
             fixtureId={m.fixture_id}
             matchId={String(m.fixture_id)}
+            odds={m.odds}
+            weather={m.weather}
           />
         ))}
         {filtered.length === 0 && (

@@ -51,6 +51,19 @@ interface ConsensusMatchResult {
   analysts: Array<{ name: string; pick: string; confidence: number }>;
 }
 
+interface MatchOdds {
+  bookmaker?:  string;
+  odds_home?:  number;
+  odds_draw?:  number;
+  odds_away?:  number;
+}
+
+interface MatchWeather {
+  temperature_celsius: number;
+  weather_condition:   string;
+  source:              string;
+}
+
 interface MatchCardProps {
   homeTeam:    string;
   awayTeam:    string;
@@ -65,6 +78,8 @@ interface MatchCardProps {
   consensus?:  Consensus;
   fixtureId?:  number;
   matchId?:    string;
+  odds?:       MatchOdds | null;
+  weather?:    MatchWeather | null;
 }
 
 const pct  = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -207,13 +222,84 @@ function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
   );
 }
 
+// ===== Value vs Market table (The Winning Method) =====
+function ValueMarketTable({
+  probs, odds, valueBets, homeTeam, awayTeam,
+}: {
+  probs: { home: number; draw: number; away: number };
+  odds: MatchOdds;
+  valueBets?: ValueBets;
+  homeTeam: string;
+  awayTeam: string;
+}) {
+  const fairOdds = (p: number) => (p > 0 ? (1 / p).toFixed(2) : "—");
+  const rows = [
+    { sign: "1", label: homeTeam,  prob: probs.home, market: odds.odds_home, vb: valueBets?.home },
+    { sign: "X", label: "תיקו",    prob: probs.draw, market: odds.odds_draw, vb: valueBets?.draw },
+    { sign: "2", label: awayTeam,  prob: probs.away, market: odds.odds_away, vb: valueBets?.away },
+  ];
+
+  const th: React.CSSProperties = { padding: "7px 10px", fontSize: 9, fontWeight: 700, color: "#475569", textAlign: "right", whiteSpace: "nowrap" };
+  const td: React.CSSProperties = { padding: "7px 10px", fontSize: 11, color: "#cbd5e1", textAlign: "right" };
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <div style={{ height: 14, width: 3, background: "#10b981", borderRadius: 99 }} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>
+          הצלבת ערך מול השוק
+        </span>
+        {odds.bookmaker && (
+          <span style={{ fontSize: 9, color: "#475569" }}>· מקור: {odds.bookmaker}</span>
+        )}
+      </div>
+      <div style={{ border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "rgba(255,255,255,0.03)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <th style={th}>סימון</th>
+              <th style={th}>הסתברות אלגוריתם</th>
+              <th style={th}>יחס הוגן</th>
+              <th style={th}>יחס שוק</th>
+              <th style={th}>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const isValue = !!r.vb?.is_value_bet;
+              return (
+                <tr key={r.sign} style={{
+                  background: isValue ? "rgba(16,185,129,0.06)" : "transparent",
+                  borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                }}>
+                  <td style={{ ...td, fontWeight: 700, color: "white" }}>
+                    {r.sign} <span style={{ color: "#64748b", fontWeight: 400, fontSize: 10 }}>({r.label})</span>
+                  </td>
+                  <td style={td}>{pct0(r.prob)}</td>
+                  <td style={{ ...td, color: "#64748b", direction: "ltr" }}>{fairOdds(r.prob)}</td>
+                  <td style={{ ...td, fontWeight: isValue ? 700 : 400, direction: "ltr" }}>
+                    {r.market ? r.market.toFixed(2) : "—"}
+                  </td>
+                  <td style={{ ...td, fontWeight: 700, color: isValue ? "#10b981" : "#475569", direction: "ltr" }}>
+                    {isValue ? `+${r.vb!.edge_percent.toFixed(1)}%` : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function MatchCard({
   homeTeam, awayTeam, homeLogo, awayLogo, league, leagueLogo,
   matchDate, isLive = false,
   prediction, value_bets, consensus,
-  fixtureId, matchId,
+  fixtureId, matchId, odds, weather,
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -535,7 +621,54 @@ export default function MatchCard({
 
         {expanded && (
           <div className="card-expanded" style={{ padding: "4px 24px 20px" }}>
+
+            {/* ── VALUE vs MARKET TABLE ── */}
+            {odds?.odds_home && (
+              <ValueMarketTable
+                probs={displayProbs}
+                odds={odds}
+                valueBets={value_bets}
+                homeTeam={homeTeam}
+                awayTeam={awayTeam}
+              />
+            )}
+
             <ModuleChart modules={prediction.by_module} />
+
+            {/* ── LIVE WEATHER ── */}
+            {weather?.source === "live" && (
+              <div style={{
+                marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center",
+                background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)",
+                borderRadius: 8, padding: "6px 12px",
+              }}>
+                <span style={{ fontSize: 10, color: "#64748b" }}>🌡️ תנאי מזג אוויר במגרש (נתון חי)</span>
+                <span style={{ fontSize: 11, color: "#cbd5e1", fontWeight: 600 }}>
+                  {Math.round(weather.temperature_celsius)}°C · {weather.weather_condition}
+                </span>
+              </div>
+            )}
+
+            {/* ── TELEGRAM AUTO-SIGNAL NOTE ── */}
+            {bestVB && (bestVB[1]?.rating === "STRONG" || bestVB[1]?.rating === "MODERATE") && (
+              <div style={{
+                marginTop: 10,
+                background: "linear-gradient(90deg, rgba(56,189,248,0.08), rgba(99,102,241,0.06))",
+                border: "1px solid rgba(56,189,248,0.2)",
+                borderRadius: 8, padding: "7px 12px",
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+              }}>
+                <span style={{ fontSize: 10, color: "#94a3b8" }}>
+                  📨 הסיגנל נשלח אוטומטית לערוץ הטלגרם בעקבות זיהוי חריגת ערך
+                </span>
+                <span style={{
+                  fontSize: 9, fontWeight: 800, color: "#38bdf8",
+                  background: "rgba(56,189,248,0.12)", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap",
+                }}>
+                  HOT VALUE 🔥
+                </span>
+              </div>
+            )}
 
             {/* ── ANALYST CONSENSUS SUMMARY ROW ── */}
             {consensusData ? (
