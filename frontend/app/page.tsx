@@ -1,4 +1,5 @@
 import MatchCard from "@/components/MatchCard";
+import LeagueFilteredMatches from "@/components/LeagueFilteredMatches";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
@@ -158,34 +159,13 @@ export default async function Home() {
           ))}
         </div>
 
-        {/* Match Cards Grid */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(560px, 1fr))",
-          gap: 24,
-        }}>
+        {/* Match Cards Grid — league filter */}
+        <div>
           {hasLive ? (
-            // ✅ משחקים אמיתיים מה-API
-            liveMatches.map((m: any) => (
-              <MatchCard
-                key={m.fixture_id}
-                homeTeam={m.home_team}
-                awayTeam={m.away_team}
-                homeLogo={m.home_logo}
-                awayLogo={m.away_logo}
-                league={m.league}
-                leagueLogo={m.league_logo}
-                matchDate={m.match_date}
-                isLive={m._status === "live"}
-                prediction={m.prediction}
-                value_bets={m.value_bets}
-                consensus={m.consensus}
-                fixtureId={m.fixture_id}
-                matchId={String(m.fixture_id)}
-              />
-            ))
+            // ✅ משחקים אמיתיים מה-API — with league filter tabs
+            <LeagueFilteredMatches matches={liveMatches} />
           ) : (
-            <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(560px, 1fr))", gap: 24 }}>
               {/* הודעת מצב */}
               {!isRealData && (
                 <div style={{
@@ -217,7 +197,7 @@ export default async function Home() {
                   matchId="WC2026-demo"
                 />
               )}
-            </>
+            </div>
           )}
         </div>
 
