@@ -92,21 +92,29 @@ async def job_fetch_live_matches():
                     saved += 1
 
                     # שלח התראת Telegram אם יש Value Bet חזק
-                    vb = result.get("value_bets") or {}
+                    vb      = result.get("value_bets") or {}
+                    is_live = result.get("_status") == "live"
                     for outcome, vb_data in vb.items():
                         if vb_data and vb_data.get("rating") in ("STRONG", "MODERATE"):
                             try:
-                                from app.tasks.data_fetcher import send_value_bet_alert
                                 match_meta = {
-                                    "home_team":   result.get("home_team", ""),
-                                    "away_team":   result.get("away_team", ""),
-                                    "match_date":  result.get("match_date", ""),
-                                    "league":      result.get("league", ""),
-                                    "confidence":  result.get("prediction", {}).get("confidence", 0),
-                                    "monte_carlo": result.get("prediction", {}).get("monte_carlo", {}),
+                                    "fixture_id": result.get("fixture_id"),
+                                    "home_team":  result.get("home_team", ""),
+                                    "away_team":  result.get("away_team", ""),
+                                    "match_date": result.get("match_date", ""),
+                                    "league":     result.get("league", ""),
+                                    "confidence": result.get("prediction", {}).get("confidence", 0),
+                                    "elapsed":    result.get("elapsed"),
+                                    "score":      result.get("score"),
                                 }
-                                await send_value_bet_alert(match_meta, outcome, vb_data)
-                                alerts_sent += 1
+                                if is_live:
+                                    from app.telegram_bot import send_live_value_alert
+                                    sent = await send_live_value_alert(match_meta, outcome, vb_data)
+                                else:
+                                    from app.telegram_bot import send_value_bet_alert
+                                    sent = await send_value_bet_alert(match_meta, outcome, vb_data)
+                                if sent:
+                                    alerts_sent += 1
                             except Exception as te:
                                 logger.debug(f"[Scheduler] Telegram alert error: {te}")
             except Exception as e:

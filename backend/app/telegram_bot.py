@@ -25,6 +25,9 @@ CHANNEL_ID  = os.getenv("TELEGRAM_CHANNEL_ID", "")
 ENABLED     = bool(BOT_TOKEN and BOT_TOKEN != "your_telegram_bot_token_here"
                    and CHANNEL_ID and CHANNEL_ID != "@your_channel")
 
+# dedup: "fixture_id:outcome" — מונע שליחת אותה התראה פעמיים
+_sent_signals: set[str] = set()
+
 API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
@@ -85,6 +88,47 @@ _360SCOUT · ניתוח 360 מעלות_
     return await send_message(text.strip())
 
 
+async def send_live_value_alert(match: dict, outcome: str, vb: dict) -> bool:
+    """התראת Value Bet בליין רץ — עם dedup למניעת ספאם"""
+    fixture_id = match.get("fixture_id") or match.get("home_team", "?")
+    signal_key = f"{fixture_id}:{outcome}"
+    if signal_key in _sent_signals:
+        logger.debug(f"Telegram dedup — signal already sent: {signal_key}")
+        return False
+
+    stars    = "⭐⭐⭐" if vb.get("rating") == "STRONG" else "⭐⭐" if vb.get("rating") == "MODERATE" else "⭐"
+    emoji    = {"home": "🏠", "away": "✈️", "draw": "🤝"}.get(outcome, "⚽")
+    he_name  = {"home": "ניצחון בית (1)", "away": "ניצחון חוץ (2)", "draw": "תיקו (X)"}.get(outcome, outcome)
+
+    home_team = match.get("home_team", "?")
+    away_team = match.get("away_team", "?")
+    score     = match.get("score", {}) or {}
+    score_txt = f"{score.get('home', 0)} - {score.get('away', 0)}"
+    elapsed   = match.get("elapsed")
+    time_txt  = f"{elapsed}'" if elapsed else "LIVE"
+
+    text = f"""
+🔴 *VALUE BET — LIVE* {stars}
+
+⏱ `{time_txt}` | 📊 `{score_txt}`
+🏠 *{home_team}* נגד *{away_team}*
+🏆 {match.get('league', '')}
+
+{emoji} *{he_name}*
+━━━━━━━━━━━━━━━━━━━━
+💰 יחס:     `{vb.get('bookmaker_odds', '?')}`
+📈 יתרון:   *+{vb.get('edge_percent', 0):.1f}%*
+⭐ דירוג:   *{vb.get('rating', '?')}*
+🎯 ביטחון:  `{match.get('confidence', '?')}%`
+━━━━━━━━━━━━━━━━━━━━
+[360SCOUT — ניתוח מלא](https://www.analyst365.net/)
+"""
+    sent = await send_message(text.strip())
+    if sent:
+        _sent_signals.add(signal_key)
+    return sent
+
+
 async def send_daily_summary(matches_count: int, value_bets_count: int, top_confidence: float) -> bool:
     """סיכום יומי"""
     text = f"""
@@ -94,7 +138,7 @@ async def send_daily_summary(matches_count: int, value_bets_count: int, top_conf
 ⚡ הימורי ערך:       *{value_bets_count}*
 🎯 ביטחון מקסימלי:  *{top_confidence:.1f}%*
 
-_לחץ כאן לצפייה: [360SCOUT](http://localhost:3000)_
+_[360SCOUT](https://www.analyst365.net/)_
 """
     return await send_message(text.strip())
 
