@@ -1,81 +1,177 @@
 "use client";
 
-import { Lock, Zap, Trophy, LayoutGrid, SlidersHorizontal, Target } from "lucide-react";
+import { useState } from "react";
+import { SlidersHorizontal, Search, Percent, Award } from "lucide-react";
 
-export type MatchFilter = "all" | "value" | "lock" | "high_conf" | "major";
-export type MatchSort   = "confidence" | "date" | "edge";
-
-interface Counts {
-  all: number;
-  value: number;
-  lock: number;
-  high_conf: number;
-  major: number;
+export interface FilterState {
+  searchQuery: string;
+  onlyValue: boolean;
+  onlyConsensus: boolean;
+  leagueGroup: "ALL" | "MAJOR" | "MINOR";
+  sortBy: "TIME" | "VALUE_DESC" | "CONFIDENCE_DESC";
 }
 
-interface Props {
-  filter: MatchFilter;
-  sort: MatchSort;
-  counts: Counts;
-  onFilter: (f: MatchFilter) => void;
-  onSort: (s: MatchSort) => void;
+interface FilterSortBarProps {
+  onFilterChange: (filters: FilterState) => void;
 }
 
-const FILTERS: { key: MatchFilter; label: string; Icon: typeof LayoutGrid; active: string }[] = [
-  { key: "all",       label: "הכל",          Icon: LayoutGrid, active: "border-white/30 bg-white/10 text-white" },
-  { key: "high_conf", label: "ביטחון גבוה",  Icon: Target,     active: "border-emerald-500/40 bg-emerald-500/15 text-emerald-400" },
-  { key: "value",     label: "Value Bets",   Icon: Zap,        active: "border-amber-500/40 bg-amber-500/15 text-amber-400" },
-  { key: "lock",      label: "נעילות",       Icon: Lock,       active: "border-emerald-500/40 bg-emerald-500/15 text-emerald-400" },
-  { key: "major",     label: "ליגות בכירות", Icon: Trophy,     active: "border-violet-500/40 bg-violet-500/15 text-violet-400" },
-];
+export default function FilterSortBar({ onFilterChange }: FilterSortBarProps) {
+  const [filters, setFilters] = useState<FilterState>({
+    searchQuery: "",
+    onlyValue: false,
+    onlyConsensus: false,
+    leagueGroup: "ALL",
+    sortBy: "TIME",
+  });
 
-const SORTS: { key: MatchSort; label: string }[] = [
-  { key: "confidence", label: "אחוז ביטחון" },
-  { key: "edge",       label: "Edge % (יתרון)" },
-  { key: "date",       label: "זמן בעיטה" },
-];
+  const update = (patch: Partial<FilterState>) => {
+    const next = { ...filters, ...patch };
+    setFilters(next);
+    onFilterChange(next);
+  };
 
-export default function FilterSortBar({ filter, sort, counts, onFilter, onSort }: Props) {
+  const grpActive = (key: FilterState["leagueGroup"]) => filters.leagueGroup === key;
+
   return (
-    <div dir="rtl" className="mb-6 flex flex-wrap items-center gap-3">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-1.5">
-        {FILTERS.map(({ key, label, Icon, active }) => {
-          const isOn = filter === key;
-          return (
+    <div
+      dir="rtl"
+      style={{
+        background: "#0F1318",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 16,
+        padding: "14px 16px",
+        marginBottom: 20,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      {/* Row 1: search + league group */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10 }}>
+
+        {/* Free-text search */}
+        <div style={{ position: "relative" }}>
+          <Search
+            size={14}
+            style={{
+              position: "absolute", right: 10, top: "50%",
+              transform: "translateY(-50%)", color: "#475569", pointerEvents: "none",
+            }}
+          />
+          <input
+            type="text"
+            placeholder="חפש קבוצה או ליגה..."
+            value={filters.searchQuery}
+            onChange={(e) => update({ searchQuery: e.target.value })}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              background: "rgba(0,0,0,0.3)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10,
+              padding: "7px 32px 7px 10px",
+              fontSize: 12, color: "#e2e8f0", outline: "none",
+            }}
+          />
+        </div>
+
+        {/* League group segmented control */}
+        <div style={{
+          display: "flex",
+          background: "rgba(0,0,0,0.3)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 10,
+          padding: 3,
+          gap: 2,
+        }}>
+          {(
+            [
+              { key: "ALL",   label: "כל הליגות",       color: "#e2e8f0" },
+              { key: "MAJOR", label: "🏆 ליגות בכירות", color: "#60a5fa" },
+              { key: "MINOR", label: "🎯 Value ציידי",   color: "#fbbf24" },
+            ] as const
+          ).map(({ key, label, color }) => (
             <button
               key={key}
-              onClick={() => onFilter(key)}
-              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                isOn ? active : "border-white/10 text-slate-400 hover:border-white/20 hover:text-slate-200"
-              }`}
+              onClick={() => update({ leagueGroup: key })}
+              style={{
+                flex: 1,
+                padding: "6px 4px",
+                borderRadius: 7,
+                fontSize: 11,
+                fontWeight: grpActive(key) ? 700 : 500,
+                transition: "all 0.15s",
+                background: grpActive(key) ? "rgba(255,255,255,0.07)" : "transparent",
+                color: grpActive(key) ? color : "#64748b",
+                border: "none",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
             >
-              <Icon className="h-3.5 w-3.5" />
               {label}
-              <span className={`text-[10px] ${isOn ? "opacity-90" : "text-slate-600"}`}>
-                {counts[key]}
-              </span>
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* Sort — compact dropdown */}
-      <div className="mr-auto flex items-center gap-2">
-        <span className="flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-500">
-          <SlidersHorizontal className="h-3.5 w-3.5" /> מיין לפי:
-        </span>
-        <select
-          value={sort}
-          onChange={(e) => onSort(e.target.value as MatchSort)}
-          className="cursor-pointer rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-200 outline-none transition hover:border-white/20 focus:border-indigo-500/50"
-        >
-          {SORTS.map(({ key, label }) => (
-            <option key={key} value={key} className="bg-[#0F1318] text-slate-200">
-              {label}
-            </option>
-          ))}
-        </select>
+      {/* Row 2: toggles + sort */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+        paddingTop: 10,
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        flexWrap: "wrap",
+      }}>
+
+        {/* Quick toggles */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            { key: "onlyValue" as const,     icon: <Percent size={13} />, label: "רק משחקים עם Value 🔥", accent: "#10b981" },
+            { key: "onlyConsensus" as const, icon: <Award   size={13} />, label: "נעילות קונסנזוס בלבד ⭐", accent: "#3b82f6" },
+          ].map(({ key, icon, label, accent }) => {
+            const on = filters[key] as boolean;
+            return (
+              <button
+                key={key}
+                onClick={() => update({ [key]: !on })}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 14px", borderRadius: 99, fontSize: 12,
+                  fontWeight: on ? 700 : 500, cursor: "pointer",
+                  transition: "all 0.15s",
+                  border: on ? `1px solid ${accent}40` : "1px solid rgba(255,255,255,0.1)",
+                  background: on ? `${accent}14` : "rgba(255,255,255,0.03)",
+                  color: on ? accent : "#64748b",
+                }}
+              >
+                {icon}
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sort dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <SlidersHorizontal size={13} style={{ color: "#475569" }} />
+          <span style={{ color: "#475569", fontSize: 12 }}>מיין לפי:</span>
+          <select
+            value={filters.sortBy}
+            onChange={(e) => update({ sortBy: e.target.value as FilterState["sortBy"] })}
+            style={{
+              background: "rgba(0,0,0,0.3)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 8, padding: "5px 10px",
+              fontSize: 12, color: "#e2e8f0",
+              outline: "none", cursor: "pointer",
+            }}
+          >
+            <option value="TIME">🕒 שעת משחק</option>
+            <option value="VALUE_DESC">📈 Value הגבוה ביותר</option>
+            <option value="CONFIDENCE_DESC">🤖 ביטחון אלגוריתם</option>
+          </select>
+        </div>
       </div>
     </div>
   );

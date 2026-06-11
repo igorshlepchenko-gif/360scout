@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Info } from "lucide-react";
-import FilterSortBar, { MatchFilter, MatchSort } from "@/components/FilterSortBar";
+import FilterSortBar, { FilterState } from "@/components/FilterSortBar";
 import AlgorithmBreakdownModal, { Prediction } from "@/components/AlgorithmBreakdownModal";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
 
@@ -51,8 +51,13 @@ const CONSENSUS_HE: Record<string, string> = { LOCK: "נעילה 🔒", ALGORITH
 export default function MatchesPage() {
   const [matches, setMatches]     = useState<Match[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [filter, setFilter]       = useState<MatchFilter>("all");
-  const [sortBy, setSortBy]       = useState<MatchSort>("confidence");
+  const [activeFilters, setActiveFilters] = useState<FilterState>({
+    searchQuery: "",
+    onlyValue: false,
+    onlyConsensus: false,
+    leagueGroup: "ALL",
+    sortBy: "TIME",
+  });
   const [limit, setLimit]         = useState(20);
   const [modalMatch, setModalMatch] = useState<Match | null>(null);
 
@@ -68,37 +73,37 @@ export default function MatchesPage() {
 
   useEffect(() => { fetchMatches(); }, [fetchMatches]);
 
+  const valueBetCount = matches.filter(m => m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet)).length;
+  const lockCount     = matches.filter(m => m.consensus?.type === "LOCK").length;
+
   // filter
   const filtered = matches.filter(m => {
-    if (filter === "value")     return m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet);
-    if (filter === "lock")      return m.consensus?.type === "LOCK";
-    if (filter === "high_conf") return (m.prediction?.confidence ?? 0) >= HIGH_CONF_THRESHOLD;
-    if (filter === "major")     return isMajorLeague(m);
+    const { searchQuery, onlyValue, onlyConsensus, leagueGroup } = activeFilters;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const hit = m.home_team?.toLowerCase().includes(q)
+               || m.away_team?.toLowerCase().includes(q)
+               || m.league?.toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    if (onlyValue    && !(m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet))) return false;
+    if (onlyConsensus && m.consensus?.type !== "LOCK") return false;
+    if (leagueGroup === "MAJOR" && !isMajorLeague(m)) return false;
+    if (leagueGroup === "MINOR" &&  isMajorLeague(m)) return false;
     return true;
   });
 
   // sort
   const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === "confidence") return (b.prediction?.confidence ?? 0) - (a.prediction?.confidence ?? 0);
-    if (sortBy === "date")       return (a.match_date ?? "").localeCompare(b.match_date ?? "");
-    if (sortBy === "edge") {
+    if (activeFilters.sortBy === "CONFIDENCE_DESC") return (b.prediction?.confidence ?? 0) - (a.prediction?.confidence ?? 0);
+    if (activeFilters.sortBy === "TIME") return (a.match_date ?? "").localeCompare(b.match_date ?? "");
+    if (activeFilters.sortBy === "VALUE_DESC") {
       const aEdge = Math.max(...Object.values(a.value_bets ?? {}).map(v => v?.edge_percent ?? 0));
       const bEdge = Math.max(...Object.values(b.value_bets ?? {}).map(v => v?.edge_percent ?? 0));
       return bEdge - aEdge;
     }
     return 0;
   });
-
-  const valueBetCount = matches.filter(m => m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet)).length;
-  const lockCount     = matches.filter(m => m.consensus?.type === "LOCK").length;
-
-  const counts = {
-    all:       matches.length,
-    value:     valueBetCount,
-    lock:      lockCount,
-    high_conf: matches.filter(m => (m.prediction?.confidence ?? 0) >= HIGH_CONF_THRESHOLD).length,
-    major:     matches.filter(isMajorLeague).length,
-  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
@@ -142,13 +147,7 @@ export default function MatchesPage() {
         </div>
 
         {/* Filters + Sort */}
-        <FilterSortBar
-          filter={filter}
-          sort={sortBy}
-          counts={counts}
-          onFilter={setFilter}
-          onSort={setSortBy}
-        />
+        <FilterSortBar onFilterChange={setActiveFilters} />
 
         {/* Telegram CTA */}
         <div style={{ marginBottom: 24 }}>
