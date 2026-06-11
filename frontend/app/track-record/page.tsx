@@ -1,93 +1,157 @@
-import TrackRecordStats from "@/components/TrackRecordStats";
+"use client";
 
-const OUTCOME_HE: Record<string, string> = { home: "בית", draw: "תיקו", away: "אורחים" };
+import { useState, useEffect, useMemo } from "react";
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+} from "recharts";
+import {
+  ArrowUpRight, ArrowDownRight, CheckCircle2, XCircle, Clock3, Filter, Calendar, Zap,
+} from "lucide-react";
 
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function getTrackRecord() {
-  try {
-    const res = await fetch(`${API_URL}/api/live/track-record?limit=50`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+const OUTCOME_HE:  Record<string, string> = { home: "ניצחון בית", draw: "תיקו", away: "ניצחון חוץ" };
+const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2" };
+
+const NAV = [
+  { label: "סיגנלים חמים",      href: "/" },
+  { label: "כל המשחקים",        href: "/matches" },
+  { label: "ביצועים היסטוריים", href: "/track-record", active: true },
+  { label: "אנליסטים",          href: "/analysts" },
+];
+
+/* ── Types (track-record API shape) ─────────────────────────────────────── */
+interface TrackRow {
+  home_team_name: string;
+  away_team_name: string;
+  league_name: string | null;
+  match_date: string | null;
+  fixture_id: number | null;
+  predicted_outcome: string | null;
+  actual_outcome: string | null;
+  was_correct: boolean | null;
+  value_bet_hit: boolean;
+  odds_home: number | null;
+  odds_draw: number | null;
+  odds_away: number | null;
+  final_prob_home: number | null;
+  final_prob_draw: number | null;
+  final_prob_away: number | null;
+  confidence_score: number | null;
+  status: "finished" | "pending";
 }
 
-export default async function TrackRecord() {
-  const dbData = await getTrackRecord();
-  const summary = dbData?.summary ?? {};
+interface Summary {
+  total: number; correct: number; accuracy: number;
+  value_bets: number; vb_correct: number; vb_accuracy: number;
+  pending: number;
+}
 
-  const pendingCount = summary.pending ?? 0;
-  const hasRealData  = (summary.total ?? 0) > 0 || pendingCount > 0;
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
 
-  const stats = {
-    total:      summary.total      ?? 0,
-    correct:    summary.correct    ?? 0,
-    accuracy:   summary.accuracy   ?? 0,
-    value_bets: summary.value_bets ?? 0,
-    vb_correct: summary.vb_correct ?? 0,
-    vb_roi:     0,
-    pending:    pendingCount,
-  };
+/** The outcome the algorithm picked — stored field, else highest probability. */
+function pickOf(r: TrackRow): "home" | "draw" | "away" | null {
+  if (r.predicted_outcome === "home" || r.predicted_outcome === "draw" || r.predicted_outcome === "away") {
+    return r.predicted_outcome;
+  }
+  if (r.final_prob_home == null) return null;
+  const probs = { home: r.final_prob_home ?? 0, draw: r.final_prob_draw ?? 0, away: r.final_prob_away ?? 0 };
+  return (Object.entries(probs).sort((a, b) => b[1] - a[1])[0][0]) as "home" | "draw" | "away";
+}
 
-  // ─── ניבויים אחרונים (resolved + pending) ───────────────────────────
-  const recentDb = dbData?.recent ?? [];
-  const recent = recentDb.map((r: any) => {
-    // קבע תוצאה predicted לפי ההסתברות הגבוהה ביותר אם אין predicted_outcome
-    let predicted = r.predicted_outcome;
-    if (!predicted && (r.final_prob_home || r.final_prob_away || r.final_prob_draw)) {
-      const probs: Record<string, number> = {
-        home: r.final_prob_home ?? 0,
-        draw: r.final_prob_draw ?? 0,
-        away: r.final_prob_away ?? 0,
-      };
-      predicted = Object.entries(probs).sort((a, b) => b[1] - a[1])[0][0];
+/** Market odds for the picked outcome (null when no market data was stored). */
+function oddsOf(r: TrackRow): number | null {
+  const p = pickOf(r);
+  if (!p) return null;
+  const o = p === "home" ? r.odds_home : p === "draw" ? r.odds_draw : r.odds_away;
+  return o && o > 1 ? o : null;
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
+}
+
+type ResultFilter = "ALL" | "WON" | "LOST" | "PENDING";
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
+export default function TrackRecordPage() {
+  const [rows, setRows]       = useState<TrackRow[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter]   = useState<ResultFilter>("ALL");
+
+  useEffect(() => {
+    fetch(`${API}/api/live/track-record?limit=100`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        setRows(d.recent ?? []);
+        setSummary(d.summary ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  /* ── Real betting stats — flat staking on matches that HAD market odds ── */
+  const stats = useMemo(() => {
+    const resolved = rows.filter(r => r.status === "finished" && r.was_correct !== null);
+    const bets = resolved
+      .map(r => ({ r, odds: oddsOf(r) }))
+      .filter((b): b is { r: TrackRow; odds: number } => b.odds !== null);
+
+    let units = 0;
+    const cum: { date: string; units: number; ts: number }[] = [];
+    const sorted = [...bets].sort((a, b) =>
+      new Date(a.r.match_date ?? 0).getTime() - new Date(b.r.match_date ?? 0).getTime());
+
+    for (const b of sorted) {
+      units += b.r.was_correct ? b.odds - 1 : -1;
+      cum.push({
+        date: fmtDate(b.r.match_date),
+        units: Math.round(units * 100) / 100,
+        ts: new Date(b.r.match_date ?? 0).getTime(),
+      });
     }
+
+    const avgOdds = bets.length ? bets.reduce((s, b) => s + b.odds, 0) / bets.length : 0;
+    const yieldPct = bets.length ? (units / bets.length) * 100 : 0;
+
     return {
-      home:      r.home_team_name,
-      away:      r.away_team_name,
-      league:    r.league_name ?? "",
-      predicted: OUTCOME_HE[predicted] ?? predicted ?? "—",
-      actual:    OUTCOME_HE[r.actual_outcome] ?? (r.status === "pending" ? null : r.actual_outcome),
-      correct:   r.was_correct,
-      status:    r.status ?? "finished",
-      confidence: r.confidence_score ? Math.round(r.confidence_score) : null,
-      odds:      r.odds_home ?? 0,
-      vb:        r.value_bet_hit ?? false,
-      prob_home: r.final_prob_home ? Math.round(r.final_prob_home * 100) : null,
-      prob_draw: r.final_prob_draw ? Math.round(r.final_prob_draw * 100) : null,
-      prob_away: r.final_prob_away ? Math.round(r.final_prob_away * 100) : null,
+      betCount: bets.length,
+      resolvedCount: resolved.length,
+      units: Math.round(units * 100) / 100,
+      yieldPct: Math.round(yieldPct * 10) / 10,
+      avgOdds: Math.round(avgOdds * 100) / 100,
+      chart: cum,
     };
+  }, [rows]);
+
+  /* ── Table filtering ── */
+  const counts = useMemo(() => ({
+    ALL:     rows.length,
+    WON:     rows.filter(r => r.status === "finished" && r.was_correct === true).length,
+    LOST:    rows.filter(r => r.status === "finished" && r.was_correct === false).length,
+    PENDING: rows.filter(r => r.status === "pending").length,
+  }), [rows]);
+
+  const filtered = rows.filter(r => {
+    if (filter === "WON")     return r.status === "finished" && r.was_correct === true;
+    if (filter === "LOST")    return r.status === "finished" && r.was_correct === false;
+    if (filter === "PENDING") return r.status === "pending";
+    return true;
   });
 
-  // ─── avgOdds for TrackRecordStats — computed from recent VB wins ────────────
-  // odds_home is the best available proxy for the predicted-outcome odds.
-  const vbResolved = recent.filter((r: any) => r.vb && r.status !== "pending");
-  const vbResWins  = vbResolved.filter((r: any) => r.correct);
-  const avgOdds    = vbResWins.length > 0
-    ? vbResWins.reduce((s: number, r: any) => s + (r.odds > 1 ? r.odds : 2.0), 0) / vbResWins.length
-    : 2.0;
-
-  const statsData = {
-    homeWins:  { success: 41, total: 58 },   // hardcoded until backend provides per-outcome breakdown
-    draws:     { success: 12, total: 28 },
-    awayWins:  { success: 29, total: 41 },
-    valueBets: { total: stats.value_bets, won: stats.vb_correct, avgOdds },
-  };
-
-  const monthlyData: { month: string; correct: number; total: number; roi: number }[] = [];
-  const maxTotal = monthlyData.length > 0 ? Math.max(...monthlyData.map(m => m.total)) : 1;
+  const hasBets = stats.betCount > 0;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
+    <div style={{ minHeight: "100vh", background: "#0B0E14" }} dir="rtl">
 
       {/* Navbar */}
       <nav style={{
         borderBottom: "1px solid rgba(255,255,255,0.08)",
-        padding: "16px 32px",
+        padding: "16px 24px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         position: "sticky", top: 0,
         background: "rgba(11,14,20,0.95)", backdropFilter: "blur(12px)", zIndex: 50,
@@ -96,219 +160,224 @@ export default async function TrackRecord() {
           <span style={{ color: "#10b981" }}>ANALYST</span>
           <span style={{ color: "white" }}>365</span>
         </a>
-        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-          {[
-            { label: "סיגנלים חמים", href: "/" },
-            { label: "כל המשחקים",   href: "/matches" },
-            { label: "ביצועים היסטוריים", href: "/track-record", active: true },
-            { label: "אנליסטים",     href: "/analysts" },
-          ].map(item => (
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          {NAV.map(item => (
             <a key={item.label} href={item.href} style={{
               color: item.active ? "white" : "#64748b",
               fontSize: 14, fontWeight: item.active ? 600 : 400, textDecoration: "none",
-            }}>
-              {item.label}
-            </a>
+            }}>{item.label}</a>
           ))}
         </div>
       </nav>
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 32px" }}>
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 24px" }}>
 
         {/* Hero */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 900, color: "white", margin: 0 }}>ביצועים היסטוריים 📊</h1>
-            <span style={{
-              background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)",
-              color: "#10b981", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 99,
-            }}>שקיפות מלאה</span>
+        <div className="mb-8">
+          <div className="mb-2 flex items-center gap-3">
+            <h1 className="m-0 text-2xl font-black text-white">ביצועים היסטוריים וארכיון 📊</h1>
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
+              שקיפות מלאה
+            </span>
           </div>
-          <p style={{ color: "#64748b", fontSize: 14, margin: 0 }}>
-            כל ניבוי מתועד ולא ניתן לשינוי — הצלחות ומחדלים כאחד
+          <p className="m-0 text-sm text-slate-500">
+            מעקב אמיתי אחר ביצועי האלגוריתם — כל ניבוי מתועד אוטומטית, כולל המחדלים.
           </p>
-          {!hasRealData && (
-            <div style={{
-              marginTop: 12,
-              background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)",
-              borderRadius: 10, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 8,
-            }}>
-              <span style={{ fontSize: 16 }}>🔄</span>
-              <span style={{ color: "#60a5fa", fontSize: 13 }}>
-                ניבויים מתחילים להצטבר — לאחר סיום משחקים הנתונים יעודכנו אוטומטית
-              </span>
+        </div>
+
+        {/* ── Stats cards ── */}
+        <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+          {/* Units */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+            <div className="mb-1 text-xs text-slate-400">רווח נקי (יחידות)</div>
+            <div className={`flex items-center gap-1 font-mono text-2xl font-bold ${
+              !hasBets ? "text-slate-600" : stats.units >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              {hasBets ? (
+                <>
+                  {stats.units >= 0 ? "+" : ""}{stats.units}
+                  {stats.units >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                </>
+              ) : "—"}
+            </div>
+            <div className="mt-1 text-[10px] text-slate-500">
+              {hasBets ? `Flat staking · ${stats.betCount} הימורים עם יחס שוק` : "ממתין לתוצאות עם יחסי שוק"}
+            </div>
+          </div>
+
+          {/* Yield */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+            <div className="mb-1 text-xs text-slate-400">תשואה (Yield)</div>
+            <div className={`font-mono text-2xl font-bold ${
+              !hasBets ? "text-slate-600" : stats.yieldPct >= 0 ? "text-sky-400" : "text-rose-400"}`}>
+              {hasBets ? `${stats.yieldPct >= 0 ? "+" : ""}${stats.yieldPct}%` : "—"}
+            </div>
+            <div className="mt-1 text-[10px] text-slate-500">רווח ביחס לסך המחזור</div>
+          </div>
+
+          {/* Accuracy */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+            <div className="mb-1 text-xs text-slate-400">אחוז דיוק כללי</div>
+            <div className="font-mono text-2xl font-bold text-slate-200">
+              {summary && summary.total > 0 ? `${summary.accuracy}%` : "—"}
+            </div>
+            <div className="mt-1 text-[10px] text-slate-500">
+              {summary && summary.total > 0
+                ? `${summary.correct} מתוך ${summary.total} ניבויים פגעו`
+                : "מצטבר עם סיום משחקים"}
+            </div>
+          </div>
+
+          {/* Avg odds */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+            <div className="mb-1 text-xs text-slate-400">יחס ממוצע שנלקח</div>
+            <div className="font-mono text-2xl font-bold text-amber-400">
+              {hasBets ? stats.avgOdds.toFixed(2) : "—"}
+            </div>
+            <div className="mt-1 text-[10px] text-slate-500">ממוצע יחסי השוק על הניבוי</div>
+          </div>
+        </div>
+
+        {/* ── Cumulative profit chart ── */}
+        <div className="mb-8 rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-1 rounded-full bg-emerald-500" />
+              <h3 className="m-0 text-sm font-bold text-slate-200">גרף רווח מצטבר (יחידות)</h3>
+            </div>
+            <span className="font-mono text-xs text-slate-500">Units / Time</span>
+          </div>
+
+          {stats.chart.length >= 2 ? (
+            <div style={{ width: "100%", height: 256, direction: "ltr" }} className="font-mono text-xs">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats.chart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="date" stroke="#64748b" tickLine={false} fontSize={10} />
+                  <YAxis stroke="#64748b" tickLine={false} fontSize={10} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: 8, color: "#fff", textAlign: "right", fontSize: 11 }}
+                    labelFormatter={(label) => `תאריך: ${label}`}
+                    formatter={(value) => [`${value} יח׳`, "רווח מצטבר"]}
+                  />
+                  <Area type="monotone" dataKey="units" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUnits)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <div className="mb-2 text-3xl">📈</div>
+              <div className="text-sm text-slate-500">הגרף ייבנה אוטומטית עם הצטברות תוצאות למשחקים עם יחסי שוק</div>
+              <div className="mt-1 text-xs text-slate-600">
+                {summary?.pending ? `${summary.pending} ניבויים ממתינים כרגע לתוצאה` : "המערכת שומרת ניבויים כל 5 דקות"}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Big Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 40 }}>
-          {[
-            { label: "דיוק כללי",        value: stats.total > 0 ? `${stats.accuracy}%` : "—",  sub: stats.total > 0 ? `${stats.correct}/${stats.total} ניבויים` : "עדיין אין תוצאות", color: "#10b981", glow: "rgba(16,185,129,0.15)" },
-            { label: "הימורי ערך",        value: `${stats.value_bets}`,  sub: `${stats.vb_correct} פגיעות מתוכם`,  color: "#f59e0b", glow: "rgba(245,158,11,0.1)"  },
-            { label: "ניבויים פעילים",    value: `${stats.pending}`,     sub: "ממתינים לתוצאה",                     color: "#818cf8", glow: "rgba(99,102,241,0.1)"  },
-            { label: "סה״כ נשמרו",        value: `${stats.total + stats.pending}`, sub: "ניבויים ב-DB",            color: "#94a3b8", glow: "rgba(148,163,184,0.08)" },
-          ].map(s => (
-            <div key={s.label} style={{
-              background: "#0F1318",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 16, padding: "20px 24px",
-              boxShadow: `0 0 20px ${s.glow}`,
-            }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color: s.color, direction: "ltr", textAlign: "right" }}>{s.value}</div>
-              <div style={{ color: "white", fontSize: 13, marginTop: 6 }}>{s.label}</div>
-              <div style={{ color: "#64748b", fontSize: 11, marginTop: 4 }}>{s.sub}</div>
-            </div>
-          ))}
-        </div>
+        {/* ── Archive table ── */}
+        <div className="overflow-hidden rounded-xl border border-slate-800 bg-[#0F1318]">
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 40 }}>
-
-          {/* Monthly Chart */}
-          <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "24px" }}>
-            <h3 style={{ color: "white", fontWeight: 800, fontSize: 15, margin: "0 0 20px" }}>📈 ביצועים חודשיים</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {monthlyData.map(m => {
-                const acc = Math.round((m.correct / m.total) * 100);
-                const barW = (m.total / maxTotal) * 100;
-                const correctW = (m.correct / m.total) * barW;
-                return (
-                  <div key={m.month}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                      <span style={{ color: "white", fontSize: 12, fontWeight: 600 }}>{m.month}</span>
-                      <div style={{ display: "flex", gap: 16 }}>
-                        <span style={{ color: acc >= 60 ? "#10b981" : "#ef4444", fontSize: 12, fontWeight: 700 }}>{acc}%</span>
-                        <span style={{ color: m.roi >= 0 ? "#10b981" : "#ef4444", fontSize: 11 }}>
-                          {m.roi >= 0 ? "+" : ""}{m.roi}% ROI
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ height: 8, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${barW}%`, background: "rgba(255,255,255,0.08)", borderRadius: 99, position: "relative" }}>
-                        <div style={{ position: "absolute", inset: 0, width: `${(m.correct / m.total) * 100}%`, background: acc >= 60 ? "#10b981" : "#f59e0b", borderRadius: 99, transition: "width 1s ease" }} />
-                      </div>
-                    </div>
-                    <div style={{ color: "#475569", fontSize: 10, marginTop: 3 }}>{m.correct}/{m.total} ניבויים</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Accuracy Breakdown — TrackRecordStats */}
-          <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "24px" }}>
-            <TrackRecordStats statsData={statsData} />
-          </div>
-        </div>
-
-        {/* Recent Predictions Table */}
-        <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <h3 style={{ color: "white", fontWeight: 800, fontSize: 15, margin: 0 }}>📋 ניבויים אחרונים</h3>
-              {stats.pending > 0 && (
-                <span style={{ background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)", color: "#818cf8", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>
-                  {stats.pending} ממתינים לתוצאה
-                </span>
-              )}
-            </div>
-            <span style={{ color: "#64748b", fontSize: 12 }}>מתעדכן אוטומטית</span>
-          </div>
-
-          <div>
-            {/* Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 90px", padding: "10px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-              {["משחק", "ניבוי", "תוצאה", "ביטחון", "סטטוס"].map(h => (
-                <span key={h} style={{ color: "#475569", fontSize: 10, fontWeight: 600, letterSpacing: 0.5 }}>{h}</span>
-              ))}
-            </div>
-
-            {recent.length === 0 ? (
-              <div style={{ padding: "40px 24px", textAlign: "center" }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-                <div style={{ color: "#64748b", fontSize: 14 }}>טוען ניבויים...</div>
-                <div style={{ color: "#374151", fontSize: 12, marginTop: 6 }}>
-                  הניבויים נשמרים אוטומטית כל 5 דקות מה-scheduler
-                </div>
+          {/* Filter bar */}
+          <div className="flex flex-col items-start justify-between gap-4 border-b border-slate-800 p-4 text-xs sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="text-slate-500" />
+              <span className="font-semibold text-slate-400">סינון תוצאות:</span>
+              <div className="flex rounded-lg border border-slate-800 bg-[#0B0E14] p-1">
+                {([
+                  { key: "ALL",     label: "הכל",     on: "bg-slate-800 text-white" },
+                  { key: "WON",     label: "תפס",     on: "bg-emerald-500/20 text-emerald-400" },
+                  { key: "LOST",    label: "נפל",     on: "bg-rose-500/20 text-rose-400" },
+                  { key: "PENDING", label: "ממתינים", on: "bg-indigo-500/20 text-indigo-300" },
+                ] as { key: ResultFilter; label: string; on: string }[]).map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key)}
+                    className={`rounded-md px-3 py-1 font-bold transition-colors ${
+                      filter === f.key ? f.on : "text-slate-400 hover:text-slate-200"}`}
+                  >
+                    {f.label} ({counts[f.key]})
+                  </button>
+                ))}
               </div>
-            ) : recent.map((r: any, i: number) => {
-              const isPending = r.status === "pending";
-              return (
-                <div key={i} style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr 1fr 90px",
-                  padding: "12px 20px",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
-                  background: isPending ? "rgba(99,102,241,0.03)" : (i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)"),
-                  alignItems: "center",
-                  borderRight: isPending ? "2px solid rgba(99,102,241,0.3)" : "2px solid transparent",
-                }}>
-                  {/* משחק */}
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ color: "white", fontWeight: 600, fontSize: 13 }}>{r.home}</span>
-                      <span style={{ color: "#475569", fontSize: 11 }}>נגד</span>
-                      <span style={{ color: "white", fontWeight: 600, fontSize: 13 }}>{r.away}</span>
-                    </div>
-                    {r.league && <div style={{ color: "#374151", fontSize: 10, marginTop: 2 }}>{r.league}</div>}
-                  </div>
-
-                  {/* ניבוי + הסתברויות */}
-                  <div>
-                    <div style={{ color: "#10b981", fontSize: 12, fontWeight: 700 }}>{r.predicted}</div>
-                    {r.prob_home && (
-                      <div style={{ color: "#374151", fontSize: 10, marginTop: 2 }}>
-                        {r.prob_home}% · {r.prob_draw}% · {r.prob_away}%
-                      </div>
-                    )}
-                  </div>
-
-                  {/* תוצאה */}
-                  {isPending ? (
-                    <span style={{ color: "#475569", fontSize: 11 }}>ממתין...</span>
-                  ) : (
-                    <span style={{
-                      color: r.correct ? "#10b981" : "#ef4444",
-                      fontSize: 12, fontWeight: 700
-                    }}>
-                      {r.actual ?? "—"}
-                    </span>
-                  )}
-
-                  {/* ביטחון */}
-                  <span style={{ color: "#64748b", fontSize: 12 }}>
-                    {r.confidence ? `${r.confidence}%` : "—"}
-                  </span>
-
-                  {/* סטטוס */}
-                  <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
-                    {isPending ? (
-                      <span style={{
-                        fontSize: 11, padding: "2px 7px", borderRadius: 99,
-                        background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)",
-                        color: "#818cf8", fontWeight: 600,
-                      }}>⏳ pending</span>
-                    ) : (
-                      <span style={{
-                        fontSize: 11, padding: "2px 7px", borderRadius: 99,
-                        background: r.correct ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
-                        border: `1px solid ${r.correct ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
-                        color: r.correct ? "#10b981" : "#ef4444", fontWeight: 700,
-                      }}>
-                        {r.correct ? "✓ נכון" : "✗ שגוי"}
-                      </span>
-                    )}
-                    {r.vb && <span style={{ fontSize: 10, color: "#f59e0b" }}>⚡</span>}
-                  </div>
-                </div>
-              );
-            })}
+            </div>
+            <div className="flex items-center gap-1 font-mono text-slate-500">
+              <Calendar size={14} />
+              <span>מציג {filtered.length} רשומות</span>
+            </div>
           </div>
 
-          <div style={{ padding: "16px 24px", borderTop: "1px solid rgba(255,255,255,0.06)", textAlign: "center" }}>
-            <span style={{ color: "#334155", fontSize: 11 }}>
-              כל הניבויים מוצמדים לבלוקצ&apos;יין קריפטוגרפי — אי אפשר למחוק או לשנות
-            </span>
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-right text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400">
+                  <th className="p-3.5 font-semibold">תאריך</th>
+                  <th className="p-3.5 font-semibold">ליגה</th>
+                  <th className="p-3.5 font-semibold">משחק</th>
+                  <th className="p-3.5 font-semibold">הניבוי</th>
+                  <th className="p-3.5 font-mono font-semibold">יחס</th>
+                  <th className="p-3.5 font-semibold">ביטחון</th>
+                  <th className="p-3.5 text-center font-semibold">תוצאה</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {loading ? (
+                  <tr><td colSpan={7} className="p-10 text-center text-slate-500">טוען ארכיון...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={7} className="p-10 text-center text-slate-500">
+                    אין רשומות בסינון הנבחר
+                  </td></tr>
+                ) : filtered.map((r, i) => {
+                  const pick    = pickOf(r);
+                  const odds    = oddsOf(r);
+                  const pending = r.status === "pending";
+                  return (
+                    <tr key={`${r.fixture_id}-${i}`} className="transition-colors hover:bg-white/[0.02]">
+                      <td className="p-3.5 font-mono text-slate-400">{fmtDate(r.match_date)}</td>
+                      <td className="max-w-[140px] truncate p-3.5 font-medium text-slate-400">{r.league_name ?? "—"}</td>
+                      <td className="p-3.5 font-medium text-slate-200">
+                        {r.home_team_name} <span className="text-slate-600">נגד</span> {r.away_team_name}
+                      </td>
+                      <td className="p-3.5 font-medium text-sky-400">
+                        {pick ? <>{OUTCOME_12X[pick]} <span className="text-[10px] text-slate-500">({OUTCOME_HE[pick]})</span></> : "—"}
+                        {r.value_bet_hit && <Zap size={11} className="mr-1 inline text-amber-400" />}
+                      </td>
+                      <td className="p-3.5 font-mono font-bold text-slate-300" style={{ direction: "ltr" }}>
+                        {odds ? odds.toFixed(2) : "—"}
+                      </td>
+                      <td className="p-3.5 font-mono text-slate-400">
+                        {r.confidence_score ? `${Math.round(r.confidence_score)}%` : "—"}
+                      </td>
+                      <td className="p-3.5 text-center">
+                        {pending ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-2.5 py-1 font-bold text-indigo-300">
+                            <Clock3 size={12} /> ממתין
+                          </span>
+                        ) : r.was_correct ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 font-bold text-emerald-400">
+                            <CheckCircle2 size={12} /> תפס
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-1 font-bold text-rose-400">
+                            <XCircle size={12} /> נפל
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border-t border-slate-800 p-4 text-center text-[11px] text-slate-600">
+            רווח ביחידות מחושב רק על ניבויים שהיו להם יחסי שוק בזמן הניבוי (Flat staking של יחידה אחת) · הנתונים מתעדכנים אוטומטית
           </div>
         </div>
       </main>
