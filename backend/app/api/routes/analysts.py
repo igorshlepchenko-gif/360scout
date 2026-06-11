@@ -13,6 +13,7 @@ from app.db.repository import (
     submit_analyst_prediction,
     get_match_analyst_predictions,
     get_analyst_predictions_history,
+    get_consensus_locks,
 )
 
 router = APIRouter(prefix="/api/analysts", tags=["analysts"])
@@ -96,6 +97,13 @@ async def get_predictions_for_match(fixture_id: int):
             for p in preds
         ],
     }
+
+
+@router.get("/consensus-locks")
+async def consensus_locks(limit: int = 10):
+    """נעילות קונסנזוס פעילות — אנליסטים שמסכימים עם האלגוריתם על משחקים שטרם הוכרעו"""
+    locks = await get_consensus_locks(limit)
+    return {"status": "success", "count": len(locks), "locks": locks}
 
 
 @router.get("/{analyst_id}/history")

@@ -450,6 +450,71 @@ async def get_analyst_predictions_history(analyst_id: str, limit: int = 20) -> l
         return []
 
 
+async def get_consensus_locks(limit: int = 10) -> list:
+    """
+    נעילות קונסנזוס אמיתיות: משחקים שטרם הוכרעו שבהם רוב האנליסטים
+    שסימנו ניבוי מסכימים עם תוצאת האלגוריתם.
+    """
+    pool = await get_db()
+    if pool is None:
+        return []
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT
+                    m.api_football_id AS fixture_id,
+                    m.home_team_name, m.away_team_name, m.league_name, m.match_date,
+                    mp.final_prob_home, mp.final_prob_draw, mp.final_prob_away,
+                    bo.odds_home, bo.odds_draw, bo.odds_away,
+                    ARRAY_AGG(ap.predicted_outcome) AS analyst_picks
+                FROM analyst_predictions ap
+                JOIN matches m  ON m.id = ap.match_id
+                LEFT JOIN match_predictions mp  ON mp.match_id = m.id
+                LEFT JOIN prediction_results pr ON pr.match_id = m.id
+                LEFT JOIN bookmaker_odds bo     ON bo.match_id = m.id
+                WHERE pr.match_id IS NULL
+                GROUP BY m.api_football_id, m.home_team_name, m.away_team_name,
+                         m.league_name, m.match_date,
+                         mp.final_prob_home, mp.final_prob_draw, mp.final_prob_away,
+                         bo.odds_home, bo.odds_draw, bo.odds_away
+                ORDER BY MAX(ap.submitted_at) DESC
+                LIMIT $1
+            """, limit)
+
+        locks = []
+        for r in rows:
+            probs = {
+                "home": r["final_prob_home"] or 0,
+                "draw": r["final_prob_draw"] or 0,
+                "away": r["final_prob_away"] or 0,
+            }
+            if not any(probs.values()):
+                continue
+            algo_pick = max(probs, key=probs.get)
+            picks     = [p for p in (r["analyst_picks"] or []) if p]
+            agreeing  = sum(1 for p in picks if p == algo_pick)
+            # נעילה = רוב האנליסטים מסכימים עם האלגוריתם
+            if not picks or agreeing * 2 <= len(picks):
+                continue
+            odds_key = {"home": "odds_home", "draw": "odds_draw", "away": "odds_away"}[algo_pick]
+            locks.append({
+                "fixture_id":      r["fixture_id"],
+                "home_team":       r["home_team_name"],
+                "away_team":       r["away_team_name"],
+                "league":          r["league_name"],
+                "match_date":      r["match_date"].isoformat() if r["match_date"] else None,
+                "algo_pick":       algo_pick,
+                "algo_prob":       round(probs[algo_pick], 4),
+                "agreeing_count":  agreeing,
+                "total_analysts":  len(picks),
+                "market_odds":     r[odds_key],
+            })
+        return locks
+    except Exception as e:
+        logger.error(f"get_consensus_locks failed: {e}")
+        return []
+
+
 async def update_match_result(fixture_id: int, home_score: int, away_score: int) -> bool:
     """
     כשמשחק מסתיים — שמור את התוצאה האמיתית וחשב האם הניבוי היה נכון.

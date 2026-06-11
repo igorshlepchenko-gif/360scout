@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  Users, ShieldCheck, Flame, Award, ArrowLeftRight, PenSquare, Plus,
+} from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/* ── Types ───────────────────────────────────────────────────────────────── */
 interface Analyst {
   id: string;
   name: string;
@@ -32,6 +36,21 @@ interface AnalystPrediction {
   win_rate: number;
 }
 
+interface ConsensusLock {
+  fixture_id: number | null;
+  home_team: string;
+  away_team: string;
+  league: string | null;
+  match_date: string | null;
+  algo_pick: "home" | "draw" | "away";
+  algo_prob: number;
+  agreeing_count: number;
+  total_analysts: number;
+  market_odds: number | null;
+}
+
+type FormResult = "W" | "L";
+
 const NAV = [
   { label: "סיגנלים חמים",      href: "/" },
   { label: "כל המשחקים",        href: "/matches" },
@@ -39,56 +58,95 @@ const NAV = [
   { label: "אנליסטים",          href: "/analysts", active: true },
 ];
 
-const OUTCOME_HE: Record<string, string> = { home: "בית", draw: "תיקו", away: "אורחים" };
+const OUTCOME_HE:  Record<string, string> = { home: "ניצחון בית", draw: "תיקו", away: "ניצחון חוץ" };
+const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2" };
 const OUTCOME_COLOR: Record<string, string> = { home: "#10b981", draw: "#f59e0b", away: "#ef4444" };
 
+function initialsOf(name: string) {
+  return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function fmtDate(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
 export default function AnalystsPage() {
-  const [analysts, setAnalysts]         = useState<Analyst[]>([]);
-  const [matches, setMatches]           = useState<LiveMatch[]>([]);
+  const [analysts, setAnalysts]   = useState<Analyst[]>([]);
+  const [forms, setForms]         = useState<Record<string, FormResult[]>>({});
+  const [locks, setLocks]         = useState<ConsensusLock[]>([]);
+  const [matches, setMatches]     = useState<LiveMatch[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<LiveMatch | null>(null);
   const [matchPredictions, setMatchPredictions] = useState<AnalystPrediction[]>([]);
 
-  // Form state
+  // prediction form state
   const [selectedAnalyst, setSelectedAnalyst] = useState("");
-  const [outcome, setOutcome]           = useState<"home" | "draw" | "away" | "">("");
-  const [confidence, setConfidence]     = useState(7);
-  const [reasoning, setReasoning]       = useState("");
-  const [submitting, setSubmitting]     = useState(false);
-  const [submitMsg, setSubmitMsg]       = useState("");
+  const [outcome, setOutcome]       = useState<"home" | "draw" | "away" | "">("");
+  const [confidence, setConfidence] = useState(7);
+  const [reasoning, setReasoning]   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg]   = useState("");
 
-  // Add analyst form
+  // add-analyst form state
   const [newName, setNewName]           = useState("");
   const [newLeague, setNewLeague]       = useState("");
   const [addingAnalyst, setAddingAnalyst] = useState(false);
   const [showAddForm, setShowAddForm]   = useState(false);
 
+  /* ── Data fetching ── */
   const fetchAnalysts = useCallback(async () => {
-    const r = await fetch(`${API}/api/analysts`);
-    const d = await r.json();
-    setAnalysts(d.analysts ?? []);
+    try {
+      const r = await fetch(`${API}/api/analysts`);
+      const d = await r.json();
+      const list: Analyst[] = d.analysts ?? [];
+      setAnalysts(list);
+
+      // real last-5 form per analyst (resolved predictions only)
+      const formEntries = await Promise.all(list.map(async (a) => {
+        try {
+          const hr = await fetch(`${API}/api/analysts/${a.id}/history?limit=20`);
+          const hd = await hr.json();
+          const resolved = (hd.history ?? [])
+            .filter((h: { was_correct: boolean | null }) => h.was_correct !== null)
+            .slice(0, 5)
+            .map((h: { was_correct: boolean }) => (h.was_correct ? "W" : "L") as FormResult);
+          return [a.id, resolved] as const;
+        } catch { return [a.id, []] as const; }
+      }));
+      setForms(Object.fromEntries(formEntries));
+    } catch { /* silent */ }
+  }, []);
+
+  const fetchLocks = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/api/analysts/consensus-locks`);
+      const d = await r.json();
+      setLocks(d.locks ?? []);
+    } catch { /* silent */ }
   }, []);
 
   const fetchMatches = useCallback(async () => {
-    const r = await fetch(`${API}/api/live/matches?limit=8`);
-    const d = await r.json();
-    setMatches(d.matches ?? []);
+    try {
+      const r = await fetch(`${API}/api/live/matches?limit=8`);
+      const d = await r.json();
+      setMatches(d.matches ?? []);
+    } catch { /* silent */ }
   }, []);
 
   const fetchMatchPredictions = useCallback(async (fixtureId: number) => {
-    const r = await fetch(`${API}/api/analysts/match/${fixtureId}`);
-    const d = await r.json();
-    setMatchPredictions(d.predictions ?? []);
+    try {
+      const r = await fetch(`${API}/api/analysts/match/${fixtureId}`);
+      const d = await r.json();
+      setMatchPredictions(d.predictions ?? []);
+    } catch { /* silent */ }
   }, []);
 
-  useEffect(() => {
-    fetchAnalysts();
-    fetchMatches();
-  }, [fetchAnalysts, fetchMatches]);
+  useEffect(() => { fetchAnalysts(); fetchMatches(); fetchLocks(); }, [fetchAnalysts, fetchMatches, fetchLocks]);
+  useEffect(() => { if (selectedMatch) fetchMatchPredictions(selectedMatch.fixture_id); }, [selectedMatch, fetchMatchPredictions]);
 
-  useEffect(() => {
-    if (selectedMatch) fetchMatchPredictions(selectedMatch.fixture_id);
-  }, [selectedMatch, fetchMatchPredictions]);
-
+  /* ── Actions ── */
   async function handleSubmitPrediction() {
     if (!selectedMatch || !selectedAnalyst || !outcome) return;
     setSubmitting(true);
@@ -98,11 +156,9 @@ export default function AnalystsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fixture_id:  selectedMatch.fixture_id,
-          analyst_id:  selectedAnalyst,
-          outcome,
-          confidence,
-          reasoning,
+          fixture_id: selectedMatch.fixture_id,
+          analyst_id: selectedAnalyst,
+          outcome, confidence, reasoning,
         }),
       });
       const d = await r.json();
@@ -111,14 +167,13 @@ export default function AnalystsPage() {
         setOutcome("");
         setReasoning("");
         fetchMatchPredictions(selectedMatch.fixture_id);
+        fetchLocks();           // ניבוי חדש יכול ליצור נעילה
+        fetchAnalysts();
       } else {
         setSubmitMsg("❌ " + (d.detail ?? "שגיאה"));
       }
-    } catch {
-      setSubmitMsg("❌ שגיאת רשת");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch { setSubmitMsg("❌ שגיאת רשת"); }
+    finally { setSubmitting(false); }
   }
 
   async function handleAddAnalyst() {
@@ -131,37 +186,21 @@ export default function AnalystsPage() {
         body: JSON.stringify({ name: newName.trim(), expertise_league: newLeague.trim() }),
       });
       if (r.ok) {
-        setNewName("");
-        setNewLeague("");
-        setShowAddForm(false);
+        setNewName(""); setNewLeague(""); setShowAddForm(false);
         fetchAnalysts();
       }
-    } finally {
-      setAddingAnalyst(false);
-    }
+    } finally { setAddingAnalyst(false); }
   }
 
-  // Compute consensus for selected match
   const algo = selectedMatch?.prediction?.final;
-  const consensusOutcome = matchPredictions.length > 0
-    ? (() => {
-        const votes: Record<string, number> = { home: 0, draw: 0, away: 0 };
-        matchPredictions.forEach(p => {
-          votes[p.predicted_outcome] = (votes[p.predicted_outcome] ?? 0) + p.confidence_level * p.win_rate;
-        });
-        const total = Object.values(votes).reduce((a, b) => a + b, 0);
-        if (!total) return null;
-        return Object.fromEntries(Object.entries(votes).map(([k, v]) => [k, v / total]));
-      })()
-    : null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
+    <div style={{ minHeight: "100vh", background: "#0B0E14" }} dir="rtl">
 
       {/* Navbar */}
       <nav style={{
         borderBottom: "1px solid rgba(255,255,255,0.08)",
-        padding: "16px 32px",
+        padding: "16px 24px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         position: "sticky", top: 0,
         background: "rgba(11,14,20,0.95)", backdropFilter: "blur(12px)", zIndex: 50,
@@ -170,7 +209,7 @@ export default function AnalystsPage() {
           <span style={{ color: "#10b981" }}>ANALYST</span>
           <span style={{ color: "white" }}>365</span>
         </a>
-        <div style={{ display: "flex", gap: 28 }}>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           {NAV.map(item => (
             <a key={item.label} href={item.href} style={{
               color: item.active ? "white" : "#64748b",
@@ -180,366 +219,357 @@ export default function AnalystsPage() {
         </div>
       </nav>
 
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px" }}>
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 24px" }}>
 
-        {/* Hero */}
-        <div style={{ marginBottom: 36, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <h1 style={{ fontSize: 32, fontWeight: 900, color: "white", margin: 0 }}>לוח אנליסטים 👥</h1>
-            <p style={{ color: "#64748b", fontSize: 14, marginTop: 8 }}>
-              הזן ניבויים ידניים · ראה השוואה מול האלגוריתם · מדד דיוק אישי
-            </p>
+        {/* ── Header ── */}
+        <div className="mb-10 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-sky-500/10 p-3 text-sky-400">
+              <Users size={26} />
+            </div>
+            <div>
+              <h1 className="m-0 mb-1 text-2xl font-black text-white">צוות האנליסטים של Analyst365</h1>
+              <p className="m-0 text-sm text-slate-500">
+                הצלבת חישובי האלגוריתם עם ניתוח אנושי — קונסנזוס בין מכונה לאדם.
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setShowAddForm(v => !v)}
-            style={{
-              background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)",
-              color: "#10b981", borderRadius: 10, padding: "10px 20px",
-              fontSize: 13, fontWeight: 700, cursor: "pointer",
-            }}>
-            + הוסף אנליסט
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-[13px] font-bold text-emerald-400 transition hover:bg-emerald-500/20"
+          >
+            <Plus size={14} /> הוסף אנליסט
           </button>
         </div>
 
-        {/* Add Analyst Form */}
+        {/* ── Add analyst form ── */}
         {showAddForm && (
-          <div style={{
-            background: "#0F1318", border: "1px solid rgba(16,185,129,0.2)",
-            borderRadius: 14, padding: 24, marginBottom: 32,
-          }}>
-            <h3 style={{ color: "white", fontWeight: 700, fontSize: 15, margin: "0 0 16px" }}>אנליסט חדש</h3>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div className="mb-8 rounded-xl border border-emerald-500/20 bg-[#0F1318] p-5">
+            <h3 className="m-0 mb-4 text-sm font-bold text-white">אנליסט חדש</h3>
+            <div className="flex flex-wrap gap-3">
               <input
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
                 placeholder="שם האנליסט *"
-                style={inputStyle}
+                className="rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5 text-[13px] text-white outline-none"
               />
               <input
                 value={newLeague}
                 onChange={e => setNewLeague(e.target.value)}
-                placeholder="התמחות (ליגה / ספורט)"
-                style={inputStyle}
+                placeholder="התמחות (ליגה / אזור)"
+                className="rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5 text-[13px] text-white outline-none"
               />
               <button
                 onClick={handleAddAnalyst}
                 disabled={addingAnalyst || !newName.trim()}
-                style={{
-                  background: addingAnalyst || !newName.trim() ? "rgba(16,185,129,0.2)" : "#10b981",
-                  color: "#0B0E14", borderRadius: 8, padding: "10px 20px",
-                  fontWeight: 700, fontSize: 13, cursor: addingAnalyst ? "wait" : "pointer",
-                  border: "none",
-                }}>
+                className="rounded-lg bg-emerald-500 px-5 py-2.5 text-[13px] font-bold text-[#0B0E14] disabled:opacity-40"
+              >
                 {addingAnalyst ? "..." : "שמור"}
               </button>
             </div>
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 24 }}>
+        {/* ── Team cards ── */}
+        <div className="mb-12">
+          <div className="mb-5 flex items-center gap-2">
+            <div className="h-4 w-1 rounded-full bg-sky-500" />
+            <h2 className="m-0 text-base font-bold text-slate-200">הצוות ({analysts.length})</h2>
+            <span className="text-[11px] text-slate-600">· לחץ על כרטיס כדי לבחור אנליסט להזנת ניבוי</span>
+          </div>
 
-          {/* Left — Leaderboard */}
-          <div>
-            <div style={{
-              background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 16, overflow: "hidden",
-            }}>
-              <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <h2 style={{ color: "white", fontWeight: 800, fontSize: 14, margin: 0 }}>
-                  🏆 לוח מובילים ({analysts.length})
-                </h2>
-              </div>
-              {analysts.length === 0 ? (
-                <div style={{ padding: "40px 20px", textAlign: "center", color: "#475569", fontSize: 13 }}>
-                  עדיין אין אנליסטים — לחץ &ldquo;+ הוסף אנליסט&rdquo;
-                </div>
-              ) : analysts.map((a, i) => (
-                <div
-                  key={a.id}
-                  onClick={() => setSelectedAnalyst(a.id)}
-                  style={{
-                    padding: "14px 20px",
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
-                    cursor: "pointer",
-                    background: selectedAnalyst === a.id ? "rgba(16,185,129,0.06)" : "transparent",
-                    borderLeft: selectedAnalyst === a.id ? "3px solid #10b981" : "3px solid transparent",
-                    transition: "background 0.15s",
-                  }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ color: "#475569", fontSize: 12, fontWeight: 700, minWidth: 18 }}>
-                        {i + 1}
-                      </span>
-                      <div>
-                        <div style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{a.name}</div>
-                        {a.expertise_league && (
-                          <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>{a.expertise_league}</div>
-                        )}
+          {analysts.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-10 text-center text-sm text-slate-500">
+              עדיין אין אנליסטים — לחץ "הוסף אנליסט" כדי להתחיל
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              {analysts.map(a => {
+                const form = forms[a.id] ?? [];
+                const isSelected = selectedAnalyst === a.id;
+                const hasRecord = a.total_predictions > 0;
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => setSelectedAnalyst(isSelected ? "" : a.id)}
+                    className={`flex flex-col justify-between rounded-xl border p-5 text-right transition ${
+                      isSelected
+                        ? "border-emerald-500/50 bg-emerald-500/[0.06]"
+                        : "border-slate-800 bg-[#0F1318] hover:border-slate-700"}`}
+                  >
+                    <div>
+                      <div className="mb-4 flex items-center gap-3.5">
+                        {/* initials avatar — no fake photos */}
+                        <div className="grid h-14 w-14 place-items-center rounded-full border-2 border-slate-700 bg-slate-800 text-base font-black text-slate-200">
+                          {initialsOf(a.name)}
+                        </div>
+                        <div>
+                          <h3 className="m-0 flex items-center gap-1 text-sm font-bold text-slate-100">
+                            {a.name}
+                            <ShieldCheck size={14} className="text-sky-400" />
+                          </h3>
+                          <p className="m-0 mt-0.5 text-[11px] text-slate-500">
+                            {a.expertise_league || "אנליסט כללי"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 border-t border-slate-800 pt-2.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">אחוז דיוק:</span>
+                          <span className={`font-mono font-bold ${hasRecord ? "text-emerald-400" : "text-slate-600"}`}>
+                            {hasRecord ? `${a.accuracy_pct}%` : "—"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">סה״כ ניבויים:</span>
+                          <span className="font-mono font-bold text-slate-300">{a.total_predictions}</span>
+                        </div>
                       </div>
                     </div>
-                    <div style={{ textAlign: "left" }}>
-                      <div style={{
-                        color: a.accuracy_pct >= 60 ? "#10b981" : a.accuracy_pct >= 50 ? "#f59e0b" : "#ef4444",
-                        fontWeight: 900, fontSize: 18,
-                      }}>
-                        {a.accuracy_pct > 0 ? `${a.accuracy_pct}%` : "—"}
-                      </div>
-                      <div style={{ color: "#475569", fontSize: 10 }}>
-                        {a.total_predictions} ניבויים
-                      </div>
+
+                    {/* real last-5 form */}
+                    <div className="mt-4 flex items-center justify-between border-t border-slate-800 pt-3 text-xs">
+                      <span className="text-slate-500">5 אחרונים:</span>
+                      {form.length === 0 ? (
+                        <span className="text-[10px] text-slate-600">טרם נצברו תוצאות</span>
+                      ) : (
+                        <div className="flex gap-1" dir="ltr">
+                          {form.map((res, i) => (
+                            <span key={i} className={`flex h-5 w-5 items-center justify-center rounded font-mono text-[10px] font-bold ${
+                              res === "W" ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"}`}>
+                              {res}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Consensus locks ── */}
+        <div className="mb-12 rounded-xl border border-slate-800 bg-[#0F1318] p-6">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Flame size={18} className="animate-pulse text-amber-500" />
+              <h2 className="m-0 text-base font-bold text-slate-200">נעילות קונסנזוס פעילות</h2>
+            </div>
+            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 font-mono text-xs font-bold text-amber-400">
+              {locks.length} בהסכמה מלאה
+            </span>
+          </div>
+
+          {locks.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-500">
+              אין כרגע נעילות קונסנזוס פעילות. ברגע שהאלגוריתם והאנליסטים יסכימו על משחק — הוא יופיע כאן מיד.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {locks.map(lock => (
+                <div key={`${lock.fixture_id}`} className="flex flex-col items-center justify-between gap-5 rounded-xl border border-slate-800 bg-[#0B0E14] p-5 md:flex-row">
+
+                  {/* match info */}
+                  <div className="flex w-full flex-col gap-1 md:w-auto">
+                    {lock.league && (
+                      <span className="self-start rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-400">
+                        {lock.league}
+                      </span>
+                    )}
+                    <div className="mt-1 text-sm font-bold text-slate-200">
+                      {lock.home_team} <span className="px-1 font-medium text-slate-600">vs</span> {lock.away_team}
+                    </div>
+                    {lock.match_date && <span className="mt-0.5 text-xs text-slate-500">{fmtDate(lock.match_date)}</span>}
+                  </div>
+
+                  {/* the consensus */}
+                  <div className="flex w-full items-center justify-around gap-4 rounded-lg border border-slate-800/80 bg-[#0F1318] p-3 text-xs md:w-80">
+                    <div className="text-center">
+                      <span className="mb-0.5 block text-[10px] text-slate-500">🤖 אלגוריתם</span>
+                      <span className="font-bold text-sky-400">
+                        {OUTCOME_12X[lock.algo_pick]} ({OUTCOME_HE[lock.algo_pick]}) · {Math.round(lock.algo_prob * 100)}%
+                      </span>
+                    </div>
+                    <ArrowLeftRight size={14} className="shrink-0 text-slate-600" />
+                    <div className="text-center">
+                      <span className="mb-0.5 block text-[10px] text-slate-500">👥 אנליסטים</span>
+                      <span className="font-bold text-emerald-400">
+                        {lock.agreeing_count}/{lock.total_analysts} סימנו {OUTCOME_12X[lock.algo_pick]}
+                      </span>
                     </div>
                   </div>
-                  {a.total_predictions > 0 && (
-                    <div style={{ marginTop: 8, height: 4, background: "rgba(255,255,255,0.05)", borderRadius: 99 }}>
-                      <div style={{
-                        height: "100%", width: `${a.accuracy_pct}%`,
-                        background: a.accuracy_pct >= 60 ? "#10b981" : "#f59e0b",
-                        borderRadius: 99, transition: "width 0.6s ease",
-                      }} />
+
+                  {/* market odds + badge */}
+                  <div className="flex w-full items-center justify-between gap-4 border-t border-slate-800/60 pt-3 md:w-auto md:justify-end md:border-t-0 md:pt-0">
+                    <div className="text-right">
+                      <span className="block text-[10px] text-slate-500">יחס בשוק</span>
+                      <span className="font-mono text-base font-bold text-amber-400" dir="ltr">
+                        {lock.market_odds ? lock.market_odds.toFixed(2) : "—"}
+                      </span>
                     </div>
-                  )}
+                    <div className="flex items-center gap-1.5 rounded-lg bg-gradient-to-l from-amber-500 to-orange-500 px-4 py-2 text-xs font-bold text-slate-950 shadow-md">
+                      <Award size={14} />
+                      <span>נעילת זהב ⭐</span>
+                    </div>
+                  </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Prediction entry panel ── */}
+        <div className="mb-5 flex items-center gap-2">
+          <div className="h-4 w-1 rounded-full bg-emerald-500" />
+          <h2 className="m-0 flex items-center gap-1.5 text-base font-bold text-slate-200">
+            <PenSquare size={15} className="text-emerald-400" /> הזנת ניבוי חדש
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+          {/* match selector */}
+          <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+            <h3 className="m-0 mb-3.5 text-sm font-bold text-white">🎯 בחר משחק</h3>
+            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
+              {matches.length === 0 ? (
+                <div className="py-2 text-[13px] text-slate-500">טוען משחקים...</div>
+              ) : matches.map(m => (
+                <button
+                  key={m.fixture_id}
+                  onClick={() => setSelectedMatch(m)}
+                  className={`rounded-lg border px-3.5 py-2.5 text-right transition ${
+                    selectedMatch?.fixture_id === m.fixture_id
+                      ? "border-emerald-500/40 bg-emerald-500/10"
+                      : "border-white/5 bg-white/[0.03] hover:border-white/15"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500">{m.league}</span>
+                    <span className="text-[11px] text-slate-600">{m.match_date?.slice(0, 10)}</span>
+                  </div>
+                  <div className="mt-1 text-[13px] font-bold text-white">
+                    {m.home_team} <span className="font-normal text-slate-600">נגד</span> {m.away_team}
+                  </div>
+                </button>
               ))}
             </div>
           </div>
 
-          {/* Right — Match selector + predict + consensus */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-            {/* Match selector */}
-            <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 20 }}>
-              <h3 style={{ color: "white", fontWeight: 700, fontSize: 14, margin: "0 0 14px" }}>🎯 בחר משחק לניבוי</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto" }}>
-                {matches.length === 0 ? (
-                  <div style={{ color: "#475569", fontSize: 13, padding: "8px 0" }}>טוען משחקים...</div>
-                ) : matches.map(m => (
-                  <button
-                    key={m.fixture_id}
-                    onClick={() => setSelectedMatch(m)}
-                    style={{
-                      background: selectedMatch?.fixture_id === m.fixture_id ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.03)",
-                      border: selectedMatch?.fixture_id === m.fixture_id ? "1px solid rgba(16,185,129,0.3)" : "1px solid rgba(255,255,255,0.06)",
-                      borderRadius: 10, padding: "10px 14px",
-                      textAlign: "right", cursor: "pointer",
-                      transition: "all 0.15s",
-                    }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#64748b", fontSize: 11 }}>{m.league}</span>
-                      <span style={{ color: "#475569", fontSize: 11 }}>{m.match_date?.slice(0, 10)}</span>
-                    </div>
-                    <div style={{ color: "white", fontWeight: 700, fontSize: 13, marginTop: 4 }}>
-                      {m.home_team} <span style={{ color: "#475569", fontWeight: 400 }}>נגד</span> {m.away_team}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Prediction form */}
-            {selectedMatch && (
-              <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 20 }}>
-                <h3 style={{ color: "white", fontWeight: 700, fontSize: 14, margin: "0 0 4px" }}>
-                  ✏️ הזן ניבוי
-                </h3>
-                <p style={{ color: "#475569", fontSize: 12, margin: "0 0 16px" }}>
+          {/* prediction form + per-match consensus */}
+          <div className="flex flex-col gap-5">
+            {selectedMatch ? (
+              <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+                <h3 className="m-0 mb-1 text-sm font-bold text-white">✏️ הזן ניבוי</h3>
+                <p className="m-0 mb-4 text-xs text-slate-500">
                   {selectedMatch.home_team} נגד {selectedMatch.away_team}
+                  {selectedAnalyst
+                    ? <> · בשם <span className="font-bold text-emerald-400">{analysts.find(a => a.id === selectedAnalyst)?.name}</span></>
+                    : <> · <span className="text-amber-400">בחר אנליסט מהכרטיסים למעלה</span></>}
                 </p>
 
-                {/* Algorithm probs */}
                 {algo && (
-                  <div style={{
-                    background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "10px 14px",
-                    marginBottom: 16, display: "flex", gap: 12,
-                  }}>
-                    <span style={{ color: "#475569", fontSize: 11, marginLeft: "auto" }}>אלגוריתם:</span>
+                  <div className="mb-4 flex items-center gap-3 rounded-lg bg-white/[0.03] px-3.5 py-2.5 text-xs">
+                    <span className="text-slate-500">אלגוריתם:</span>
                     {(["home", "draw", "away"] as const).map(o => (
-                      <span key={o} style={{ fontSize: 12, color: OUTCOME_COLOR[o] }}>
-                        {OUTCOME_HE[o]} {Math.round(algo[o] * 100)}%
+                      <span key={o} style={{ color: OUTCOME_COLOR[o] }}>
+                        {OUTCOME_12X[o]} {Math.round(algo[o] * 100)}%
                       </span>
                     ))}
                   </div>
                 )}
 
-                {/* Outcome buttons */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <div className="mb-4 flex gap-2">
                   {(["home", "draw", "away"] as const).map(o => (
                     <button
                       key={o}
                       onClick={() => setOutcome(o)}
+                      className="flex-1 rounded-lg py-2.5 text-[13px] font-bold transition"
                       style={{
-                        flex: 1, padding: "10px 0", borderRadius: 10,
                         border: outcome === o ? `1px solid ${OUTCOME_COLOR[o]}` : "1px solid rgba(255,255,255,0.1)",
                         background: outcome === o ? `${OUTCOME_COLOR[o]}18` : "transparent",
                         color: outcome === o ? OUTCOME_COLOR[o] : "#64748b",
-                        fontWeight: 700, fontSize: 13, cursor: "pointer",
-                        transition: "all 0.15s",
-                      }}>
-                      {OUTCOME_HE[o]}
+                      }}
+                    >
+                      {OUTCOME_12X[o]} · {OUTCOME_HE[o]}
                     </button>
                   ))}
                 </div>
 
-                {/* Confidence */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: "#94a3b8", fontSize: 12 }}>רמת ביטחון</span>
-                    <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{confidence}/10</span>
+                <div className="mb-4">
+                  <div className="mb-1.5 flex justify-between text-xs">
+                    <span className="text-slate-400">רמת ביטחון</span>
+                    <span className="font-bold text-white">{confidence}/10</span>
                   </div>
                   <input
                     type="range" min={1} max={10} value={confidence}
                     onChange={e => setConfidence(+e.target.value)}
-                    style={{ width: "100%", accentColor: "#10b981" }}
+                    className="w-full accent-emerald-500"
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                    <span style={{ color: "#374151", fontSize: 10 }}>ספק</span>
-                    <span style={{ color: "#374151", fontSize: 10 }}>וודאי</span>
-                  </div>
                 </div>
 
-                {/* Reasoning */}
                 <textarea
                   value={reasoning}
                   onChange={e => setReasoning(e.target.value)}
                   placeholder="נימוק קצר (אופציונלי)..."
                   rows={2}
-                  style={{
-                    ...inputStyle, width: "100%", boxSizing: "border-box",
-                    resize: "none", marginBottom: 12,
-                  }}
+                  className="mb-3.5 w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5 text-[13px] text-white outline-none"
                 />
-
-                {/* Analyst selector */}
-                <select
-                  value={selectedAnalyst}
-                  onChange={e => setSelectedAnalyst(e.target.value)}
-                  style={{ ...inputStyle, width: "100%", boxSizing: "border-box", marginBottom: 14 }}>
-                  <option value="">— בחר אנליסט —</option>
-                  {analysts.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
 
                 <button
                   onClick={handleSubmitPrediction}
                   disabled={!outcome || !selectedAnalyst || submitting}
-                  style={{
-                    width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
-                    background: (!outcome || !selectedAnalyst || submitting) ? "rgba(16,185,129,0.2)" : "#10b981",
-                    color: "#0B0E14", fontWeight: 800, fontSize: 14,
-                    cursor: (!outcome || !selectedAnalyst || submitting) ? "not-allowed" : "pointer",
-                    transition: "background 0.15s",
-                  }}>
+                  className="w-full rounded-lg bg-emerald-500 py-3 text-sm font-extrabold text-[#0B0E14] transition disabled:opacity-30"
+                >
                   {submitting ? "שומר..." : "שלח ניבוי"}
                 </button>
 
                 {submitMsg && (
-                  <div style={{ marginTop: 10, color: submitMsg.startsWith("✅") ? "#10b981" : "#ef4444", fontSize: 13, textAlign: "center" }}>
+                  <div className={`mt-2.5 text-center text-[13px] ${submitMsg.startsWith("✅") ? "text-emerald-400" : "text-rose-400"}`}>
                     {submitMsg}
                   </div>
                 )}
               </div>
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-8 text-center text-sm text-slate-500">
+                בחר משחק מהרשימה כדי להזין ניבוי
+              </div>
             )}
 
-            {/* Consensus panel */}
-            {selectedMatch && (
-              <div style={{ background: "#0F1318", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 20 }}>
-                <h3 style={{ color: "white", fontWeight: 700, fontSize: 14, margin: "0 0 16px" }}>
-                  🤝 קונסנזוס — אנליסטים vs אלגוריתם
-                </h3>
-
-                {matchPredictions.length === 0 ? (
-                  <div style={{ color: "#475569", fontSize: 13, textAlign: "center", padding: "12px 0" }}>
-                    עדיין אין ניבויי אנליסטים למשחק זה
-                  </div>
-                ) : (
-                  <>
-                    {/* Analyst predictions list */}
-                    <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-                      {matchPredictions.map((p, i) => (
-                        <div key={i} style={{
-                          display: "flex", justifyContent: "space-between", alignItems: "center",
-                          padding: "8px 12px", borderRadius: 8,
-                          background: "rgba(255,255,255,0.03)",
-                        }}>
-                          <div>
-                            <span style={{ color: "white", fontWeight: 600, fontSize: 13 }}>{p.name}</span>
-                            {p.reasoning && (
-                              <span style={{ color: "#475569", fontSize: 11, marginRight: 8 }}>· {p.reasoning}</span>
-                            )}
-                          </div>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <span style={{ color: "#475569", fontSize: 11 }}>{p.confidence_level}/10</span>
-                            <span style={{
-                              color: OUTCOME_COLOR[p.predicted_outcome] ?? "white",
-                              fontWeight: 700, fontSize: 13,
-                              background: `${OUTCOME_COLOR[p.predicted_outcome] ?? "#fff"}18`,
-                              border: `1px solid ${OUTCOME_COLOR[p.predicted_outcome] ?? "#fff"}40`,
-                              borderRadius: 6, padding: "2px 8px",
-                            }}>
-                              {OUTCOME_HE[p.predicted_outcome] ?? p.predicted_outcome}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Consensus bars */}
-                    {consensusOutcome && algo && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {(["home", "draw", "away"] as const).map(o => {
-                          const analystPct = Math.round((consensusOutcome[o] ?? 0) * 100);
-                          const algoPct    = Math.round(algo[o] * 100);
-                          const agree      = Math.abs(analystPct - algoPct) <= 8;
-                          return (
-                            <div key={o}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                                <span style={{ color: OUTCOME_COLOR[o], fontSize: 12, fontWeight: 700 }}>
-                                  {OUTCOME_HE[o]}
-                                </span>
-                                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                                  <span style={{ color: "#64748b", fontSize: 11 }}>
-                                    אנליסטים <strong style={{ color: "white" }}>{analystPct}%</strong>
-                                  </span>
-                                  <span style={{ color: "#64748b", fontSize: 11 }}>
-                                    אלגו <strong style={{ color: "#10b981" }}>{algoPct}%</strong>
-                                  </span>
-                                  <span style={{ fontSize: 10, color: agree ? "#10b981" : "#f59e0b" }}>
-                                    {agree ? "✓ הסכמה" : "≠ פער"}
-                                  </span>
-                                </div>
-                              </div>
-                              <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 99, position: "relative" }}>
-                                <div style={{
-                                  position: "absolute", height: "100%",
-                                  width: `${algoPct}%`, background: OUTCOME_COLOR[o],
-                                  opacity: 0.3, borderRadius: 99,
-                                }} />
-                                <div style={{
-                                  position: "absolute", height: "100%",
-                                  width: `${analystPct}%`, background: OUTCOME_COLOR[o],
-                                  borderRadius: 99,
-                                }} />
-                              </div>
-                            </div>
-                          );
-                        })}
+            {/* per-match analyst predictions */}
+            {selectedMatch && matchPredictions.length > 0 && (
+              <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
+                <h3 className="m-0 mb-3.5 text-sm font-bold text-white">🤝 ניבויים שהוזנו למשחק</h3>
+                <div className="flex flex-col gap-2">
+                  {matchPredictions.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2">
+                      <div>
+                        <span className="text-[13px] font-semibold text-white">{p.name}</span>
+                        {p.reasoning && <span className="mr-2 text-[11px] text-slate-500">· {p.reasoning}</span>}
                       </div>
-                    )}
-                  </>
-                )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500">{p.confidence_level}/10</span>
+                        <span
+                          className="rounded-md px-2 py-0.5 text-[13px] font-bold"
+                          style={{
+                            color: OUTCOME_COLOR[p.predicted_outcome] ?? "white",
+                            background: `${OUTCOME_COLOR[p.predicted_outcome] ?? "#fff"}18`,
+                            border: `1px solid ${OUTCOME_COLOR[p.predicted_outcome] ?? "#fff"}40`,
+                          }}
+                        >
+                          {OUTCOME_12X[p.predicted_outcome] ?? p.predicted_outcome}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         </div>
-
       </main>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: 8, padding: "10px 14px",
-  color: "white", fontSize: 13, outline: "none",
-};
