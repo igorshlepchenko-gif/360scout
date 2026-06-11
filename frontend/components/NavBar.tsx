@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "סיגנלים חמים",      href: "/" },
+  { label: "🏆 מונדיאל 2026",   href: "/world-cup" },
   { label: "כל המשחקים",        href: "/matches" },
   { label: "ביצועים היסטוריים", href: "/track-record" },
   { label: "אנליסטים",          href: "/analysts" },
