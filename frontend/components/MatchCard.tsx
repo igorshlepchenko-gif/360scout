@@ -38,6 +38,17 @@ interface CrossCheckResult {
   data_source:           string;
 }
 
+interface ConsensusMatchResult {
+  our_pick:               string;
+  consensus_rate:         number;
+  agreeing_count:         string;
+  avg_analysts_confidence: number;
+  is_consensus_lock:      boolean;
+  display_badge:          string;
+  is_demo:                boolean;
+  analysts: Array<{ name: string; pick: string; confidence: number }>;
+}
+
 interface MatchCardProps {
   homeTeam:    string;
   awayTeam:    string;
@@ -204,11 +215,38 @@ export default function MatchCard({
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  const [crossCheck, setCrossCheck]         = useState<CrossCheckResult | null>(null);
+  const [crossCheck, setCrossCheck]               = useState<CrossCheckResult | null>(null);
   const [crossCheckLoading, setCrossCheckLoading] = useState(false);
+  const [consensusData, setConsensusData]         = useState<ConsensusMatchResult | null>(null);
+  const [consensusLoading, setConsensusLoading]   = useState(false);
 
   const topOutcome = (Object.entries(prediction.final) as [string, number][])
     .sort((a, b) => b[1] - a[1])[0][0];
+
+  const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2" };
+
+  async function runConsensusCheck() {
+    setConsensusLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/matches/consensus-match`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_id:        matchId ?? `${homeTeam}-${awayTeam}`,
+          home_team:       homeTeam,
+          away_team:       awayTeam,
+          our_prediction:  OUTCOME_12X[topOutcome] ?? "1",
+          our_probability: prediction.final[topOutcome as keyof typeof prediction.final],
+          fixture_id:      fixtureId ?? null,
+        }),
+      });
+      if (!res.ok) throw new Error("API error");
+      const data = await res.json();
+      if (!data.analysts) throw new Error("missing analysts");
+      setConsensusData(data);
+    } catch { /* silent */ }
+    finally { setConsensusLoading(false); }
+  }
 
   async function runCrossCheck() {
     setCrossCheckLoading(true);
@@ -593,6 +631,117 @@ export default function MatchCard({
                 </div>
               </div>
             )}
+            {/* ── ANALYST CONSENSUS PANEL ── */}
+            <div style={{ marginTop: 10 }}>
+              {!consensusData ? (
+                <button
+                  onClick={runConsensusCheck}
+                  disabled={consensusLoading}
+                  style={{
+                    width: "100%",
+                    padding: "9px 0",
+                    background: consensusLoading ? "rgba(245,158,11,0.04)" : "rgba(245,158,11,0.07)",
+                    border: "1px solid rgba(245,158,11,0.22)",
+                    borderRadius: 10,
+                    color: consensusLoading ? "#f59e0baa" : "#fbbf24",
+                    fontSize: 12, fontWeight: 700,
+                    cursor: consensusLoading ? "wait" : "pointer",
+                    transition: "all 0.2s",
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  {consensusLoading ? "⏳ בודק קונסנזוס אנליסטים..." : "👥 הצלב עם אנליסטים חיצוניים"}
+                </button>
+              ) : (
+                <div style={{
+                  background: consensusData.is_consensus_lock
+                    ? "rgba(245,158,11,0.07)"
+                    : "rgba(100,116,139,0.06)",
+                  border: `1px solid ${consensusData.is_consensus_lock ? "rgba(245,158,11,0.25)" : "rgba(100,116,139,0.15)"}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>👥 קונסנזוס אנליסטים</span>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800,
+                      color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8",
+                    }}>
+                      {consensusData.display_badge}
+                    </span>
+                  </div>
+
+                  {/* Stats row */}
+                  <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
+                        {consensusData.consensus_rate}%
+                      </div>
+                      <div style={{ fontSize: 9, color: "#475569" }}>הסכמה</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "white" }}>
+                        {consensusData.agreeing_count}
+                      </div>
+                      <div style={{ fontSize: 9, color: "#475569" }}>תומכים/סה״כ</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "#10b981" }}>
+                        {consensusData.avg_analysts_confidence}%
+                      </div>
+                      <div style={{ fontSize: 9, color: "#475569" }}>ביטחון ממוצע</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "#818cf8" }}>
+                        {consensusData.our_pick}
+                      </div>
+                      <div style={{ fontSize: 9, color: "#475569" }}>בחירת המערכת</div>
+                    </div>
+                  </div>
+
+                  {/* Individual picks */}
+                  <div style={{
+                    borderTop: "1px solid rgba(255,255,255,0.05)",
+                    paddingTop: 8,
+                    display: "flex", flexDirection: "column", gap: 5,
+                  }}>
+                    {consensusData.analysts.map((a, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 10, color: "#64748b" }}>{a.name}</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <span style={{ fontSize: 9, color: "#475569" }}>{a.confidence}%</span>
+                          <span style={{
+                            fontSize: 11, fontWeight: 900,
+                            color: a.pick === consensusData.our_pick ? "#10b981" : "#ef4444",
+                            background: a.pick === consensusData.our_pick ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.08)",
+                            border: `1px solid ${a.pick === consensusData.our_pick ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.2)"}`,
+                            borderRadius: 6,
+                            padding: "1px 7px",
+                            minWidth: 22, textAlign: "center",
+                          }}>
+                            {a.pick}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "#334155" }}>
+                      {consensusData.is_demo ? "🔮 דמו — אנליסטים לדוגמה" : "👥 אנליסטים מה-DB"}
+                    </span>
+                    <button
+                      onClick={() => setConsensusData(null)}
+                      style={{ fontSize: 9, color: "#334155", background: "none", border: "none", cursor: "pointer" }}
+                    >
+                      × נקה
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

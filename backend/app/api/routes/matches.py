@@ -4,7 +4,7 @@
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import sys, os, logging
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,22 @@ class CrossCheckRequest(BaseModel):
     prediction: str         # "home" | "draw" | "away"
     fixture_id: Optional[int] = None   # אם סופק — ניגש ל-API-Football
     text_summary: Optional[str] = None # fallback לניתוח טקסט
+
+
+class AnalystPickInput(BaseModel):
+    analyst_name: str
+    predict: str    # "1" | "X" | "2"
+    confidence: float  # 0.0 – 1.0
+
+
+class ConsensusMatchRequest(BaseModel):
+    match_id: str
+    home_team: str
+    away_team: str
+    our_prediction: str   # "1" | "X" | "2"
+    our_probability: float
+    analysts: Optional[List[AnalystPickInput]] = None
+    fixture_id: Optional[int] = None  # אם סופק — fetch מה-DB
 
 
 # ============================================================
@@ -224,6 +240,73 @@ async def cross_check_prediction(req: CrossCheckRequest):
         "expert_summary_hebrew": " ".join(insights),
         "consensus_reached":     abs(alignment_score) <= 5,
         "data_source":           data_source,
+    }
+
+
+@router.post("/consensus-match")
+async def check_consensus_match(req: ConsensusMatchRequest):
+    """
+    Checks consensus between our system prediction and external analyst picks.
+    Uses 1/X/2 format (1=home, X=draw, 2=away).
+    Mirrors the JS checkConsensusMatch() function.
+    Fetches from DB when fixture_id is provided and no analysts supplied.
+    """
+    DEMO_ANALYSTS = [
+        AnalystPickInput(analyst_name="John (UK Expert)",  predict="1", confidence=0.85),
+        AnalystPickInput(analyst_name="Maddison Stats",    predict="1", confidence=0.78),
+        AnalystPickInput(analyst_name="BettingInside",     predict="1", confidence=0.82),
+    ]
+    OUTCOME_MAP = {"home": "1", "draw": "X", "away": "2"}
+
+    analysts_data: list[AnalystPickInput] = req.analysts or []
+
+    # Priority 1: DB analyst predictions (converted from home/draw/away → 1/X/2)
+    if not analysts_data and req.fixture_id:
+        try:
+            from app.db.repository import get_match_analyst_predictions
+            db_preds = await get_match_analyst_predictions(req.fixture_id)
+            analysts_data = [
+                AnalystPickInput(
+                    analyst_name=p.get("analyst_name", "אנליסט"),
+                    predict=OUTCOME_MAP.get(p.get("outcome", "home"), "1"),
+                    confidence=p.get("confidence_level", 5) / 10.0,
+                )
+                for p in db_preds
+            ]
+        except Exception as exc:
+            logger.warning("Analyst DB fetch failed for fixture %s: %s", req.fixture_id, exc)
+
+    # Priority 2: demo fallback — so the UI always shows something useful
+    if not analysts_data:
+        analysts_data = DEMO_ANALYSTS
+        is_demo = True
+    else:
+        is_demo = False
+
+    total     = len(analysts_data)
+    agreeing  = [a for a in analysts_data if a.predict == req.our_prediction]
+    count     = len(agreeing)
+    rate      = (count / total) * 100
+    avg_conf  = (sum(a.confidence for a in agreeing) / count) if count > 0 else 0.0
+
+    # Consensus lock: ≥80% analyst agreement AND system probability ≥60%
+    is_lock   = rate >= 80 and req.our_probability >= 0.60
+    badge     = "🔥 נעילת קונסנזוס" if is_lock else ("⚡ בבדיקה" if rate >= 50 else "⚠ פיצול")
+
+    return {
+        "match_id":               req.match_id,
+        "teams":                  f"{req.home_team} vs {req.away_team}",
+        "our_pick":               req.our_prediction,
+        "consensus_rate":         round(rate, 1),
+        "agreeing_count":         f"{count}/{total}",
+        "avg_analysts_confidence": round(avg_conf * 100, 1),
+        "is_consensus_lock":      is_lock,
+        "display_badge":          badge,
+        "is_demo":                is_demo,
+        "analysts": [
+            {"name": a.analyst_name, "pick": a.predict, "confidence": round(a.confidence * 100)}
+            for a in analysts_data
+        ],
     }
 
 
