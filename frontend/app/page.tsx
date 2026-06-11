@@ -37,8 +37,11 @@ async function getTrackStats() {
       next: { revalidate: 300 },
     });
     const data = await res.json();
-    return data.summary ?? null;
-  } catch { return null; }
+    return {
+      summary:   data.summary   ?? null,
+      byLeague:  data.by_league ?? [],
+    };
+  } catch { return { summary: null, byLeague: [] }; }
 }
 
 export default async function Home() {
@@ -49,6 +52,8 @@ export default async function Home() {
   const displayMode = liveResult.mode;
   const isRealData  = liveResult.isReal;
   const hasLive     = liveMatches.length > 0;
+  const byLeague    = trackStats.byLeague as { league: string; total: number; correct: number; rate: number }[];
+  const summary     = trackStats.summary;
 
   const pageTitle =
     displayMode === "live"      ? "משחקים חיים עכשיו 🔴" :
@@ -69,8 +74,8 @@ export default async function Home() {
     hasLive                     ? "7 ימים אחרונים" : "Demo";
 
   // סטטיסטיקות — מה-DB אם זמין, אחרת ברירות מחדל
-  const accuracy  = trackStats?.total > 0 ? `${trackStats.accuracy}%` : "—";
-  const accSub    = trackStats?.total > 0 ? `${trackStats.correct}/${trackStats.total} ניבויים` : "מצטבר נתונים";
+  const accuracy  = summary?.total > 0 ? `${summary.accuracy}%` : "—";
+  const accSub    = summary?.total > 0 ? `${summary.correct}/${summary.total} ניבויים` : "מצטבר נתונים";
 
   const stats = [
     { label: "דיוק האלגוריתם",    value: accuracy,                                          sub: accSub,                    color: "text-emerald-400" },
@@ -78,6 +83,8 @@ export default async function Home() {
     { label: "משחקים בניתוח",      value: liveMatches.length.toString(),                     sub: modeLabel,                 color: "text-blue-400"   },
     { label: "נעילות קונסנזוס",   value: lockCount > 0 ? lockCount.toString() : "0",        sub: "הסכמה מלאה במשחקים הנוכחיים", color: "text-purple-400" },
   ];
+
+  const leagueAccuracy = byLeague ?? [];
 
   const navItems = [
     { label: "סיגנלים חמים",      href: "/",             active: true  },
@@ -163,7 +170,11 @@ export default async function Home() {
         <div>
           {hasLive ? (
             // ✅ משחקים אמיתיים מה-API — with league filter tabs
-            <LeagueFilteredMatches matches={liveMatches} />
+            <LeagueFilteredMatches
+              matches={liveMatches}
+              leagueAccuracy={leagueAccuracy}
+              globalAccuracy={summary?.accuracy ?? null}
+            />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(560px, 1fr))", gap: 24 }}>
               {/* הודעת מצב */}

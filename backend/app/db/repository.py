@@ -265,6 +265,27 @@ async def get_track_record(limit: int = 50) -> dict:
             vb      = summary["value_bets"] or 0
             vb_ok   = summary["vb_correct"] or 0
 
+            # accuracy breakdown per league (mirrors calculateLeagueAccuracy JS)
+            league_rows = await conn.fetch("""
+                SELECT
+                    m.league_name,
+                    COUNT(*)                                   AS total,
+                    COUNT(*) FILTER (WHERE pr.was_correct)    AS correct
+                FROM prediction_results pr
+                JOIN matches m ON m.id = pr.match_id
+                GROUP BY m.league_name
+                ORDER BY total DESC
+            """)
+            by_league = [
+                {
+                    "league": row["league_name"],
+                    "total":   row["total"],
+                    "correct": row["correct"],
+                    "rate":    round(row["correct"] / row["total"] * 100, 1) if row["total"] else 0,
+                }
+                for row in league_rows
+            ]
+
             # מיין: ניבויים שנגמרו קודם, אחר כך pending
             recent = [dict(r) for r in resolved] + [dict(r) for r in pending]
 
@@ -278,7 +299,8 @@ async def get_track_record(limit: int = 50) -> dict:
                     "vb_accuracy":  round(vb_ok / vb * 100, 1) if vb else 0,
                     "pending":      len(pending),
                 },
-                "recent": recent,
+                "by_league": by_league,
+                "recent":    recent,
             }
 
     except Exception as e:

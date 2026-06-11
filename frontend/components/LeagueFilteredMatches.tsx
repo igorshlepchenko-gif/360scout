@@ -18,7 +18,30 @@ function getGroupKey(league: string): string {
   return LEAGUE_GROUPS.find(g => g.match(league))?.key ?? "other";
 }
 
-export default function LeagueFilteredMatches({ matches }: { matches: any[] }) {
+type LeagueAccuracyRow = { league: string; total: number; correct: number; rate: number };
+
+function getGroupAccuracy(
+  groupKey: string,
+  leagueAccuracy: LeagueAccuracyRow[],
+): { rate: number; total: number } | null {
+  const group = LEAGUE_GROUPS.find(g => g.key === groupKey);
+  if (!group) return null;
+  const rows = leagueAccuracy.filter(r => group.match(r.league ?? ""));
+  const total   = rows.reduce((s, r) => s + r.total,   0);
+  const correct = rows.reduce((s, r) => s + r.correct, 0);
+  if (!total) return null;
+  return { rate: Math.round((correct / total) * 1000) / 10, total };
+}
+
+export default function LeagueFilteredMatches({
+  matches,
+  leagueAccuracy = [],
+  globalAccuracy = null,
+}: {
+  matches: any[];
+  leagueAccuracy?: LeagueAccuracyRow[];
+  globalAccuracy?: number | null;
+}) {
   const [active, setActive] = useState("all");
 
   /* Build tab list — only show groups that have matches */
@@ -44,9 +67,12 @@ export default function LeagueFilteredMatches({ matches }: { matches: any[] }) {
             label={`כל המשחקים (${matches.length})`}
             active={active === "all"}
             onClick={() => setActive("all")}
+            badge={globalAccuracy != null ? { text: `${globalAccuracy}% דיוק`, bg: "#e67e22" } : undefined}
           />
           {availableGroups.map(g => {
             const count = matches.filter(m => getGroupKey(m.league ?? "") === g.key).length;
+            const acc   = getGroupAccuracy(g.key, leagueAccuracy);
+            const badgeBg = g.key === "world-cup" ? "#2ecc71" : "#3498db";
             return (
               <TabBtn
                 key={g.key}
@@ -54,6 +80,7 @@ export default function LeagueFilteredMatches({ matches }: { matches: any[] }) {
                 active={active === g.key}
                 onClick={() => setActive(g.key)}
                 highlight={g.key === "world-cup"}
+                badge={acc ? { text: `${acc.rate}% פגיעה`, bg: badgeBg } : undefined}
               />
             );
           })}
@@ -98,9 +125,13 @@ export default function LeagueFilteredMatches({ matches }: { matches: any[] }) {
 }
 
 function TabBtn({
-  label, active, onClick, highlight = false,
+  label, active, onClick, highlight = false, badge,
 }: {
-  label: string; active: boolean; onClick: () => void; highlight?: boolean;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  highlight?: boolean;
+  badge?: { text: string; bg: string };
 }) {
   return (
     <button
@@ -113,6 +144,9 @@ function TabBtn({
         whiteSpace: "nowrap",
         cursor: "pointer",
         transition: "all 0.18s",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
         border: active
           ? highlight ? "1px solid rgba(234,179,8,0.6)" : "1px solid rgba(16,185,129,0.5)"
           : "1px solid rgba(255,255,255,0.1)",
@@ -125,6 +159,19 @@ function TabBtn({
       }}
     >
       {label}
+      {badge && (
+        <span style={{
+          background: badge.bg,
+          color: "white",
+          fontSize: 10,
+          fontWeight: 700,
+          padding: "1px 6px",
+          borderRadius: 99,
+          lineHeight: 1.6,
+        }}>
+          {badge.text}
+        </span>
+      )}
     </button>
   );
 }
