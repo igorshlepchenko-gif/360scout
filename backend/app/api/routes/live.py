@@ -562,6 +562,10 @@ def build_match_analysis_sync(
         "value_bets":    value_bets if value_bets else None,
         "consensus":     consensus,
         "weather":       weather,
+        "xg": {
+            "home": round(xg_home, 2),
+            "away": round(xg_away, 2),
+        },
         # live state — for the LIVE indicator and the in-play tab
         "_status":       fixture.get("_status"),
         "elapsed":       fix.get("status", {}).get("elapsed"),

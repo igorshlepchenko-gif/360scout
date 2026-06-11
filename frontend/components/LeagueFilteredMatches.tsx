@@ -180,6 +180,7 @@ export default function LeagueFilteredMatches({
             matchId={String(m.fixture_id)}
             odds={m.odds}
             weather={m.weather}
+            xg={m.xg}
           />
         ))}
         {filtered.length === 0 && (

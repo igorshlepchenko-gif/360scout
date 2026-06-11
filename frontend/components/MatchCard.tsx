@@ -81,6 +81,7 @@ interface MatchCardProps {
   matchId?:    string;
   odds?:       MatchOdds | null;
   weather?:    MatchWeather | null;
+  xg?:         { home: number; away: number } | null;
 }
 
 const pct  = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -224,69 +225,129 @@ function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
 }
 
 // ===== Value vs Market table (The Winning Method) =====
-function ValueMarketTable({
-  probs, odds, valueBets, homeTeam, awayTeam,
+function WinningMethodTable({
+  probs, odds, valueBets, homeTeam, awayTeam, xg,
 }: {
-  probs: { home: number; draw: number; away: number };
-  odds: MatchOdds;
+  probs:     { home: number; draw: number; away: number };
+  odds:      MatchOdds;
   valueBets?: ValueBets;
-  homeTeam: string;
-  awayTeam: string;
+  homeTeam:  string;
+  awayTeam:  string;
+  xg?:       { home: number; away: number };
 }) {
   const fairOdds = (p: number) => (p > 0 ? (1 / p).toFixed(2) : "—");
-  const rows = [
-    { sign: "1", label: homeTeam,  prob: probs.home, market: odds.odds_home, vb: valueBets?.home },
-    { sign: "X", label: "תיקו",    prob: probs.draw, market: odds.odds_draw, vb: valueBets?.draw },
-    { sign: "2", label: awayTeam,  prob: probs.away, market: odds.odds_away, vb: valueBets?.away },
+
+  const TH: React.CSSProperties = {
+    padding: "10px 12px", fontSize: 10, fontWeight: 700,
+    color: "#64748b", textAlign: "center", whiteSpace: "nowrap",
+    background: "rgba(15,23,42,0.6)",
+  };
+  const TD: React.CSSProperties = {
+    padding: "10px 12px", fontSize: 12, textAlign: "center",
+    fontFamily: "monospace", color: "#cbd5e1",
+  };
+  const LABEL: React.CSSProperties = {
+    padding: "10px 12px", fontSize: 11, fontWeight: 700,
+    color: "#94a3b8", textAlign: "right",
+  };
+  const ROW_PROB: React.CSSProperties = { background: "rgba(56,189,248,0.06)" };
+  const ROW_VALUE_ON: React.CSSProperties = { background: "rgba(74,222,128,0.08)" };
+
+  const cols = [
+    { sign: "1", label: homeTeam,  prob: probs.home, market: odds.odds_home, vb: valueBets?.home,  xgVal: xg?.home },
+    { sign: "X", label: "תיקו",   prob: probs.draw, market: odds.odds_draw, vb: valueBets?.draw,  xgVal: undefined },
+    { sign: "2", label: awayTeam, prob: probs.away, market: odds.odds_away, vb: valueBets?.away,  xgVal: xg?.away },
   ];
 
-  const th: React.CSSProperties = { padding: "7px 10px", fontSize: 9, fontWeight: 700, color: "#475569", textAlign: "right", whiteSpace: "nowrap" };
-  const td: React.CSSProperties = { padding: "7px 10px", fontSize: 11, color: "#cbd5e1", textAlign: "right" };
+  const hasAnyValue = cols.some(c => c.vb?.is_value_bet);
 
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <div style={{ height: 14, width: 3, background: "#10b981", borderRadius: 99 }} />
+        <div style={{ height: 14, width: 3, background: "#38bdf8", borderRadius: 99 }} />
         <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>
-          הצלבת ערך מול השוק
+          שיטת הניצחון — ניתוח מלא
         </span>
         {odds.bookmaker && (
-          <span style={{ fontSize: 9, color: "#475569" }}>· מקור: {odds.bookmaker}</span>
+          <span style={{ fontSize: 9, color: "#475569" }}>· {odds.bookmaker}</span>
         )}
       </div>
-      <div style={{ border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, overflow: "hidden" }}>
+
+      <div style={{ border: "1px solid #334155", borderRadius: 10, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "rgba(255,255,255,0.03)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <th style={th}>סימון</th>
-              <th style={th}>הסתברות אלגוריתם</th>
-              <th style={th}>יחס הוגן</th>
-              <th style={th}>יחס שוק</th>
-              <th style={th}>Value</th>
+            <tr style={{ borderBottom: "2px solid #38bdf8" }}>
+              <th style={{ ...TH, textAlign: "right" }}>פרמטר</th>
+              {cols.map(c => (
+                <th key={c.sign} style={TH}>
+                  {c.sign}<br />
+                  <span style={{ fontSize: 9, fontWeight: 400, color: "#475569" }}>{c.label}</span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => {
-              const isValue = !!r.vb?.is_value_bet;
-              return (
-                <tr key={r.sign} style={{
-                  background: isValue ? "rgba(16,185,129,0.06)" : "transparent",
-                  borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
-                }}>
-                  <td style={{ ...td, fontWeight: 700, color: "white" }}>
-                    {r.sign} <span style={{ color: "#64748b", fontWeight: 400, fontSize: 10 }}>({r.label})</span>
+
+            {/* ── xG row (only when backend provides it) ── */}
+            {xg && (
+              <tr style={{ borderBottom: "1px solid #334155" }}>
+                <td style={LABEL}>⚽ xG משוקלל</td>
+                {cols.map(c => (
+                  <td key={c.sign} style={TD}>
+                    {c.xgVal != null ? c.xgVal.toFixed(2) : "—"}
                   </td>
-                  <td style={td}>{pct0(r.prob)}</td>
-                  <td style={{ ...td, color: "#64748b", direction: "ltr" }}>{fairOdds(r.prob)}</td>
-                  <td style={{ ...td, fontWeight: isValue ? 700 : 400, direction: "ltr" }}>
-                    {r.market ? r.market.toFixed(2) : "—"}
-                  </td>
-                  <td style={{ ...td, fontWeight: 700, color: isValue ? "#10b981" : "#475569", direction: "ltr" }}>
-                    {isValue ? `+${r.vb!.edge_percent.toFixed(1)}%` : "—"}
-                  </td>
-                </tr>
-              );
-            })}
+                ))}
+              </tr>
+            )}
+
+            {/* ── Probability row — blue ── */}
+            <tr style={{ ...ROW_PROB, borderBottom: "1px solid #334155" }}>
+              <td style={{ ...LABEL, color: "#38bdf8" }}>📊 הסתברות</td>
+              {cols.map(c => (
+                <td key={c.sign} style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 14 }}>
+                  {(c.prob * 100).toFixed(1)}%
+                </td>
+              ))}
+            </tr>
+
+            {/* ── Fair odds row ── */}
+            <tr style={{ borderBottom: "1px solid #334155" }}>
+              <td style={LABEL}>⚖️ יחס הוגן</td>
+              {cols.map(c => (
+                <td key={c.sign} style={{ ...TD, color: "#64748b" }}>
+                  {fairOdds(c.prob)}
+                </td>
+              ))}
+            </tr>
+
+            {/* ── Market odds row ── */}
+            <tr style={{ borderBottom: hasAnyValue ? "1px solid #334155" : "none" }}>
+              <td style={LABEL}>💰 יחס שוק</td>
+              {cols.map(c => (
+                <td key={c.sign} style={TD}>
+                  {c.market ? c.market.toFixed(2) : "—"}
+                </td>
+              ))}
+            </tr>
+
+            {/* ── Value row — green if any value found ── */}
+            {hasAnyValue && (
+              <tr style={ROW_VALUE_ON}>
+                <td style={{ ...LABEL, color: "#4ade80" }}>⚡ ערך (Edge)</td>
+                {cols.map(c => {
+                  const isV = !!c.vb?.is_value_bet;
+                  return (
+                    <td key={c.sign} style={{
+                      ...TD,
+                      fontWeight: 700,
+                      color: isV ? "#4ade80" : "#475569",
+                    }}>
+                      {isV ? `✅ +${c.vb!.edge_percent.toFixed(1)}%` : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -300,7 +361,7 @@ export default function MatchCard({
   homeTeam, awayTeam, homeLogo, awayLogo, league, leagueLogo,
   matchDate, isLive = false,
   prediction, value_bets, consensus,
-  fixtureId, matchId, odds, weather,
+  fixtureId, matchId, odds, weather, xg,
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -623,14 +684,15 @@ export default function MatchCard({
         {expanded && (
           <div className="card-expanded" style={{ padding: "4px 24px 20px" }}>
 
-            {/* ── VALUE vs MARKET TABLE ── */}
+            {/* ── WINNING METHOD TABLE ── */}
             {odds?.odds_home && (
-              <ValueMarketTable
+              <WinningMethodTable
                 probs={displayProbs}
                 odds={odds}
                 valueBets={value_bets}
                 homeTeam={homeTeam}
                 awayTeam={awayTeam}
+                xg={xg ?? undefined}
               />
             )}
 
