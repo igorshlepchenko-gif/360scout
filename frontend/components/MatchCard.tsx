@@ -354,12 +354,12 @@ export default function MatchCard({
             <div>
               <div style={{
                 fontSize: 13, fontWeight: 800, lineHeight: 1.2,
-                color: homeWin ? "#10b981" : "white",
+                color: "#10b981",
                 maxWidth: 110,
               }}>
                 {homeTeam}
               </div>
-              <div style={{ fontSize: 9, color: "#475569", marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 9, color: "#10b981", opacity: 0.7, marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
                 בית
               </div>
             </div>
@@ -418,12 +418,12 @@ export default function MatchCard({
             <div style={{ textAlign: "left" }}>
               <div style={{
                 fontSize: 13, fontWeight: 800, lineHeight: 1.2,
-                color: awayWin ? "#ef4444" : "white",
+                color: "#ef4444",
                 maxWidth: 110,
               }}>
                 {awayTeam}
               </div>
-              <div style={{ fontSize: 9, color: "#475569", marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 9, color: "#ef4444", opacity: 0.7, marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
                 אורחים
               </div>
             </div>
