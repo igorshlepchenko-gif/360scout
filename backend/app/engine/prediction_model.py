@@ -3,12 +3,37 @@
 Layers: Stats → Environment → Human Factors → Psychology → Monte Carlo
 """
 
+import math
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+# ── Poisson goal-distribution model (The Winning Method) ──────────────────────
+_FACT = np.array([math.factorial(k) for k in range(11)], dtype=float)
+
+
+def poisson_match_probabilities(xg_home: float, xg_away: float, max_goals: int = 8) -> dict:
+    """
+    ממיר xG לשתי הקבוצות להסתברויות 1/X/2 דרך מטריצת פואסון.
+    matrix[h][a] = P(בית=h, חוץ=a). בית מנצח = מתחת לאלכסון, חוץ = מעל, תיקו = האלכסון.
+    מנורמל ל-1 כדי לפצות על קטיעת הזנב ב-max_goals.
+    """
+    lh = max(float(xg_home), 0.05)
+    la = max(float(xg_away), 0.05)
+    ks = np.arange(max_goals + 1)
+    fact = _FACT[: max_goals + 1]
+    home_pmf = np.exp(-lh) * lh ** ks / fact
+    away_pmf = np.exp(-la) * la ** ks / fact
+    matrix = np.outer(home_pmf, away_pmf)
+
+    home = float(np.tril(matrix, -1).sum())   # h > a
+    away = float(np.triu(matrix,  1).sum())   # a > h
+    draw = float(np.trace(matrix))            # h == a
+    total = home + draw + away or 1.0
+    return {"home": home / total, "draw": draw / total, "away": away / total}
 
 
 @dataclass
@@ -124,19 +149,21 @@ class PredictionEngine:
     #  MODULE 1 — Stats (xG, form, H2H)                                   #
     # ------------------------------------------------------------------ #
     def _stats_module(self, ctx: MatchContext) -> dict:
-        xg_total = ctx.xg_home + ctx.xg_away + 1e-9
-        base_home = ctx.xg_home / xg_total
-        base_away = ctx.xg_away / xg_total
+        # Poisson goal matrix → statistically-grounded 1/X/2 from xG
+        p = poisson_match_probabilities(ctx.xg_home, ctx.xg_away)
+        home, draw, away = p["home"], p["draw"], p["away"]
 
-        # Form: ±15% swing
-        base_home += ctx.form_home * 0.15
-        base_away += ctx.form_away * 0.15
+        # Form: ±15% swing, H2H: ±8% swing — applied to home/away
+        home += ctx.form_home * 0.15 + ctx.h2h_advantage * 0.08
+        away += ctx.form_away * 0.15 - ctx.h2h_advantage * 0.08
 
-        # H2H: ±8% swing
-        base_home += ctx.h2h_advantage * 0.08
-        base_away -= ctx.h2h_advantage * 0.08
-
-        return self._normalize_two(base_home, base_away)
+        # renormalize across all three (keeps the Poisson draw weight)
+        home = max(home, 0.02)
+        away = max(away, 0.02)
+        total = home + draw + away
+        return {"home": round(home / total, 4),
+                "draw": round(draw / total, 4),
+                "away": round(away / total, 4)}
 
     # ------------------------------------------------------------------ #
     #  MODULE 2 — Environmental                                            #
