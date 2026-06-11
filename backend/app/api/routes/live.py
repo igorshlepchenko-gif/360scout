@@ -8,6 +8,9 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 from fastapi import APIRouter, BackgroundTasks
 import httpx
 from dotenv import load_dotenv
@@ -473,7 +476,7 @@ def build_match_analysis_sync(
     if match_date:
         try:
             dt = datetime.fromisoformat(match_date.replace("Z", "+00:00"))
-            match_date_display = dt.strftime("%d/%m/%Y %H:%M")
+            match_date_display = dt.astimezone(ISRAEL_TZ).strftime("%d/%m/%Y %H:%M")
         except Exception:
             match_date_display = match_date[:16]
     else:

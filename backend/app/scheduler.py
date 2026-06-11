@@ -12,7 +12,10 @@ Jobs:
 import os
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
@@ -44,7 +47,7 @@ def _build_jobstores() -> dict:
 async def job_fetch_live_matches():
     """כל 5 דקות — מושך משחקים חיים ושומר ניבויים ל-DB"""
     try:
-        logger.info(f"[Scheduler] fetch_live_matches — {datetime.utcnow().strftime('%H:%M:%S')}")
+        logger.info(f"[Scheduler] fetch_live_matches — {datetime.now(ISRAEL_TZ).strftime('%H:%M:%S')}")
         import httpx
         from app.cache import set as cache_set
         from app.db.repository import save_match_prediction
@@ -118,7 +121,7 @@ async def job_fetch_live_matches():
 async def job_auto_update_results():
     """כל 60 דקות — עדכון תוצאות משחקים שנגמרו"""
     try:
-        logger.info(f"[Scheduler] auto_update_results — {datetime.utcnow().strftime('%H:%M')}")
+        logger.info(f"[Scheduler] auto_update_results — {datetime.now(ISRAEL_TZ).strftime('%H:%M')}")
         import httpx
         from app.db.database import get_db
         from app.db.repository import update_match_result
@@ -213,7 +216,7 @@ def start_scheduler() -> AsyncIOScheduler:
         job_fetch_live_matches,
         trigger="interval", minutes=5,
         id="fetch_live", replace_existing=True,
-        next_run_time=datetime.utcnow(),  # run immediately on startup
+        next_run_time=datetime.now(timezone.utc),  # run immediately on startup
     )
 
     # כל 60 דקות
@@ -223,10 +226,11 @@ def start_scheduler() -> AsyncIOScheduler:
         id="auto_results", replace_existing=True,
     )
 
-    # כל 24 שעות בשעה 03:00 UTC
+    # כל 24 שעות בשעה 03:00 שעון ישראל
     _scheduler.add_job(
         job_cleanup_cache,
         trigger="cron", hour=3, minute=0,
+        timezone=ISRAEL_TZ,
         id="cleanup_cache", replace_existing=True,
     )
 

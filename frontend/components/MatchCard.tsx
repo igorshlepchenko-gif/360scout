@@ -338,12 +338,14 @@ export default function MatchCard({
         </div>
 
         {/* ── SCOREBOARD ROW: Home | Center | Away ── */}
+        {/* direction:ltr forces home=left, away=right regardless of page RTL */}
         <div className="match-scoreboard" style={{
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
           gap: 8,
           marginBottom: 14,
+          direction: "ltr",
         }}>
 
           {/* HOME — שמאל */}

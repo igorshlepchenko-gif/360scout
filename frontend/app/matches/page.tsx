@@ -197,13 +197,13 @@ export default function MatchesPage() {
                       alignItems: "center",
                     }}>
                       {/* משחק */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, direction: "ltr" }}>
                         {m.home_logo && <img src={m.home_logo} width={20} height={20} style={{ objectFit: "contain" }} alt="" />}
                         <span style={{ color: "white", fontWeight: 600, fontSize: 13 }}>{m.home_team}</span>
-                        <span style={{ color: "#475569", fontSize: 11 }}>נגד</span>
+                        <span style={{ color: "#475569", fontSize: 11 }}>vs</span>
                         {m.away_logo && <img src={m.away_logo} width={20} height={20} style={{ objectFit: "contain" }} alt="" />}
                         <span style={{ color: "white", fontWeight: 600, fontSize: 13 }}>{m.away_team}</span>
-                        <span style={{ color: "#374151", fontSize: 11, marginRight: 4 }}>{m.match_date?.slice(0, 10)}</span>
+                        <span style={{ color: "#374151", fontSize: 11, marginLeft: 4 }}>{m.match_date?.slice(0, 10)}</span>
                       </div>
 
                       {/* ליגה */}
@@ -280,13 +280,13 @@ export default function MatchesPage() {
                     borderLeft: vbEntry ? "3px solid #f59e0b" : m.consensus?.type === "LOCK" ? "3px solid #10b981" : "3px solid transparent",
                   }}>
                     {/* Row 1: Teams */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap", direction: "ltr" }}>
                       {m.home_logo && <img src={m.home_logo} width={22} height={22} style={{ objectFit: "contain" }} alt="" />}
                       <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{m.home_team}</span>
                       <span style={{ color: "#475569", fontSize: 12 }}>vs</span>
                       {m.away_logo && <img src={m.away_logo} width={22} height={22} style={{ objectFit: "contain" }} alt="" />}
                       <span style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{m.away_team}</span>
-                      <span style={{ color: "#374151", fontSize: 11, marginRight: "auto" }}>{m.match_date?.slice(0, 10)}</span>
+                      <span style={{ color: "#374151", fontSize: 11, marginLeft: "auto" }}>{m.match_date?.slice(0, 10)}</span>
                     </div>
 
                     {/* Row 2: League + Confidence */}

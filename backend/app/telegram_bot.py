@@ -68,7 +68,7 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
 
 🏠 *בית:* {home_team}
 ✈️ *אורחים:* {away_team}
-🏆 {match.get('league','')} | 📅 {match.get('match_date','')}
+🏆 {match.get('league','')} | 📅 {match.get('match_date','')} 🕐 (שעון ישראל)
 
 {emoji} *תוצאה: {outcome_team} ({he_name})*
 ━━━━━━━━━━━━━━━━━━━━
