@@ -11,11 +11,14 @@ logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 from app.engine.prediction_model import (
-    PredictionEngine, MatchContext, calculate_value, calculate_consensus
+    PredictionEngine, MatchContext, calculate_value, calculate_consensus,
+    poisson_match_probabilities,
 )
 
 router = APIRouter(prefix="/api/matches", tags=["matches"])
 engine = PredictionEngine()
+
+OUTCOME_SIGN = {"home": "1", "draw": "X", "away": "2"}
 
 
 # ============================================================
@@ -417,4 +420,90 @@ async def demo_prediction():
         "value_bets": value_bets,
         "consensus":  consensus,
         "note":       "This is a demo prediction with simulated data.",
+    }
+
+
+@router.get("/{fixture_id}/winning-method")
+async def winning_method(fixture_id: int):
+    """
+    טבלת 'The Winning Method' למשחק אמיתי:
+    xG → הסתברות המודל → יחס הוגן → יחס שוק → סטיית ערך.
+    משתמש במנוע החי + יחסי שוק אמיתיים (אותו מקור אמת כמו הכרטיסים).
+    """
+    import httpx
+    from app.api.routes.live import (
+        API_FOOTBALL_BASE, API_FOOTBALL_KEY,
+        build_match_analysis, fetch_all_odds,
+    )
+
+    # 1. משוך את ה-fixture
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{API_FOOTBALL_BASE}/fixtures",
+                headers={"x-apisports-key": API_FOOTBALL_KEY},
+                params={"id": fixture_id},
+            )
+            fixtures = r.json().get("response", [])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"שגיאה במשיכת המשחק: {e}")
+
+    if not fixtures:
+        raise HTTPException(status_code=404, detail="משחק לא נמצא")
+
+    # 2. ניתוח מלא (xG אמיתי + odds + מנוע) — אותו path של עמוד המשחק
+    all_odds = await fetch_all_odds()
+    match    = await build_match_analysis(fixtures[0], all_odds)
+
+    final = match["prediction"]["final"]
+    odds  = match.get("odds") or {}
+    vbs   = match.get("value_bets") or {}
+    xg    = match.get("xg") or {}
+
+    # 3. בנה את שורות הטבלה
+    rows = []
+    best_value = None
+    for outcome, odds_key in (("home", "odds_home"), ("draw", "odds_draw"), ("away", "odds_away")):
+        prob   = final.get(outcome, 0.0)
+        fair   = round(1 / prob, 2) if prob > 0 else None
+        market = odds.get(odds_key)
+        vb     = vbs.get(outcome) or {}
+        edge   = vb.get("edge_percent")
+        is_value = bool(vb.get("is_value_bet"))
+        team = (match["home_team"] if outcome == "home"
+                else match["away_team"] if outcome == "away" else "תיקו")
+
+        row = {
+            "outcome":      outcome,
+            "sign":         OUTCOME_SIGN[outcome],
+            "label":        team,
+            "model_prob":   round(prob * 100, 1),   # %
+            "fair_odds":    fair,
+            "market_odds":  market,
+            "edge_percent": round(edge, 1) if edge is not None else None,
+            "is_value":     is_value,
+            "verdict":      "ערך חיובי" if is_value else ("ללא ערך" if market else "אין יחס שוק"),
+        }
+        rows.append(row)
+        if is_value and (best_value is None or (edge or 0) > (best_value.get("edge_percent") or 0)):
+            best_value = row
+
+    return {
+        "status":     "success",
+        "fixture_id": fixture_id,
+        "home_team":  match["home_team"],
+        "away_team":  match["away_team"],
+        "league":     match.get("league"),
+        "match_date": match.get("match_date"),
+        "method":     "The Winning Method · Poisson goal-matrix",
+        "xg": {
+            "home":   xg.get("home"),
+            "away":   xg.get("away"),
+            "source": match.get("data_quality", {}).get("xg_source", "estimated"),
+        },
+        "confidence":  match["prediction"].get("confidence"),
+        "bookmaker":   odds.get("bookmaker"),
+        "table":       rows,
+        "best_value":  best_value,
+        "note":        "יחס הוגן = 1 ÷ הסתברות המודל · ערך חיובי = יחס השוק גבוה מהיחס ההוגן. למטרות מחקר בלבד.",
     }
