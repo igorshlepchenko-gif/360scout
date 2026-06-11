@@ -116,7 +116,7 @@ export default async function Home() {
         </a>
 
         {/* Nav links */}
-        <div style={{ display: "flex", gap: 28 }}>
+        <div className="nav-links" style={{ display: "flex", gap: 28 }}>
           {navItems.map((item) => (
             <a key={item.label} href={item.href} style={{
               color: item.active ? "white" : "#64748b",

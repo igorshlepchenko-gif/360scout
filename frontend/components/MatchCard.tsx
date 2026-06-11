@@ -338,7 +338,7 @@ export default function MatchCard({
         </div>
 
         {/* ── SCOREBOARD ROW: Home | Center | Away ── */}
-        <div style={{
+        <div className="match-scoreboard" style={{
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
@@ -347,7 +347,7 @@ export default function MatchCard({
         }}>
 
           {/* HOME — שמאל */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="team-col team-home" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TeamLogo logo={homeLogo} name={homeTeam} size={48} />
             <div>
               <div style={{
@@ -366,13 +366,13 @@ export default function MatchCard({
           {/* CENTER — אחוזים + ביטחון */}
           <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
             {/* 3 probability pills */}
-            <div style={{ display: "flex", gap: 4 }}>
+            <div className="prob-pills" style={{ display: "flex", gap: 4 }}>
               {([
                 { key: "home", val: displayProbs.home, color: "#10b981", bg: "rgba(16,185,129,0.12)" },
                 { key: "draw", val: displayProbs.draw, color: "#94a3b8", bg: "rgba(148,163,184,0.08)" },
                 { key: "away", val: displayProbs.away, color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
               ] as const).map(p => (
-                <div key={p.key} style={{
+                <div key={p.key} className="prob-pill" style={{
                   background: p.bg,
                   border: `1px solid ${p.color}30`,
                   borderRadius: 8,
@@ -412,7 +412,7 @@ export default function MatchCard({
           </div>
 
           {/* AWAY — ימין */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+          <div className="team-col team-away" style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
             <div style={{ textAlign: "left" }}>
               <div style={{
                 fontSize: 13, fontWeight: 800, lineHeight: 1.2,
@@ -462,7 +462,7 @@ export default function MatchCard({
 
       {/* ── KEY FACTORS ── */}
       {prediction.key_factors.length > 0 && (
-        <div style={{ padding: "0 24px 12px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div className="key-factors" style={{ padding: "0 24px 12px", display: "flex", flexWrap: "wrap", gap: 6 }}>
           {prediction.key_factors.map(f => {
             const info  = FACTOR_LABELS[f.factor] ?? { label: f.factor, icon: "•" };
             const color = f.impact === "CRITICAL" ? "rgba(239,68,68,0.12) border-red-500/20 text-red-400"
@@ -483,7 +483,7 @@ export default function MatchCard({
 
       {/* ── VALUE BET ── */}
       {anyValueBet && bestVB && (
-        <div style={{
+        <div className="value-bet-section" style={{
           margin: "0 24px 16px",
           background: "linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.06))",
           border: "1px solid rgba(16,185,129,0.3)",
@@ -532,7 +532,7 @@ export default function MatchCard({
         </button>
 
         {expanded && (
-          <div style={{ padding: "4px 24px 20px" }}>
+          <div className="card-expanded" style={{ padding: "4px 24px 20px" }}>
             <ModuleChart modules={prediction.by_module} />
 
             {/* ── ANALYST CONSENSUS SUMMARY ROW ── */}
@@ -590,7 +590,7 @@ export default function MatchCard({
             )}
 
             {/* Monte Carlo stats */}
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
+            <div className="monte-carlo-row" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: "white" }}>🎲 {prediction.monte_carlo.simulations.toLocaleString("he-IL")}</div>
                 <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>סימולציות</div>
@@ -756,7 +756,7 @@ export default function MatchCard({
                   ) : null}
 
                   {/* Stats row */}
-                  <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
+                  <div className="consensus-stats-row" style={{ display: "flex", gap: 16, marginBottom: 10 }}>
                     <div style={{ textAlign: "center" }}>
                       <div style={{ fontSize: 20, fontWeight: 900, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
                         {consensusData.consensus_rate}%
