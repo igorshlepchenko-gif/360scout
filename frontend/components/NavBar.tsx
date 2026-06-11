@@ -21,7 +21,7 @@ export default function NavBar() {
   return (
     <>
       <nav style={{
-        position: "sticky", top: 0, zIndex: 50,
+        position: "sticky", top: 40, zIndex: 50,
         borderBottom: "1px solid rgba(255,255,255,0.08)",
         background: "rgba(11,14,20,0.95)",
         backdropFilter: "blur(12px)",
@@ -90,7 +90,7 @@ export default function NavBar() {
         <div
           style={{
             position: "fixed",
-            top: 57, left: 0, right: 0,
+            top: 97, left: 0, right: 0,
             zIndex: 49,
             background: "rgba(11,14,20,0.98)",
             borderBottom: "1px solid rgba(255,255,255,0.08)",
