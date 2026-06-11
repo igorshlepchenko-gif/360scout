@@ -66,7 +66,13 @@ export default function MatchesPage() {
     try {
       const r = await fetch(`${API}/api/live/matches?limit=${limit}`, { cache: "no-store" });
       const d = await r.json();
-      setMatches(d.matches ?? []);
+      // dedupe — הפיד מחזיר לעיתים את אותו משחק פעמיים
+      const seen = new Set<number>();
+      setMatches((d.matches ?? []).filter((m: Match) => {
+        if (seen.has(m.fixture_id)) return false;
+        seen.add(m.fixture_id);
+        return true;
+      }));
     } catch { setMatches([]); }
     finally { setLoading(false); }
   }, [limit]);
@@ -98,8 +104,8 @@ export default function MatchesPage() {
     if (activeFilters.sortBy === "CONFIDENCE_DESC") return (b.prediction?.confidence ?? 0) - (a.prediction?.confidence ?? 0);
     if (activeFilters.sortBy === "TIME") return (a.match_date ?? "").localeCompare(b.match_date ?? "");
     if (activeFilters.sortBy === "VALUE_DESC") {
-      const aEdge = Math.max(...Object.values(a.value_bets ?? {}).map(v => v?.edge_percent ?? 0));
-      const bEdge = Math.max(...Object.values(b.value_bets ?? {}).map(v => v?.edge_percent ?? 0));
+      const aEdge = Math.max(0, ...Object.values(a.value_bets ?? {}).map(v => v?.edge_percent ?? 0));
+      const bEdge = Math.max(0, ...Object.values(b.value_bets ?? {}).map(v => v?.edge_percent ?? 0));
       return bEdge - aEdge;
     }
     return 0;
