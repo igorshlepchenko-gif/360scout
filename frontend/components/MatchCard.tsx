@@ -45,6 +45,7 @@ interface ConsensusMatchResult {
   avg_analysts_confidence: number;
   is_consensus_lock:      boolean;
   display_badge:          string;
+  expert_advice:          string;
   is_demo:                boolean;
   data_source:            "demo" | "api-football" | "db";
   analysts: Array<{ name: string; pick: string; confidence: number }>;
@@ -719,7 +720,7 @@ export default function MatchCard({
                   padding: "12px 14px",
                 }}>
                   {/* Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: consensusData.expert_advice ? 4 : 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>👥 קונסנזוס אנליסטים</span>
                     <span style={{
                       fontSize: 11, fontWeight: 800,
@@ -728,6 +729,11 @@ export default function MatchCard({
                       {consensusData.display_badge}
                     </span>
                   </div>
+                  {consensusData.expert_advice ? (
+                    <div style={{ fontSize: 10, color: "#64748b", fontStyle: "italic", marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      💬 {consensusData.expert_advice}
+                    </div>
+                  ) : null}
 
                   {/* Stats row */}
                   <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>

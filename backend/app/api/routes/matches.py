@@ -277,19 +277,19 @@ async def check_consensus_match(req: ConsensusMatchRequest):
             logger.warning("Analyst DB fetch failed for fixture %s: %s", req.fixture_id, exc)
 
     # Priority 2: API-Football predictions endpoint
+    apf_data: Optional[dict] = None
     if not analysts_data and req.fixture_id:
         try:
             from app.tasks.data_fetcher import fetch_api_football_predictions
-            apf = await fetch_api_football_predictions(req.fixture_id)
-            if apf:
-                picks = [
-                    ("API-Football (בית)",    "1", apf["home_pct"] / 100),
-                    ("API-Football (תיקו)",   "X", apf["draw_pct"] / 100),
-                    ("API-Football (אורחים)", "2", apf["away_pct"] / 100),
-                ]
+            apf_data = await fetch_api_football_predictions(req.fixture_id)
+            if apf_data:
                 analysts_data = [
-                    AnalystPickInput(analyst_name=name, predict=pick, confidence=round(conf, 3))
-                    for name, pick, conf in picks
+                    AnalystPickInput(analyst_name=f"API-Football ({label})", predict=pick, confidence=round(conf / 100, 3))
+                    for label, pick, conf in [
+                        ("בית",    "1", apf_data["home_pct"]),
+                        ("תיקו",   "X", apf_data["draw_pct"]),
+                        ("אורחים", "2", apf_data["away_pct"]),
+                    ]
                     if conf > 0
                 ]
         except Exception as exc:
@@ -302,27 +302,43 @@ async def check_consensus_match(req: ConsensusMatchRequest):
         data_source   = "demo"
     else:
         is_demo     = False
-        data_source = "api-football" if any("API-Football" in a.analyst_name for a in analysts_data) else "db"
+        data_source = "api-football" if apf_data else "db"
 
-    total     = len(analysts_data)
-    agreeing  = [a for a in analysts_data if a.predict == req.our_prediction]
-    count     = len(agreeing)
-    rate      = (count / total) * 100
-    avg_conf  = (sum(a.confidence for a in agreeing) / count) if count > 0 else 0.0
+    # ── evaluateConsensusLock logic ──
+    # For API-Football: consensus_rate = the API-Football % for our pick,
+    #                   lock = dominantPick matches our pick AND prob ≥ 65%
+    # For DB / demo:    consensus_rate = % of analysts agreeing,
+    #                   lock = rate ≥ 80% AND prob ≥ 65%
+    if data_source == "api-football" and apf_data:
+        pct_for_pick = {"1": apf_data["home_pct"], "X": apf_data["draw_pct"], "2": apf_data["away_pct"]}
+        rate          = pct_for_pick.get(req.our_prediction, 0.0)
+        is_agreement  = apf_data["dominant_pick"] == req.our_prediction
+        is_lock       = is_agreement and req.our_probability >= 0.65
+        agreeing_str  = f'{int(rate)}% ({apf_data["dominant_pick"]})'
+        avg_conf      = rate / 100
+        expert_advice = apf_data.get("advice") or ""
+    else:
+        total        = len(analysts_data)
+        agreeing     = [a for a in analysts_data if a.predict == req.our_prediction]
+        count        = len(agreeing)
+        rate         = (count / total) * 100 if total else 0.0
+        avg_conf     = (sum(a.confidence for a in agreeing) / count) if count > 0 else 0.0
+        is_lock      = rate >= 80 and req.our_probability >= 0.65
+        agreeing_str = f"{count}/{total}"
+        expert_advice = ""
 
-    # Consensus lock: ≥80% analyst agreement AND system probability ≥60%
-    is_lock   = rate >= 80 and req.our_probability >= 0.60
-    badge     = "🔥 נעילת קונסנזוס" if is_lock else ("⚡ בבדיקה" if rate >= 50 else "⚠ פיצול")
+    badge = "🔥 נעילת קונסנזוס" if is_lock else ("⚡ בבדיקה" if rate >= 50 else "⚠ פיצול")
 
     return {
         "match_id":               req.match_id,
         "teams":                  f"{req.home_team} vs {req.away_team}",
         "our_pick":               req.our_prediction,
         "consensus_rate":         round(rate, 1),
-        "agreeing_count":         f"{count}/{total}",
+        "agreeing_count":         agreeing_str,
         "avg_analysts_confidence": round(avg_conf * 100, 1),
         "is_consensus_lock":      is_lock,
         "display_badge":          badge,
+        "expert_advice":          expert_advice,
         "is_demo":                is_demo,
         "data_source":            data_source,
         "analysts": [
