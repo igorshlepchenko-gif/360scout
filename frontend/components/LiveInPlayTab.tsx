@@ -1,5 +1,6 @@
 "use client";
 import { Play, TrendingUp, Zap, Clock } from "lucide-react";
+import { bestValueBet } from "@/lib/valueBets";
 
 /* ── Types — the real /api/live/matches shape ───────────────────────────── */
 interface LiveMatch {
@@ -58,7 +59,7 @@ export default function LiveInPlayTab({ matches = [] }: { matches?: LiveMatch[] 
             const topKey = final
               ? (Object.entries(final).sort((a, b) => b[1] - a[1])[0][0] as "home" | "draw" | "away")
               : null;
-            const vbEntry = Object.entries(m.value_bets ?? {}).find(([, v]) => v?.is_value_bet);
+            const vbEntry = bestValueBet(m.value_bets);
             const fairOdds = topKey && final ? (1 / final[topKey]).toFixed(2) : null;
             const scoreTxt = m.score && m.score.home !== null
               ? `${m.score.home} - ${m.score.away}`

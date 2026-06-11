@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Info } from "lucide-react";
 import FilterSortBar, { FilterState } from "@/components/FilterSortBar";
+import { bestValueBet } from "@/lib/valueBets";
 import AlgorithmBreakdownModal, { Prediction } from "@/components/AlgorithmBreakdownModal";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
 
@@ -162,7 +163,7 @@ export default function MatchesPage() {
                 {sorted.map((m, i) => {
                   const final   = m.prediction?.final ?? { home: 0, draw: 0, away: 0 };
                   const bestOut = Object.entries(final).sort((a, b) => b[1] - a[1])[0];
-                  const vbEntry = Object.entries(m.value_bets ?? {}).find(([, v]) => v?.is_value_bet);
+                  const vbEntry = bestValueBet(m.value_bets);
 
                   return (
                     <div key={m.fixture_id} style={{
@@ -247,7 +248,7 @@ export default function MatchesPage() {
               {sorted.map(m => {
                 const final   = m.prediction?.final ?? { home: 0, draw: 0, away: 0 };
                 const bestOut = Object.entries(final).sort((a, b) => b[1] - a[1])[0];
-                const vbEntry = Object.entries(m.value_bets ?? {}).find(([, v]) => v?.is_value_bet);
+                const vbEntry = bestValueBet(m.value_bets);
 
                 return (
                   <div key={m.fixture_id} style={{

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { bestValueBet } from "@/lib/valueBets";
 
 interface Prediction {
   final: { home: number; draw: number; away: number };
@@ -365,7 +366,7 @@ export default function MatchCard({
 
   const displayProbs = consensus?.master ?? prediction.final;
   const anyValueBet  = Object.values(value_bets ?? {}).some(v => v?.is_value_bet);
-  const bestVB       = Object.entries(value_bets ?? {}).find(([, v]) => v?.is_value_bet);
+  const bestVB       = bestValueBet(value_bets);   // הגבוה ביותר, לא הראשון
   const cfg          = CONSENSUS_CONFIG[consensus?.type ?? "ALGORITHM_ONLY"] ?? CONSENSUS_CONFIG.ALGORITHM_ONLY;
 
   const homeWin    = displayProbs.home > displayProbs.away && displayProbs.home > displayProbs.draw;
