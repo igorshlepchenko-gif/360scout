@@ -131,7 +131,13 @@ export default function AnalystsPage() {
     try {
       const r = await fetch(`${API}/api/live/matches?limit=8`);
       const d = await r.json();
-      setMatches(d.matches ?? []);
+      // dedupe — הפיד מחזיר לעיתים את אותו משחק פעמיים
+      const seen = new Set<number>();
+      setMatches((d.matches ?? []).filter((m: LiveMatch) => {
+        if (seen.has(m.fixture_id)) return false;
+        seen.add(m.fixture_id);
+        return true;
+      }));
     } catch { /* silent */ }
   }, []);
 
