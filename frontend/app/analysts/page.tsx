@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import MatchConsensus from "@/components/MatchConsensus";
 import {
   Users, ShieldCheck, Flame, Award, ArrowLeftRight, PenSquare, Plus,
 } from "lucide-react";
@@ -516,34 +517,15 @@ export default function AnalystsPage() {
               </div>
             )}
 
-            {/* per-match analyst predictions */}
-            {selectedMatch && matchPredictions.length > 0 && (
-              <div className="rounded-xl border border-slate-800 bg-[#0F1318] p-5">
-                <h3 className="m-0 mb-3.5 text-sm font-bold text-white">🤝 ניבויים שהוזנו למשחק</h3>
-                <div className="flex flex-col gap-2">
-                  {matchPredictions.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2">
-                      <div>
-                        <span className="text-[13px] font-semibold text-white">{p.name}</span>
-                        {p.reasoning && <span className="mr-2 text-[11px] text-slate-500">· {p.reasoning}</span>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-500">{p.confidence_level}/10</span>
-                        <span
-                          className="rounded-md px-2 py-0.5 text-[13px] font-bold"
-                          style={{
-                            color: OUTCOME_COLOR[p.predicted_outcome] ?? "white",
-                            background: `${OUTCOME_COLOR[p.predicted_outcome] ?? "#fff"}18`,
-                            border: `1px solid ${OUTCOME_COLOR[p.predicted_outcome] ?? "#fff"}40`,
-                          }}
-                        >
-                          {OUTCOME_12X[p.predicted_outcome] ?? p.predicted_outcome}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {/* per-match consensus — algorithm vs analysts */}
+            {selectedMatch && algo && (
+              <MatchConsensus
+                homeTeam={selectedMatch.home_team}
+                awayTeam={selectedMatch.away_team}
+                algoProbs={algo}
+                algoConfidence={selectedMatch.prediction?.confidence ?? 0}
+                analysts={matchPredictions}
+              />
             )}
           </div>
         </div>
