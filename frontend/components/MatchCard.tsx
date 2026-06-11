@@ -431,8 +431,8 @@ export default function MatchCard({
           </div>
         </div>
 
-        {/* ── PROB BAR ── */}
-        <div style={{ height: 6, borderRadius: 99, overflow: "hidden", display: "flex", gap: 1.5, background: "rgba(255,255,255,0.04)" }}>
+        {/* ── PROB BAR ── direction:ltr so green (home) is on the LEFT under the home team */}
+        <div style={{ height: 6, borderRadius: 99, overflow: "hidden", display: "flex", gap: 1.5, background: "rgba(255,255,255,0.04)", direction: "ltr" }}>
           <AnimatedBar value={displayProbs.home} color="bg-emerald-500" delay={0} />
           <AnimatedBar value={displayProbs.draw} color="bg-slate-600"   delay={100} />
           <AnimatedBar value={displayProbs.away} color="bg-rose-500"    delay={200} />
