@@ -313,7 +313,7 @@ async def check_consensus_match(req: ConsensusMatchRequest):
         pct_for_pick = {"1": apf_data["home_pct"], "X": apf_data["draw_pct"], "2": apf_data["away_pct"]}
         rate          = pct_for_pick.get(req.our_prediction, 0.0)
         is_agreement  = apf_data["dominant_pick"] == req.our_prediction
-        is_lock       = is_agreement and req.our_probability >= 0.65
+        is_lock       = is_agreement and req.our_probability >= 0.68
         agreeing_str  = f'{int(rate)}% ({apf_data["dominant_pick"]})'
         avg_conf      = rate / 100
         expert_advice = apf_data.get("advice") or ""
@@ -323,7 +323,7 @@ async def check_consensus_match(req: ConsensusMatchRequest):
         count        = len(agreeing)
         rate         = (count / total) * 100 if total else 0.0
         avg_conf     = (sum(a.confidence for a in agreeing) / count) if count > 0 else 0.0
-        is_lock      = rate >= 80 and req.our_probability >= 0.65
+        is_lock      = rate >= 80 and req.our_probability >= 0.68
         agreeing_str = f"{count}/{total}"
         expert_advice = ""
 

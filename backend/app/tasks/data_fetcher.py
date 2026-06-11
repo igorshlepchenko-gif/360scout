@@ -126,7 +126,12 @@ async def fetch_api_football_predictions(fixture_id: int) -> Optional[dict]:
             home_pct = float(str(pct.get("home", "0")).replace("%", "") or 0)
             draw_pct = float(str(pct.get("draw", "0")).replace("%", "") or 0)
             away_pct = float(str(pct.get("away", "0")).replace("%", "") or 0)
-            dominant = max([("1", home_pct), ("X", draw_pct), ("2", away_pct)], key=lambda x: x[1])[0]
+            # Only lock to 1/2 when clearly dominant (>55%), otherwise "X" = unclear
+            dominant = "X"
+            if home_pct > 55:
+                dominant = "1"
+            elif away_pct > 55:
+                dominant = "2"
             winner   = (data.get("predictions", {}).get("winner") or {}).get("name", "")
             advice   = data.get("predictions", {}).get("advice", "")
             return {
