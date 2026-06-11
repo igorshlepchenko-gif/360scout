@@ -1,7 +1,6 @@
 import MatchCard from "@/components/MatchCard";
-import LeagueFilteredMatches from "@/components/LeagueFilteredMatches";
+import DashboardTabs from "@/components/DashboardTabs";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
-import LiveInPlayTab from "@/components/LiveInPlayTab";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
@@ -128,8 +127,8 @@ export default async function Home() {
         {/* Match Cards Grid — league filter */}
         <div>
           {hasLive ? (
-            // ✅ משחקים אמיתיים מה-API — with league filter tabs
-            <LeagueFilteredMatches
+            // ✅ משחקים אמיתיים מה-API — top-level tabs: All / Live / World Cup
+            <DashboardTabs
               matches={liveMatches}
               leagueAccuracy={leagueAccuracy}
               globalAccuracy={summary?.accuracy ?? null}
@@ -170,9 +169,6 @@ export default async function Home() {
             </div>
           )}
         </div>
-
-        {/* Live In-Play value alerts */}
-        <LiveInPlayTab matches={liveMatches} />
 
         {/* Telegram community CTA */}
         <div style={{ marginTop: 48 }}>
