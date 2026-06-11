@@ -105,6 +105,43 @@ async def fetch_injuries(fixture_id: int) -> list:
             return []
 
 
+async def fetch_api_football_predictions(fixture_id: int) -> Optional[dict]:
+    """
+    Fetch API-Football predictions for a fixture.
+    Returns dict: advice, winner_name, home_pct, draw_pct, away_pct, dominant_pick
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.get(
+                f"{API_FOOTBALL_BASE}/predictions",
+                headers={"x-apisports-key": API_FOOTBALL_KEY},
+                params={"fixture": fixture_id},
+            )
+            resp.raise_for_status()
+            items = resp.json().get("response", [])
+            if not items:
+                return None
+            data    = items[0]
+            pct     = data.get("predictions", {}).get("percent", {})
+            home_pct = float(str(pct.get("home", "0")).replace("%", "") or 0)
+            draw_pct = float(str(pct.get("draw", "0")).replace("%", "") or 0)
+            away_pct = float(str(pct.get("away", "0")).replace("%", "") or 0)
+            dominant = max([("1", home_pct), ("X", draw_pct), ("2", away_pct)], key=lambda x: x[1])[0]
+            winner   = (data.get("predictions", {}).get("winner") or {}).get("name", "")
+            advice   = data.get("predictions", {}).get("advice", "")
+            return {
+                "advice":        advice,
+                "winner_name":   winner,
+                "home_pct":      home_pct,
+                "draw_pct":      draw_pct,
+                "away_pct":      away_pct,
+                "dominant_pick": dominant,
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch predictions for fixture {fixture_id}: {e}")
+            return None
+
+
 async def fetch_h2h(team_a: int, team_b: int) -> list:
     """Fetch head-to-head history"""
     async with httpx.AsyncClient(timeout=30) as client:

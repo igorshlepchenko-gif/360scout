@@ -46,6 +46,7 @@ interface ConsensusMatchResult {
   is_consensus_lock:      boolean;
   display_badge:          string;
   is_demo:                boolean;
+  data_source:            "demo" | "api-football" | "db";
   analysts: Array<{ name: string; pick: string; confidence: number }>;
 }
 
@@ -786,7 +787,11 @@ export default function MatchCard({
                   {/* Footer */}
                   <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 9, color: "#334155" }}>
-                      {consensusData.is_demo ? "🔮 דמו — אנליסטים לדוגמה" : "👥 אנליסטים מה-DB"}
+                      {consensusData.data_source === "api-football"
+                        ? "🌐 API-Football"
+                        : consensusData.is_demo
+                          ? "🔮 דמו — אנליסטים לדוגמה"
+                          : "👥 אנליסטים מה-DB"}
                     </span>
                     <button
                       onClick={() => setConsensusData(null)}

@@ -276,12 +276,33 @@ async def check_consensus_match(req: ConsensusMatchRequest):
         except Exception as exc:
             logger.warning("Analyst DB fetch failed for fixture %s: %s", req.fixture_id, exc)
 
-    # Priority 2: demo fallback — so the UI always shows something useful
+    # Priority 2: API-Football predictions endpoint
+    if not analysts_data and req.fixture_id:
+        try:
+            from app.tasks.data_fetcher import fetch_api_football_predictions
+            apf = await fetch_api_football_predictions(req.fixture_id)
+            if apf:
+                picks = [
+                    ("API-Football (בית)",    "1", apf["home_pct"] / 100),
+                    ("API-Football (תיקו)",   "X", apf["draw_pct"] / 100),
+                    ("API-Football (אורחים)", "2", apf["away_pct"] / 100),
+                ]
+                analysts_data = [
+                    AnalystPickInput(analyst_name=name, predict=pick, confidence=round(conf, 3))
+                    for name, pick, conf in picks
+                    if conf > 0
+                ]
+        except Exception as exc:
+            logger.warning("API-Football predictions fetch failed for fixture %s: %s", req.fixture_id, exc)
+
+    # Priority 3: demo fallback — so the UI always shows something useful
     if not analysts_data:
         analysts_data = DEMO_ANALYSTS
-        is_demo = True
+        is_demo       = True
+        data_source   = "demo"
     else:
-        is_demo = False
+        is_demo     = False
+        data_source = "api-football" if any("API-Football" in a.analyst_name for a in analysts_data) else "db"
 
     total     = len(analysts_data)
     agreeing  = [a for a in analysts_data if a.predict == req.our_prediction]
@@ -303,6 +324,7 @@ async def check_consensus_match(req: ConsensusMatchRequest):
         "is_consensus_lock":      is_lock,
         "display_badge":          badge,
         "is_demo":                is_demo,
+        "data_source":            data_source,
         "analysts": [
             {"name": a.analyst_name, "pick": a.predict, "confidence": round(a.confidence * 100)}
             for a in analysts_data
