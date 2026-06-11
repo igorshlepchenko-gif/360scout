@@ -16,6 +16,7 @@ from app.api.routes.analysts import router as analysts_router
 from app.telegram_bot import test_bot, send_message, ENABLED as TELEGRAM_ENABLED
 from app.db.database import init_db, close_db
 from app.scheduler import start_scheduler, stop_scheduler
+from app.telegram_commands import start_command_bot, stop_command_bot
 
 
 @asynccontextmanager
@@ -23,7 +24,9 @@ async def lifespan(app: FastAPI):
     """אתחול ב-startup וניקוי ב-shutdown"""
     await init_db()
     start_scheduler()
+    start_command_bot()
     yield
+    stop_command_bot()
     stop_scheduler()
     await close_db()
 
