@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import MatchCard from "./MatchCard";
 
 /* ── League grouping config ── */
@@ -43,6 +43,8 @@ export default function LeagueFilteredMatches({
   globalAccuracy?: number | null;
 }) {
   const [active, setActive] = useState("all");
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
 
   /* Build tab list — only show groups that have matches */
   const availableGroups = LEAGUE_GROUPS.filter(g =>
@@ -53,37 +55,96 @@ export default function LeagueFilteredMatches({
     ? matches
     : matches.filter(m => getGroupKey(m.league ?? "") === active);
 
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const check = () => setHasOverflow(el.scrollWidth > el.clientWidth + 4);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [matches]);
+
+  function scrollTabs(dir: "start" | "end") {
+    tabsRef.current?.scrollBy({ left: dir === "end" ? 140 : -140, behavior: "smooth" });
+  }
+
   return (
     <>
       {/* ── Filter tabs ── */}
       {availableGroups.length > 0 && (
-        <div style={{
-          display: "flex", gap: 8, marginBottom: 24,
-          overflowX: "auto", paddingBottom: 4,
-          scrollbarWidth: "none",
-        }}>
-          {/* "All" tab always first */}
-          <TabBtn
-            label={`כל המשחקים (${matches.length})`}
-            active={active === "all"}
-            onClick={() => setActive("all")}
-            badge={globalAccuracy != null ? { text: `${globalAccuracy}% דיוק`, bg: "#e67e22" } : undefined}
-          />
-          {availableGroups.map(g => {
-            const count = matches.filter(m => getGroupKey(m.league ?? "") === g.key).length;
-            const acc   = getGroupAccuracy(g.key, leagueAccuracy);
-            const badgeBg = g.key === "world-cup" ? "#2ecc71" : "#3498db";
-            return (
-              <TabBtn
-                key={g.key}
-                label={`${g.label} (${count})`}
-                active={active === g.key}
-                onClick={() => setActive(g.key)}
-                highlight={g.key === "world-cup"}
-                badge={acc ? { text: `${acc.rate}% פגיעה`, bg: badgeBg } : undefined}
-              />
-            );
-          })}
+        <div style={{ position: "relative", marginBottom: 24 }}>
+
+          {/* Scroll arrow — ימין (לטאבים הראשונים) */}
+          {hasOverflow && (
+            <button
+              onClick={() => scrollTabs("start")}
+              aria-label="גלול ימינה"
+              style={{
+                position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+                zIndex: 10,
+                width: 28, height: 28, borderRadius: "50%",
+                background: "rgba(15,19,24,0.92)",
+                border: "1px solid rgba(255,255,255,0.14)",
+                color: "#94a3b8", fontSize: 16, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "-6px 0 12px rgba(11,14,20,0.9)",
+              }}
+            >›</button>
+          )}
+
+          {/* Scroll arrow — שמאל (לטאבים האחרונים) */}
+          {hasOverflow && (
+            <button
+              onClick={() => scrollTabs("end")}
+              aria-label="גלול שמאלה"
+              style={{
+                position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)",
+                zIndex: 10,
+                width: 28, height: 28, borderRadius: "50%",
+                background: "rgba(15,19,24,0.92)",
+                border: "1px solid rgba(255,255,255,0.14)",
+                color: "#94a3b8", fontSize: 16, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "6px 0 12px rgba(11,14,20,0.9)",
+              }}
+            >‹</button>
+          )}
+
+          {/* Tabs scroll container */}
+          <div
+            ref={tabsRef}
+            style={{
+              display: "flex", gap: 8,
+              overflowX: "auto", paddingBottom: 4,
+              scrollbarWidth: "none",
+              /* leave room for arrows when overflow */
+              paddingLeft: hasOverflow ? 36 : 0,
+              paddingRight: hasOverflow ? 36 : 0,
+            }}
+          >
+            {/* "All" tab always first */}
+            <TabBtn
+              label={`כל המשחקים (${matches.length})`}
+              active={active === "all"}
+              onClick={() => setActive("all")}
+              badge={globalAccuracy != null ? { text: `${globalAccuracy}% דיוק`, bg: "#e67e22" } : undefined}
+            />
+            {availableGroups.map(g => {
+              const count = matches.filter(m => getGroupKey(m.league ?? "") === g.key).length;
+              const acc   = getGroupAccuracy(g.key, leagueAccuracy);
+              const badgeBg = g.key === "world-cup" ? "#2ecc71" : "#3498db";
+              return (
+                <TabBtn
+                  key={g.key}
+                  label={`${g.label} (${count})`}
+                  active={active === g.key}
+                  onClick={() => setActive(g.key)}
+                  highlight={g.key === "world-cup"}
+                  badge={acc ? { text: `${acc.rate}% פגיעה`, bg: badgeBg } : undefined}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
 
