@@ -36,6 +36,38 @@ def poisson_match_probabilities(xg_home: float, xg_away: float, max_goals: int =
     return {"home": home / total, "draw": draw / total, "away": away / total}
 
 
+def poisson_goal_markets(xg_home: float, xg_away: float, line: float = 2.5, max_goals: int = 10) -> dict:
+    """
+    שווקי שערים מאותה מטריצת פואסון: Over/Under (ברירת מחדל 2.5) ו-BTTS.
+    סוכם את תאי המטריצה לפי סכום השערים (h+a) ולפי שתי הקבוצות שכבשו.
+    """
+    lh = max(float(xg_home), 0.05)
+    la = max(float(xg_away), 0.05)
+    ks = np.arange(max_goals + 1)
+    fact = _FACT[: max_goals + 1] if max_goals < len(_FACT) else np.array([math.factorial(k) for k in ks], dtype=float)
+    home_pmf = np.exp(-lh) * lh ** ks / fact
+    away_pmf = np.exp(-la) * la ** ks / fact
+    matrix = np.outer(home_pmf, away_pmf)
+    total = float(matrix.sum()) or 1.0
+
+    # סכום השערים בכל תא: h + a
+    goal_sum = ks[:, None] + ks[None, :]
+    over = float(matrix[goal_sum > line].sum()) / total
+    under = max(0.0, 1.0 - over)
+
+    # BTTS — שתי הקבוצות כובשות לפחות שער (h>=1 וגם a>=1)
+    btts_yes = float(matrix[1:, 1:].sum()) / total
+    btts_no = max(0.0, 1.0 - btts_yes)
+
+    return {
+        "line":      line,
+        "over":      round(over, 4),
+        "under":     round(under, 4),
+        "btts_yes":  round(btts_yes, 4),
+        "btts_no":   round(btts_no, 4),
+    }
+
+
 @dataclass
 class MatchContext:
     """All inputs needed for a full 360° prediction"""

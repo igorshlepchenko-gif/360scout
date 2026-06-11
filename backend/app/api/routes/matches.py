@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
 from app.engine.prediction_model import (
     PredictionEngine, MatchContext, calculate_value, calculate_consensus,
-    poisson_match_probabilities,
+    poisson_match_probabilities, poisson_goal_markets,
 )
 
 router = APIRouter(prefix="/api/matches", tags=["matches"])
@@ -488,6 +488,20 @@ async def winning_method(fixture_id: int):
         if is_value and (best_value is None or (edge or 0) > (best_value.get("edge_percent") or 0)):
             best_value = row
 
+    # 4. שווקי שערים — Over/Under 2.5 + BTTS מאותו xG (פואסון)
+    goal_markets = None
+    xg_h, xg_a = xg.get("home"), xg.get("away")
+    if xg_h is not None and xg_a is not None:
+        gm = poisson_goal_markets(xg_h, xg_a, line=2.5)
+        fair = lambda p: round(1 / p, 2) if p > 0 else None
+        goal_markets = {
+            "over_under_line": gm["line"],
+            "over_2_5":  {"prob": round(gm["over"]  * 100, 1), "fair_odds": fair(gm["over"])},
+            "under_2_5": {"prob": round(gm["under"] * 100, 1), "fair_odds": fair(gm["under"])},
+            "btts_yes":  {"prob": round(gm["btts_yes"] * 100, 1), "fair_odds": fair(gm["btts_yes"])},
+            "btts_no":   {"prob": round(gm["btts_no"]  * 100, 1), "fair_odds": fair(gm["btts_no"])},
+        }
+
     return {
         "status":     "success",
         "fixture_id": fixture_id,
@@ -501,9 +515,10 @@ async def winning_method(fixture_id: int):
             "away":   xg.get("away"),
             "source": match.get("data_quality", {}).get("xg_source", "estimated"),
         },
-        "confidence":  match["prediction"].get("confidence"),
-        "bookmaker":   odds.get("bookmaker"),
-        "table":       rows,
-        "best_value":  best_value,
-        "note":        "יחס הוגן = 1 ÷ הסתברות המודל · ערך חיובי = יחס השוק גבוה מהיחס ההוגן. למטרות מחקר בלבד.",
+        "confidence":   match["prediction"].get("confidence"),
+        "bookmaker":    odds.get("bookmaker"),
+        "table":        rows,
+        "best_value":   best_value,
+        "goal_markets": goal_markets,
+        "note":         "יחס הוגן = 1 ÷ הסתברות המודל · ערך חיובי = יחס השוק גבוה מהיחס ההוגן. למטרות מחקר בלבד.",
     }

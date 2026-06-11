@@ -368,23 +368,32 @@ def extract_form_score(stats: dict) -> float:
 
 
 def extract_xg(stats: dict, direction: str = "for") -> float:
-    """חלץ xG ממוצע — עם הגנה מלאה מטיפוסים לא צפויים"""
+    """
+    חלץ xG ממוצע — עם הגנה מלאה מטיפוסים לא צפויים.
+    ממוצע 0 או נמוך מאוד = אין נתונים (קבוצה שטרם שיחקה בעונה), לא 0 אמיתי →
+    נופלים לברירת מחדל ריאליסטית כדי לא לייצר חיזוי מנוון.
+    """
+    DEFAULT = 1.2
     if not isinstance(stats, dict):
-        return 1.2
+        return DEFAULT
     try:
         goals = stats.get("goals") or {}
         if not isinstance(goals, dict):
-            return 1.2
+            return DEFAULT
         side = goals.get(direction) or {}
         if not isinstance(side, dict):
-            return 1.2
+            return DEFAULT
         avg = side.get("average") or {}
         if not isinstance(avg, dict):
-            return 1.2
+            return DEFAULT
         val = avg.get("total")
-        return float(val) if val else 1.2
+        if val is None:
+            return DEFAULT
+        xg = float(val)
+        # 0 / ערך מזערי = אין נתונים, לא ביצוע אמיתי
+        return xg if xg >= 0.2 else DEFAULT
     except (TypeError, ValueError):
-        return 1.2
+        return DEFAULT
 
 
 def calculate_injury_impact(injuries: list, team_id: int) -> float:
