@@ -37,7 +37,7 @@ body {
   100% { transform: translate3d(100%, 0, 0); }
 }
 .ticker-items {
-  animation: ticker-scroll 70s linear infinite;
+  animation: ticker-scroll 110s linear infinite;
 }
 .ticker-wrap:hover .ticker-items {
   animation-play-state: paused;
