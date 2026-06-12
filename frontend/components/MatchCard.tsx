@@ -478,11 +478,23 @@ export default function MatchCard({
               </div>
             )
           )}
-          {matchDate && (
-            <span style={{ fontSize: 10, color: "#334155", direction: "ltr" }}>
-              {matchDate.split(" ")[0]} {matchDate.split(" ")[1]}
-            </span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* live weather chip — always visible at a glance */}
+            {weather?.source === "live" && (
+              <span style={{
+                fontSize: 10, color: "#64748b", direction: "ltr",
+                background: "rgba(255,255,255,0.04)", borderRadius: 99,
+                padding: "2px 7px", display: "inline-flex", alignItems: "center", gap: 3,
+              }}>
+                🌡️ {Math.round(weather.temperature_celsius)}°C
+              </span>
+            )}
+            {matchDate && (
+              <span style={{ fontSize: 10, color: "#334155", direction: "ltr" }}>
+                {matchDate.split(" ")[0]} {matchDate.split(" ")[1]}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── SCOREBOARD ROW: Home | Center | Away ── */}
