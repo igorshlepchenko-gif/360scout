@@ -512,18 +512,59 @@ def build_match_analysis_sync(
     home_score = goals.get("home") or 0
     away_score = goals.get("away") or 0
 
+    # מצא יחסים מוקדם — ישמשו לכיול xG כשאין סטטיסטיקות
+    odds = find_odds_for_match(all_odds, home.get("name", ""), away.get("name", ""))
+    if odds is None and fixture_odds:
+        odds = fixture_odds
+
     if home_stats:
         xg_home   = extract_xg(home_stats, "for")
         form_home = extract_form_score(home_stats)
     else:
-        xg_home   = max(float(home_score) * 0.9 + 0.5, 1.1) if home_score else 1.3
+        if home_score:
+            xg_home = max(float(home_score) * 0.9 + 0.5, 1.1)
+        elif odds:
+            # כיול xG מיחסי הסוחר: p_win יחסי → xG יחסי
+            # סך שערים ממוצע במשחק בינלאומי ≈ 2.55 שערים
+            try:
+                oh = float(odds.get("odds_home") or 0)
+                oa = float(odds.get("odds_away") or 0)
+                if oh > 1.0 and oa > 1.0:
+                    ph_raw = 1 / oh
+                    pa_raw = 1 / oa
+                    total_raw = ph_raw + pa_raw
+                    ph = ph_raw / total_raw  # עוצמה יחסית של בית
+                    xg_home = max(0.60, ph * 2.55 * 1.05)  # בוסט קל לבית
+                else:
+                    xg_home = 1.3
+            except (TypeError, ValueError, ZeroDivisionError):
+                xg_home = 1.3
+        else:
+            xg_home = 1.3
         form_home = 0.4 if home.get("winner") is True else (-0.3 if home.get("winner") is False else 0.0)
 
     if away_stats:
         xg_away   = extract_xg(away_stats, "for")
         form_away = extract_form_score(away_stats)
     else:
-        xg_away   = max(float(away_score) * 0.9 + 0.5, 1.0) if away_score else 1.1
+        if away_score:
+            xg_away = max(float(away_score) * 0.9 + 0.5, 1.0)
+        elif odds:
+            try:
+                oh = float(odds.get("odds_home") or 0)
+                oa = float(odds.get("odds_away") or 0)
+                if oh > 1.0 and oa > 1.0:
+                    ph_raw = 1 / oh
+                    pa_raw = 1 / oa
+                    total_raw = ph_raw + pa_raw
+                    pa = pa_raw / total_raw  # עוצמה יחסית של אורחים
+                    xg_away = max(0.60, pa * 2.55 * 0.95)  # הנחה קלה לאורחים
+                else:
+                    xg_away = 1.1
+            except (TypeError, ValueError, ZeroDivisionError):
+                xg_away = 1.1
+        else:
+            xg_away = 1.1
         form_away = 0.4 if away.get("winner") is True else (-0.3 if away.get("winner") is False else 0.0)
 
     home_injury = 0.0
@@ -557,10 +598,6 @@ def build_match_analysis_sync(
     # הרץ את מנוע החיזוי
     prediction = engine.predict(ctx)
 
-    # חפש יחסים — The Odds API (fuzzy) first, API-Sports direct as fallback
-    odds = find_odds_for_match(all_odds, home.get("name",""), away.get("name",""))
-    if odds is None and fixture_odds:
-        odds = fixture_odds
     value_bets  = {}
     if odds:
         for outcome, odd_key in [("home","odds_home"),("draw","odds_draw"),("away","odds_away")]:
@@ -691,40 +728,23 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
     # הגבל לפי limit parameter
     fixtures = fixtures[:min(limit, 20)]
 
-    # ─── ערים ייחודיות לפי venue ──────────────────────────────────────
-    cities = list(dict.fromkeys(
-        f.get("fixture", {}).get("venue", {}).get("city") or "London"
-        for f in fixtures
-    ))
+    # ─── משוך odds מרוכז + נתח כל fixture עם team stats (cached 6h) ──────
+    all_odds = await fetch_all_odds()
+    if isinstance(all_odds, Exception):
+        all_odds = []
 
-    # ─── משוך odds + weather בלבד (ללא team stats — חוסך קריאות API) ──
-    # team stats נמשכים רק ב-/matches/{id} (detail view) עם cache
-    gather_tasks = (
-        [fetch_all_odds()] +
-        [fetch_weather_for_city(city) for city in cities]
-    )
-    gather_results = await asyncio.gather(*gather_tasks, return_exceptions=True)
+    _sem = asyncio.Semaphore(5)  # מגביל ל-5 fixture analyses במקביל
 
-    all_odds = gather_results[0] if not isinstance(gather_results[0], Exception) else []
-    city_weather: dict[str, dict] = {}
-    for i, city in enumerate(cities):
-        w = gather_results[1 + i]
-        city_weather[city] = w if isinstance(w, dict) else _default_weather()
+    async def _analyze(f: dict) -> dict | None:
+        async with _sem:
+            try:
+                return await build_match_analysis(f, all_odds)
+            except Exception as e:
+                logger.error(f"Error analyzing fixture {f.get('fixture', {}).get('id')}: {e}")
+                return None
 
-    # ─── נתח כל משחק (xG/form מוערכים — מהיר, ללא API נוסף) ──────────
-    matches = []
-    for f in fixtures:
-        try:
-            fix_     = f.get("fixture", {})
-            city_key = fix_.get("venue", {}).get("city") or "London"
-            weather  = city_weather.get(city_key, _default_weather())
-
-            result = build_match_analysis_sync(f, all_odds, weather)
-            if result:
-                matches.append(result)
-        except Exception as e:
-            logger.error(f"Error analyzing fixture {f.get('fixture', {}).get('id')}: {e}")
-            continue
+    results = await asyncio.gather(*[_analyze(f) for f in fixtures])
+    matches = [r for r in results if r]
 
     # מיין — value bets קודם, אחר כך לפי confidence
     matches.sort(key=lambda m: (
@@ -819,28 +839,23 @@ async def get_world_cup_matches(background_tasks: BackgroundTasks, days: int = 7
     fixtures.sort(key=lambda f: (order.get(f.get("_status"), 3), f.get("fixture", {}).get("date", "")))
     fixtures = fixtures[:min(limit, 40)]
 
-    # ─── odds + מזג אוויר (כמו בפיד הכללי) ───────────────────────────
-    cities = list(dict.fromkeys(
-        f.get("fixture", {}).get("venue", {}).get("city") or "London" for f in fixtures))
-    gather_results = await asyncio.gather(
-        fetch_all_odds(), *[fetch_weather_for_city(c) for c in cities],
-        return_exceptions=True,
-    )
-    all_odds = gather_results[0] if not isinstance(gather_results[0], Exception) else []
-    city_weather = {
-        c: (gather_results[1 + i] if isinstance(gather_results[1 + i], dict) else _default_weather())
-        for i, c in enumerate(cities)
-    }
+    # ─── odds מרוכז + ניתוח מלא עם team stats (cached 6h) ─────────────
+    all_odds = await fetch_all_odds()
+    if isinstance(all_odds, Exception):
+        all_odds = []
 
-    matches = []
-    for f in fixtures:
-        try:
-            city_key = f.get("fixture", {}).get("venue", {}).get("city") or "London"
-            result = build_match_analysis_sync(f, all_odds, city_weather.get(city_key, _default_weather()))
-            if result:
-                matches.append(result)
-        except Exception as e:
-            logger.error(f"WC analyze error {f.get('fixture', {}).get('id')}: {e}")
+    _sem = asyncio.Semaphore(5)
+
+    async def _analyze_wc(f: dict) -> dict | None:
+        async with _sem:
+            try:
+                return await build_match_analysis(f, all_odds)
+            except Exception as e:
+                logger.error(f"WC analyze error {f.get('fixture', {}).get('id')}: {e}")
+                return None
+
+    wc_results = await asyncio.gather(*[_analyze_wc(f) for f in fixtures])
+    matches = [r for r in wc_results if r]
 
     background_tasks.add_task(_save_predictions_bg, matches)
 
