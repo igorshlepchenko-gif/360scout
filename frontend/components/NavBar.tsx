@@ -83,48 +83,51 @@ export default function NavBar() {
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-      </nav>
 
-      {/* Mobile dropdown — slides down under nav */}
-      {open && (
-        <div
-          style={{
-            position: "fixed",
-            top: 97, left: 0, right: 0,
-            zIndex: 49,
-            background: "rgba(11,14,20,0.98)",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            backdropFilter: "blur(16px)",
-            padding: "8px 20px 16px",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {NAV_ITEMS.map((item, i) => (
-            <a
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              style={{
-                color: isActive(item.href) ? "white" : "#94a3b8",
-                fontSize: 16,
-                fontWeight: isActive(item.href) ? 700 : 400,
-                textDecoration: "none",
-                padding: "12px 0",
-                borderBottom: i < NAV_ITEMS.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              {isActive(item.href) && (
-                <span style={{ width: 3, height: 20, background: "#10b981", borderRadius: 99, display: "inline-block", flexShrink: 0 }} />
-              )}
-              {item.label}
-            </a>
-          ))}
-        </div>
-      )}
+        {/* Mobile dropdown — anchored to the nav's bottom edge (top:100%)
+            so it never overlaps the nav regardless of its height */}
+        {open && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%", left: 0, right: 0,
+              zIndex: 49,
+              background: "#0B0E14",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 12px 24px rgba(0,0,0,0.5)",
+              padding: "6px 20px 14px",
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: "calc(100vh - 100px)",
+              overflowY: "auto",
+            }}
+          >
+            {NAV_ITEMS.map((item, i) => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                style={{
+                  color: isActive(item.href) ? "white" : "#94a3b8",
+                  fontSize: 16,
+                  fontWeight: isActive(item.href) ? 700 : 400,
+                  textDecoration: "none",
+                  padding: "13px 0",
+                  borderBottom: i < NAV_ITEMS.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                {isActive(item.href) && (
+                  <span style={{ width: 3, height: 20, background: "#10b981", borderRadius: 99, display: "inline-block", flexShrink: 0 }} />
+                )}
+                {item.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </nav>
     </>
   );
 }
