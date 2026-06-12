@@ -198,8 +198,9 @@ function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {rows.map(row => (
-        <div key={row.key} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" }}>
-          {/* Away (right in RTL → left in LTR grid) */}
+        // direction:ltr — HOME column always left, AWAY column always right
+        <div key={row.key} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center", direction: "ltr" }}>
+          {/* HOME — left (green) */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, alignItems: "center" }}>
             <span style={{ fontSize: 12, color: "white", fontWeight: 600 }}>{pct0(row.home)}</span>
             <div style={{ width: 60, height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden" }}>
@@ -211,7 +212,7 @@ function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
             <span style={{ fontSize: 10 }}>{row.icon}</span>
             <span style={{ fontSize: 10, color: "#64748b", marginRight: 4 }}>{row.label}</span>
           </div>
-          {/* Home */}
+          {/* AWAY — right (red) */}
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <div style={{ width: 60, height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${row.away * 100}%`, background: "#ef4444", borderRadius: 99, transition: "width 0.8s ease" }} />

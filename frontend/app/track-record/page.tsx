@@ -313,8 +313,8 @@ export default function TrackRecordPage() {
                     <tr key={`${r.fixture_id}-${i}`} className="transition-colors hover:bg-white/[0.02]">
                       <td className="p-3.5 font-mono text-slate-400">{fmtDate(r.match_date)}</td>
                       <td className="max-w-[140px] truncate p-3.5 font-medium text-slate-400">{r.league_name ?? "—"}</td>
-                      <td className="p-3.5 font-medium text-slate-200">
-                        {r.home_team_name} <span className="text-slate-600">נגד</span> {r.away_team_name}
+                      <td className="p-3.5 font-medium text-slate-200" style={{ direction: "ltr", textAlign: "right" }}>
+                        {r.home_team_name} <span className="text-slate-600">vs</span> {r.away_team_name}
                       </td>
                       <td className="p-3.5 font-medium text-sky-400">
                         {pick ? <>{OUTCOME_12X[pick]} <span className="text-[10px] text-slate-500">({OUTCOME_HE[pick]})</span></> : "—"}
