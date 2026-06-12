@@ -433,7 +433,7 @@ async def winning_method(fixture_id: int):
     import httpx
     from app.api.routes.live import (
         API_FOOTBALL_BASE, API_FOOTBALL_KEY,
-        build_match_analysis, fetch_all_odds,
+        build_match_analysis, fetch_all_odds, find_totals_for_match,
     )
 
     # 1. משוך את ה-fixture
@@ -494,10 +494,27 @@ async def winning_method(fixture_id: int):
     if xg_h is not None and xg_a is not None:
         gm = poisson_goal_markets(xg_h, xg_a, line=2.5)
         fair = lambda p: round(1 / p, 2) if p > 0 else None
+
+        # יחסי שוק אמיתיים ל-Over/Under (אם זמינים) → ורדיקט ערך
+        totals = find_totals_for_match(all_odds, match["home_team"], match["away_team"], line=2.5)
+
+        def market_cell(prob: float, market_odds):
+            cell = {"prob": round(prob * 100, 1), "fair_odds": fair(prob), "market_odds": market_odds}
+            if market_odds:
+                vb = calculate_value(prob, market_odds)
+                cell["edge_percent"] = round(vb["edge_percent"], 1)
+                cell["is_value"]     = vb["is_value_bet"]
+                cell["verdict"]      = "ערך חיובי" if vb["is_value_bet"] else "ללא ערך"
+            else:
+                cell["verdict"] = "אין יחס שוק"
+            return cell
+
         goal_markets = {
             "over_under_line": gm["line"],
-            "over_2_5":  {"prob": round(gm["over"]  * 100, 1), "fair_odds": fair(gm["over"])},
-            "under_2_5": {"prob": round(gm["under"] * 100, 1), "fair_odds": fair(gm["under"])},
+            "totals_bookmaker": totals.get("bookmaker") if totals else None,
+            "over_2_5":  market_cell(gm["over"],  totals.get("over")  if totals else None),
+            "under_2_5": market_cell(gm["under"], totals.get("under") if totals else None),
+            # BTTS — אין כיסוי שוק בפיד הנוכחי, מודל בלבד
             "btts_yes":  {"prob": round(gm["btts_yes"] * 100, 1), "fair_odds": fair(gm["btts_yes"])},
             "btts_no":   {"prob": round(gm["btts_no"]  * 100, 1), "fair_odds": fair(gm["btts_no"])},
         }

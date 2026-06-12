@@ -226,8 +226,8 @@ def _default_weather() -> dict:
 
 
 async def fetch_all_odds() -> list:
-    """משוך יחסים — עם cache של 15 דקות"""
-    cache_key = "odds:soccer:eu:h2h"
+    """משוך יחסים (1X2 + Over/Under) — קריאה אחת, cache של 15 דקות"""
+    cache_key = "odds:soccer:eu:h2h_totals"   # bumped — now includes totals
     cached = await cache_get(cache_key, "odds")
     if cached is not None:
         return cached
@@ -239,7 +239,7 @@ async def fetch_all_odds() -> list:
                 params={
                     "apiKey":     ODDS_API_KEY,
                     "regions":    "eu",
-                    "markets":    "h2h",
+                    "markets":    "h2h,totals",   # שני השווקים באותה מכסה
                     "oddsFormat": "decimal",
                 }
             )
@@ -250,6 +250,34 @@ async def fetch_all_odds() -> list:
             return data
         except Exception:
             return []
+
+
+def find_totals_for_match(all_odds: list, home_team: str, away_team: str, line: float = 2.5) -> dict | None:
+    """חפש יחסי Over/Under לקו מסוים (ברירת מחדל 2.5) — מטריצת The Odds API"""
+    home_lower = home_team.lower()
+    away_lower = away_team.lower()
+    for event in all_odds:
+        ev_home = event.get("home_team", "").lower()
+        ev_away = event.get("away_team", "").lower()
+        if not ((home_lower[:6] in ev_home or ev_home[:6] in home_lower) and
+                (away_lower[:6] in ev_away or ev_away[:6] in away_lower)):
+            continue
+        for bm in event.get("bookmakers", []):
+            totals = next((m for m in bm.get("markets", []) if m["key"] == "totals"), None)
+            if not totals:
+                continue
+            over  = next((o for o in totals.get("outcomes", [])
+                          if o.get("name") == "Over"  and abs(o.get("point", 0) - line) < 0.01), None)
+            under = next((o for o in totals.get("outcomes", [])
+                          if o.get("name") == "Under" and abs(o.get("point", 0) - line) < 0.01), None)
+            if over and under:
+                return {
+                    "bookmaker": bm.get("title", ""),
+                    "line":      line,
+                    "over":      over["price"],
+                    "under":     under["price"],
+                }
+    return None
 
 
 async def fetch_odds_apisports(fixture_id: int) -> dict | None:
