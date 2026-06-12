@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { SlidersHorizontal, Search, Percent, Award } from "lucide-react";
+import { SlidersHorizontal, Search, Percent, Award, Coins } from "lucide-react";
 
 export interface FilterState {
   searchQuery: string;
   onlyValue: boolean;
   onlyConsensus: boolean;
+  onlyWithOdds: boolean;
   leagueGroup: "ALL" | "MAJOR" | "MINOR";
   sortBy: "TIME" | "VALUE_DESC" | "CONFIDENCE_DESC";
 }
@@ -20,6 +21,7 @@ export default function FilterSortBar({ onFilterChange }: FilterSortBarProps) {
     searchQuery: "",
     onlyValue: false,
     onlyConsensus: false,
+    onlyWithOdds: false,
     leagueGroup: "ALL",
     sortBy: "TIME",
   });
@@ -129,6 +131,7 @@ export default function FilterSortBar({ onFilterChange }: FilterSortBarProps) {
           {[
             { key: "onlyValue" as const,     icon: <Percent size={13} />, label: "רק משחקים עם Value 🔥", accent: "#10b981" },
             { key: "onlyConsensus" as const, icon: <Award   size={13} />, label: "נעילות קונסנזוס בלבד ⭐", accent: "#3b82f6" },
+            { key: "onlyWithOdds" as const,  icon: <Coins   size={13} />, label: "יש יחסי שוק 💰",        accent: "#f59e0b" },
           ].map(({ key, icon, label, accent }) => {
             const on = filters[key] as boolean;
             return (

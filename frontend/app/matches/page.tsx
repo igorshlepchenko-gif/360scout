@@ -27,7 +27,10 @@ interface Match {
   value_bets: Record<string, { is_value_bet: boolean; rating: string; edge_percent: number; bookmaker_odds: number }> | null;
   consensus: { type: string };
   weather: { temperature_celsius: number; weather_condition: string; source: string };
+  odds?: { odds_home?: number; odds_draw?: number; odds_away?: number } | null;
 }
+
+const hasMarketOdds = (m: Match): boolean => !!(m.odds && m.odds.odds_home && m.odds.odds_home > 1);
 
 const HIGH_CONF_THRESHOLD = 65;
 
@@ -49,6 +52,7 @@ export default function MatchesPage() {
     searchQuery: "",
     onlyValue: false,
     onlyConsensus: false,
+    onlyWithOdds: false,
     leagueGroup: "ALL",
     sortBy: "TIME",
   });
@@ -78,7 +82,7 @@ export default function MatchesPage() {
 
   // filter
   const filtered = matches.filter(m => {
-    const { searchQuery, onlyValue, onlyConsensus, leagueGroup } = activeFilters;
+    const { searchQuery, onlyValue, onlyConsensus, onlyWithOdds, leagueGroup } = activeFilters;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hit = m.home_team?.toLowerCase().includes(q)
@@ -88,6 +92,7 @@ export default function MatchesPage() {
     }
     if (onlyValue    && !(m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet))) return false;
     if (onlyConsensus && m.consensus?.type !== "LOCK") return false;
+    if (onlyWithOdds && !hasMarketOdds(m)) return false;
     if (leagueGroup === "MAJOR" && !isMajorLeague(m)) return false;
     if (leagueGroup === "MINOR" &&  isMajorLeague(m)) return false;
     return true;
