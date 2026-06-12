@@ -541,10 +541,14 @@ export default function MatchCard({
         </div>
 
         {/* ── PROBABILITY DISPLAY ── */}
-        {/* direction:ltr — 1(home) always left, X(draw) center, 2(away) right */}
-        <div style={{ direction: "ltr" }}>
-          {/* Labels row: percentages aligned to their bar segment */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 5, alignItems: "end" }}>
+        {/* direction:ltr set directly on each element — home=left, away=right */}
+        <div>
+          {/* Labels row */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+            marginBottom: 5, alignItems: "end",
+            direction: "ltr",
+          }}>
             <div style={{ textAlign: "left" }}>
               <span style={{ fontSize: 16, fontWeight: 900, color: "#10b981" }}>{pct0(displayProbs.home)}</span>
               <span style={{ fontSize: 9, color: "#475569", marginLeft: 3 }}>1</span>
@@ -558,8 +562,11 @@ export default function MatchCard({
               <span style={{ fontSize: 16, fontWeight: 900, color: "#ef4444" }}>{pct0(displayProbs.away)}</span>
             </div>
           </div>
-          {/* Proportional stacked bar — flex-grow guarantees exact visual ratios */}
-          <div style={{ height: 6, borderRadius: 99, overflow: "hidden", display: "flex" }}>
+          {/* Proportional stacked bar — flex-grow + explicit direction:ltr on the flex container */}
+          <div style={{
+            height: 6, borderRadius: 99, overflow: "hidden",
+            display: "flex", direction: "ltr",
+          }}>
             <div style={{ flexGrow: displayProbs.home, background: "#10b981" }} />
             <div style={{ width: 2, background: "#0F1318", flexShrink: 0 }} />
             <div style={{ flexGrow: displayProbs.draw, background: "#475569" }} />
