@@ -625,7 +625,7 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
         async with pool.acquire() as conn:
             # מצא את המשחק
             row = await conn.fetchrow("""
-                SELECT m.id, mp.final_prob_home, mp.final_prob_draw, mp.final_prob_away
+                SELECT m.id, m.status, mp.final_prob_home, mp.final_prob_draw, mp.final_prob_away
                 FROM matches m
                 LEFT JOIN match_predictions mp ON mp.match_id = m.id
                 WHERE m.api_football_id = $1
@@ -634,7 +634,8 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
             if not row:
                 return False
 
-            match_uuid = row["id"]
+            match_uuid       = row["id"]
+            already_finished = row["status"] == "finished"
 
             # קבע prediction — הסתברות הגבוהה ביותר
             probs = {
@@ -674,6 +675,28 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
                 SET status = 'finished', home_score = $2, away_score = $3
                 WHERE id = $1
             """, match_uuid, home_score, away_score)
+
+            # ── ניקוד אנליסטים אמיתי — פעם אחת בלבד למשחק (idempotent) ──
+            # total_predictions כבר נספר בהזנה; כאן מעדכנים correct_predictions
+            # ומחשבים מחדש win_rate = דיוק אמיתי (correct/total).
+            if not already_finished:
+                scored = await conn.execute("""
+                    UPDATE analysts a SET
+                        correct_predictions = a.correct_predictions + sub.correct_count,
+                        win_rate = CASE WHEN a.total_predictions > 0
+                            THEN ROUND((a.correct_predictions + sub.correct_count)::numeric
+                                       / a.total_predictions, 4)
+                            ELSE a.win_rate END
+                    FROM (
+                        SELECT analyst_id,
+                               COUNT(*) FILTER (WHERE predicted_outcome = $2) AS correct_count
+                        FROM analyst_predictions
+                        WHERE match_id = $1
+                        GROUP BY analyst_id
+                    ) sub
+                    WHERE a.id = sub.analyst_id
+                """, match_uuid, actual)
+                logger.info(f"Analyst scoring: {scored} (fixture={fixture_id}, actual={actual})")
 
         logger.info(f"Result saved: fixture={fixture_id} | predicted={predicted} actual={actual} correct={was_correct}")
         return True
