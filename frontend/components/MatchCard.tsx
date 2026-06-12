@@ -451,22 +451,16 @@ export default function MatchCard({
       {/* ── HEADER ── */}
       <div style={{ padding: "16px 20px 14px" }}>
 
-        {/* League + badge row */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.badge}`}>
-            {cfg.label}
-          </span>
+        {/* ── Meta row: league (left) + date (right) ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           {league && (
             isWorldCup ? (
               <span style={{
                 fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
                 background: "linear-gradient(90deg, rgba(234,179,8,0.15), rgba(251,191,36,0.08))",
                 border: "1px solid rgba(234,179,8,0.35)",
-                borderRadius: 99, padding: "3px 10px",
-                color: "#fbbf24",
-              }}>
-                🏆 גביע העולם 2026
-              </span>
+                borderRadius: 99, padding: "3px 10px", color: "#fbbf24",
+              }}>🏆 גביע העולם 2026</span>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 {leagueLogo && (
@@ -474,128 +468,104 @@ export default function MatchCard({
                   <img src={leagueLogo} alt={league} width={12} height={12}
                     style={{ objectFit: "contain", opacity: 0.6 }} />
                 )}
-                <span style={{ fontSize: 10, color: "#374151" }}>{league}</span>
+                <span style={{ fontSize: 10, color: "#475569" }}>{league}</span>
               </div>
             )
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* live weather chip — always visible at a glance */}
-            {weather?.source === "live" && (
-              <span style={{
-                fontSize: 10, color: "#64748b", direction: "ltr",
-                background: "rgba(255,255,255,0.04)", borderRadius: 99,
-                padding: "2px 7px", display: "inline-flex", alignItems: "center", gap: 3,
-              }}>
-                🌡️ {Math.round(weather.temperature_celsius)}°C
-              </span>
-            )}
-            {matchDate && (
-              <span style={{ fontSize: 10, color: "#334155", direction: "ltr" }}>
-                {matchDate.split(" ")[0]} {matchDate.split(" ")[1]}
-              </span>
-            )}
-          </div>
+          {matchDate && (
+            <span style={{ fontSize: 10, color: "#334155", direction: "ltr" }}>
+              {matchDate.split(" ")[0]} {matchDate.split(" ")[1]}
+            </span>
+          )}
         </div>
 
-        {/* ── SCOREBOARD ROW: Home | Center | Away ── */}
-        {/* direction:ltr forces home=left, away=right regardless of page RTL */}
+        {/* ── Consensus badge on its own row ── */}
+        <div style={{ marginBottom: 10 }}>
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.badge}`}>
+            {cfg.label}
+          </span>
+        </div>
+
+        {/* ── SCOREBOARD ROW: Home | VS+Confidence | Away ── */}
+        {/* direction:ltr — home is always LEFT, away always RIGHT */}
         <div className="match-scoreboard" style={{
           display: "grid",
           gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
           gap: 8,
-          marginBottom: 14,
+          marginBottom: 12,
           direction: "ltr",
         }}>
 
-          {/* HOME — שמאל */}
+          {/* HOME — left */}
           <div className="team-col team-home" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <TeamLogo logo={homeLogo} name={homeTeam} size={48} />
+            <TeamLogo logo={homeLogo} name={homeTeam} size={44} />
             <div>
-              <div style={{
-                fontSize: 13, fontWeight: 800, lineHeight: 1.2,
-                color: "#10b981",
-                maxWidth: 110,
-              }}>
+              <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.2, color: "#10b981", maxWidth: 110 }}>
                 {homeTeam}
               </div>
-              <div style={{ fontSize: 9, color: "#10b981", opacity: 0.7, marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
-                בית
-              </div>
+              <div style={{ fontSize: 9, color: "#10b981", opacity: 0.7, marginTop: 2, fontWeight: 600, letterSpacing: 0.5 }}>בית</div>
             </div>
           </div>
 
-          {/* CENTER — אחוזים + ביטחון */}
-          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            {/* 3 probability pills */}
-            <div className="prob-pills" style={{ display: "flex", gap: 4 }}>
-              {([
-                { key: "home", val: displayProbs.home, color: "#10b981", bg: "rgba(16,185,129,0.12)" },
-                { key: "draw", val: displayProbs.draw, color: "#94a3b8", bg: "rgba(148,163,184,0.08)" },
-                { key: "away", val: displayProbs.away, color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-              ] as const).map(p => (
-                <div key={p.key} className="prob-pill" style={{
-                  background: p.bg,
-                  border: `1px solid ${p.color}30`,
-                  borderRadius: 8,
-                  padding: "5px 8px",
-                  textAlign: "center",
-                  minWidth: 44,
-                }}>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: p.color, lineHeight: 1 }}>
-                    {pct0(p.val)}
-                  </div>
-                  <div style={{ fontSize: 8, color: "#475569", marginTop: 2 }}>
-                    {p.key === "home" ? "בית" : p.key === "draw" ? "תיקו" : "אורחים"}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Confidence */}
+          {/* CENTER — VS separator + confidence dot */}
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{ color: "#334155", fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>VS</div>
             <div style={{
               display: "flex", alignItems: "center", gap: 4,
-              background: "rgba(255,255,255,0.04)", borderRadius: 99,
-              padding: "3px 10px",
+              background: "rgba(255,255,255,0.04)", borderRadius: 99, padding: "3px 9px",
             }}>
               <div style={{
-                width: 6, height: 6, borderRadius: "50%",
+                width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
                 background: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444",
                 boxShadow: `0 0 4px ${prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444"}`,
               }} />
               <span style={{
-                fontSize: 11, fontWeight: 700,
+                fontSize: 10, fontWeight: 700,
                 color: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444",
-              }}>
-                {prediction.confidence}%
-              </span>
-              <span style={{ fontSize: 9, color: "#475569" }}>ביטחון</span>
+              }}>{prediction.confidence}%</span>
+              <span style={{ fontSize: 8, color: "#475569" }}>ביטחון</span>
             </div>
           </div>
 
-          {/* AWAY — ימין */}
+          {/* AWAY — right */}
           <div className="team-col team-away" style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
             <div style={{ textAlign: "left" }}>
-              <div style={{
-                fontSize: 13, fontWeight: 800, lineHeight: 1.2,
-                color: "#ef4444",
-                maxWidth: 110,
-              }}>
+              <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.2, color: "#ef4444", maxWidth: 110 }}>
                 {awayTeam}
               </div>
-              <div style={{ fontSize: 9, color: "#ef4444", opacity: 0.7, marginTop: 3, fontWeight: 600, letterSpacing: 0.5 }}>
-                אורחים
-              </div>
+              <div style={{ fontSize: 9, color: "#ef4444", opacity: 0.7, marginTop: 2, fontWeight: 600, letterSpacing: 0.5 }}>אורחים</div>
             </div>
-            <TeamLogo logo={awayLogo} name={awayTeam} size={48} />
+            <TeamLogo logo={awayLogo} name={awayTeam} size={44} />
           </div>
         </div>
 
-        {/* ── PROB BAR ── direction:ltr so green (home) is on the LEFT under the home team */}
-        <div style={{ height: 6, borderRadius: 99, overflow: "hidden", display: "flex", gap: 1.5, background: "rgba(255,255,255,0.04)", direction: "ltr" }}>
-          <AnimatedBar value={displayProbs.home} color="bg-emerald-500" delay={0} />
-          <AnimatedBar value={displayProbs.draw} color="bg-slate-600"   delay={100} />
-          <AnimatedBar value={displayProbs.away} color="bg-rose-500"    delay={200} />
+        {/* ── PROBABILITY DISPLAY ── */}
+        {/* direction:ltr — 1(home) always left, X(draw) center, 2(away) right */}
+        <div style={{ direction: "ltr" }}>
+          {/* Labels row: percentages aligned to their bar segment */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", marginBottom: 5, alignItems: "end" }}>
+            <div style={{ textAlign: "left" }}>
+              <span style={{ fontSize: 16, fontWeight: 900, color: "#10b981" }}>{pct0(displayProbs.home)}</span>
+              <span style={{ fontSize: 9, color: "#475569", marginLeft: 3 }}>1</span>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <span style={{ fontSize: 9, color: "#475569", marginRight: 3 }}>X</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#64748b" }}>{pct0(displayProbs.draw)}</span>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <span style={{ fontSize: 9, color: "#475569", marginRight: 3 }}>2</span>
+              <span style={{ fontSize: 16, fontWeight: 900, color: "#ef4444" }}>{pct0(displayProbs.away)}</span>
+            </div>
+          </div>
+          {/* Proportional stacked bar — flex-grow guarantees exact visual ratios */}
+          <div style={{ height: 6, borderRadius: 99, overflow: "hidden", display: "flex" }}>
+            <div style={{ flexGrow: displayProbs.home, background: "#10b981" }} />
+            <div style={{ width: 2, background: "#0F1318", flexShrink: 0 }} />
+            <div style={{ flexGrow: displayProbs.draw, background: "#475569" }} />
+            <div style={{ width: 2, background: "#0F1318", flexShrink: 0 }} />
+            <div style={{ flexGrow: displayProbs.away, background: "#ef4444" }} />
+          </div>
         </div>
 
         {/* ── CONSENSUS LOCK BANNER ── */}
@@ -643,55 +613,58 @@ export default function MatchCard({
         </div>
       )}
 
-      {/* ── VALUE BET ── */}
-      {anyValueBet && bestVB && (
-        <div className="value-bet-section" style={{
-          margin: "0 24px 16px",
-          background: "linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.06))",
-          border: "1px solid rgba(16,185,129,0.3)",
-          borderRadius: 14,
-          padding: "12px 16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}>
-          <div>
-            <div style={{ color: "#10b981", fontWeight: 900, fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
-              <span>⚡</span> זוהה הימור ערך
-            </div>
-            <div style={{ color: "rgba(16,185,129,0.7)", fontSize: 11, marginTop: 3 }}>
-              {OUTCOME_HE[bestVB[0]] ?? bestVB[0]} — יתרון{" "}
-              <span style={{ fontWeight: 700 }}>+{bestVB[1]?.edge_percent?.toFixed(1)}%</span> מהשוק
-            </div>
-          </div>
-          <div style={{ textAlign: "left" }}>
-            <div style={{ color: "#10b981", fontSize: 28, fontWeight: 900, lineHeight: 1 }}>
-              {bestVB[1]?.bookmaker_odds}x
-            </div>
-            <div style={{ fontSize: 9, color: "rgba(16,185,129,0.5)", marginTop: 2 }}>
-              {bestVB[1]?.rating === "STRONG" ? "⭐⭐⭐" : bestVB[1]?.rating === "MODERATE" ? "⭐⭐" : "⭐"}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── EXPANDABLE BREAKDOWN ── */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      {/* ── COMPACT FOOTER: [למה? ▼]  [⚡ outcome +edge%]  [temp°C 🌡️] ── */}
+      <div style={{
+        borderTop: "1px solid rgba(255,255,255,0.05)",
+        padding: "8px 16px",
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+      }}>
+        {/* Expand toggle */}
         <button
           onClick={() => setExpanded(!expanded)}
           style={{
-            width: "100%", padding: "12px 24px",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: "none", border: "none", cursor: "pointer",
-            color: "#64748b", fontSize: 11,
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 99, padding: "4px 12px", cursor: "pointer",
+            color: "#64748b", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
             transition: "color 0.2s",
           }}
           onMouseEnter={e => (e.currentTarget.style.color = "#94a3b8")}
           onMouseLeave={e => (e.currentTarget.style.color = "#64748b")}
         >
-          <span style={{ fontSize: 12 }}>{expanded ? "▲" : "▼"}</span>
-          <span>שיטת הניצחון — פירוט מלא</span>
+          {expanded ? "למה? ▲" : "למה? ▼"}
         </button>
+
+        {/* Inline value badge — only when value bet exists */}
+        {anyValueBet && bestVB && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)",
+            borderRadius: 99, padding: "4px 10px",
+          }}>
+            <span style={{ fontSize: 12 }}>⚡</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#10b981" }}>
+              {OUTCOME_HE[bestVB[0]] ?? bestVB[0]}
+            </span>
+            <span style={{ fontSize: 11, color: "rgba(16,185,129,0.8)" }}>
+              +{bestVB[1]?.edge_percent?.toFixed(1)}%
+            </span>
+          </div>
+        )}
+
+        {/* Weather chip — right side */}
+        {weather?.source === "live" && (
+          <span style={{
+            fontSize: 11, color: "#64748b", direction: "ltr",
+            background: "rgba(255,255,255,0.04)", borderRadius: 99,
+            padding: "4px 10px", whiteSpace: "nowrap",
+          }}>
+            {Math.round(weather.temperature_celsius)}°C 🌡️
+          </span>
+        )}
+      </div>
+
+      {/* ── EXPANDABLE BREAKDOWN ── */}
+      <div>
 
         {expanded && (
           <div className="card-expanded" style={{ padding: "4px 24px 20px" }}>
