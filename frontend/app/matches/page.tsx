@@ -278,8 +278,8 @@ export default function MatchesPage() {
                       </span>
                     </div>
 
-                    {/* Row 3: Prediction bars */}
-                    <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    {/* Row 3: Prediction bars — direction:ltr so home (1) is LEFT, under the home team */}
+                    <div style={{ display: "flex", gap: 6, marginBottom: 10, direction: "ltr" }}>
                       {(["home", "draw", "away"] as const).map(o => (
                         <div key={o} style={{ flex: 1, textAlign: "center" }}>
                           <div style={{ height: 4, borderRadius: 99, marginBottom: 4, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
