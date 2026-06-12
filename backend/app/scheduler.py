@@ -200,6 +200,28 @@ async def job_auto_update_results():
         logger.error(f"[Scheduler] job_auto_update_results error: {e}", exc_info=True)
 
 
+async def job_daily_results_recap():
+    """23:00 שעון ישראל — שולח לטלגרם סיכום תוצאות יומי"""
+    try:
+        logger.info(f"[Scheduler] daily_results_recap — {datetime.now(ISRAEL_TZ).strftime('%H:%M')}")
+        from app.db.repository import get_today_results_recap
+        from app.telegram_bot import send_daily_recap
+
+        recap = await get_today_results_recap()
+        if recap["total"] == 0:
+            logger.info("[Scheduler] No resolved predictions today — skipping recap")
+            return
+
+        sent = await send_daily_recap(recap)
+        logger.info(
+            f"[Scheduler] Daily recap sent={sent} | "
+            f"{recap['hits']}/{recap['total']} hits ({recap['hit_rate']}%) | "
+            f"cumulative ×{recap['cumulative_odds']}"
+        )
+    except Exception as e:
+        logger.error(f"[Scheduler] job_daily_results_recap error: {e}", exc_info=True)
+
+
 async def job_cleanup_cache():
     """כל 24 שעות — מנקה cache פגי תוקף"""
     try:
@@ -256,8 +278,16 @@ def start_scheduler() -> AsyncIOScheduler:
         id="cleanup_cache", replace_existing=True,
     )
 
+    # 23:00 שעון ישראל — סיכום תוצאות יומי לטלגרם
+    _scheduler.add_job(
+        job_daily_results_recap,
+        trigger="cron", hour=23, minute=0,
+        timezone=ISRAEL_TZ,
+        id="daily_recap", replace_existing=True,
+    )
+
     _scheduler.start()
-    logger.info("✅ Scheduler started — fetch every 5min, results every 60min, cleanup daily")
+    logger.info("✅ Scheduler started — fetch every 5min, results every 60min, recap daily 23:00")
     return _scheduler
 
 

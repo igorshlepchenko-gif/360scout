@@ -313,6 +313,96 @@ def _empty_track_record() -> dict:
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Daily Results Recap
+# ────────────────────────────────────────────────────────────────────────────
+
+async def get_today_results_recap(tz_name: str = "Asia/Jerusalem") -> dict:
+    """
+    Returns today's resolved predictions for the Telegram daily recap.
+    Filters by archived_at >= today midnight (Israel time).
+    """
+    from zoneinfo import ZoneInfo
+    from datetime import date, time as dtime
+
+    tz = ZoneInfo(tz_name)
+    today_midnight = datetime.combine(datetime.now(tz).date(), dtime.min, tzinfo=tz)
+
+    pool = await get_db()
+    if pool is None:
+        return _empty_recap()
+
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT
+                    m.home_team_name,
+                    m.away_team_name,
+                    m.league_name,
+                    pr.predicted_outcome,
+                    pr.actual_outcome,
+                    pr.was_correct,
+                    pr.value_bet_hit,
+                    bo.is_value_bet,
+                    CASE pr.predicted_outcome
+                        WHEN 'home' THEN bo.odds_home
+                        WHEN 'draw' THEN bo.odds_draw
+                        WHEN 'away' THEN bo.odds_away
+                    END AS predicted_odds
+                FROM prediction_results pr
+                JOIN matches m ON m.id = pr.match_id
+                LEFT JOIN bookmaker_odds bo ON bo.match_id = m.id
+                WHERE pr.archived_at >= $1
+                ORDER BY pr.archived_at DESC
+                LIMIT 30
+            """, today_midnight)
+
+        total    = len(rows)
+        hits     = sum(1 for r in rows if r["was_correct"])
+        vb_total = sum(1 for r in rows if r["is_value_bet"])
+        vb_hits  = sum(1 for r in rows if r["value_bet_hit"])
+
+        cumulative_odds = 1.0
+        for r in rows:
+            if r["was_correct"] and r["predicted_odds"] and float(r["predicted_odds"]) > 1:
+                cumulative_odds *= float(r["predicted_odds"])
+        if total == 0:
+            cumulative_odds = 0.0
+
+        _label = {"home": "1 (בית)", "draw": "X (תיקו)", "away": "2 (חוץ)"}
+        match_lines: list[str] = []
+        for r in rows:
+            icon  = "✅" if r["was_correct"] else "❌"
+            pred  = _label.get(r["predicted_outcome"] or "", r["predicted_outcome"] or "?")
+            odds  = f" `{r['predicted_odds']:.2f}`" if r["predicted_odds"] else ""
+            vb    = " ⚡" if r["is_value_bet"] else ""
+            match_lines.append(
+                f"{icon}{vb} {r['home_team_name']} — {r['away_team_name']} → *{pred}*{odds}"
+            )
+
+        return {
+            "total":           total,
+            "hits":            hits,
+            "hit_rate":        round(hits / total * 100, 1) if total else 0.0,
+            "cumulative_odds": round(cumulative_odds, 2),
+            "vb_total":        vb_total,
+            "vb_hits":         vb_hits,
+            "match_lines":     match_lines[:15],
+        }
+
+    except Exception as e:
+        logger.error(f"get_today_results_recap failed: {e}")
+        return _empty_recap()
+
+
+def _empty_recap() -> dict:
+    return {
+        "total": 0, "hits": 0, "hit_rate": 0.0,
+        "cumulative_odds": 0.0, "vb_total": 0, "vb_hits": 0,
+        "match_lines": [],
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # עדכון תוצאה אמיתית
 # ────────────────────────────────────────────────────────────────────────────
 

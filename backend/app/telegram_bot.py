@@ -183,6 +183,48 @@ async def send_live_value_alert(match: dict, outcome: str, vb: dict) -> bool:
     return sent
 
 
+async def send_daily_recap(recap: dict) -> bool:
+    """סיכום תוצאות יומי — ניבויים שנגמרו היום עם ביצועים"""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%d/%m/%Y")
+
+    total    = recap.get("total", 0)
+    hits     = recap.get("hits", 0)
+    hit_rate = recap.get("hit_rate", 0.0)
+    cum_odds = recap.get("cumulative_odds", 0.0)
+    vb_total = recap.get("vb_total", 0)
+    vb_hits  = recap.get("vb_hits", 0)
+    lines    = recap.get("match_lines", [])
+
+    hit_bar = "🟩" * hits + "🟥" * (total - hits)
+
+    vb_row = (
+        f"⚡ Value Bets:    *{vb_hits}/{vb_total}* "
+        f"({round(vb_hits / vb_total * 100, 1) if vb_total else 0}%)\n"
+        if vb_total else ""
+    )
+
+    results_block = "\n".join(lines) if lines else "_אין תוצאות להיום_"
+
+    text = f"""
+📊 *סיכום תוצאות יומי — 360SCOUT*
+📅 *{today}*
+
+🏟 ניבויים שנגמרו:  *{total}*
+🎯 פגיעות:          *{hits}/{total}* ({hit_rate}%)
+{hit_bar}
+💰 יחס מצטבר:       *×{cum_odds}*
+{vb_row}
+━━━━━━━━━━━━━━━━━━━━
+📋 *פירוט משחקים:*
+{results_block}
+━━━━━━━━━━━━━━━━━━━━
+_[360SCOUT · Analyst365](https://analyst365.net/)_
+"""
+    return await send_message(text.strip())
+
+
 async def send_daily_summary(matches_count: int, value_bets_count: int, top_confidence: float) -> bool:
     """סיכום יומי"""
     text = f"""
