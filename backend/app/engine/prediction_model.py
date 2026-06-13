@@ -469,7 +469,7 @@ def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
 
     implied_prob = 1 / bookmaker_odds
     value = (our_prob * bookmaker_odds) - 1
-    edge_percent = (our_prob - implied_prob) * 100
+    edge_percent = value * 100  # EV% = (prob * odds − 1) × 100, consistent with value field
 
     rating = "NONE"
     if value > 0.20:

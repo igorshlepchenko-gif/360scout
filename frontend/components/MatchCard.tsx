@@ -274,8 +274,8 @@ function WinningMethodTable({
         )}
       </div>
 
-      <div style={{ border: "1px solid #334155", borderRadius: 10, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div style={{ border: "1px solid #334155", borderRadius: 10, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 340 }} dir="ltr">
           <thead>
             <tr style={{ borderBottom: "2px solid #38bdf8" }}>
               <th style={{ ...TH, textAlign: "right" }}>פרמטר</th>
@@ -769,22 +769,25 @@ export default function MatchCard({
                 display: "grid",
                 gridTemplateColumns: "1fr auto 1fr",
                 gap: 8, alignItems: "center",
+                direction: "ltr",
               }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981", textAlign: "right" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981", textAlign: "left" }}>
                   {pct0(consensus.analysts.home)}
                 </span>
                 <span style={{ fontSize: 10, color: "#64748b", textAlign: "center" }}>👥 מומחים</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", textAlign: "right" }}>
                   {pct0(consensus.analysts.away)}
                 </span>
               </div>
             )}
 
-            {/* Monte Carlo stats */}
-            <div className="monte-carlo-row" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
+            {/* Monte Carlo stats — direction:ltr so בית (home) is LEFT, consistent with scoreboard */}
+            <div className="monte-carlo-row" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center", direction: "ltr" }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: "white" }}>🎲 {prediction.monte_carlo.simulations.toLocaleString("he-IL")}</div>
-                <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>סימולציות</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: "#10b981" }}>
+                  📈 {pct0(prediction.monte_carlo.home)}
+                </div>
+                <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>MC בית</div>
               </div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444" }}>
@@ -793,10 +796,8 @@ export default function MatchCard({
                 <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>רמת ביטחון</div>
               </div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: "white" }}>
-                  📈 {pct0(prediction.monte_carlo.home)}
-                </div>
-                <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>MC בית</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: "white" }}>🎲 {prediction.monte_carlo.simulations.toLocaleString("he-IL")}</div>
+                <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>סימולציות</div>
               </div>
             </div>
 

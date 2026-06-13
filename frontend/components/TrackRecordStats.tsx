@@ -9,18 +9,12 @@ interface Props {
   statsData?: StatsData;
 }
 
-const DEFAULT: StatsData = {
-  homeWins:  { success: 41, total: 58 },
-  draws:     { success: 12, total: 28 },
-  awayWins:  { success: 29, total: 41 },
-  valueBets: { total: 3, won: 3, avgOdds: 1.80 },
-};
-
 const calcPct = (success: number, total: number) =>
   total > 0 ? Math.round((success / total) * 100) : 0;
 
 export default function TrackRecordStats({ statsData }: Props) {
-  const data = statsData ?? DEFAULT;
+  if (!statsData) return null;
+  const data = statsData;
 
   const homePct = calcPct(data.homeWins.success, data.homeWins.total);
   const drawPct = calcPct(data.draws.success,    data.draws.total);

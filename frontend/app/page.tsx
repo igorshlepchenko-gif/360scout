@@ -62,13 +62,17 @@ export default async function Home() {
     displayMode === "scheduled" ? "סיגנלים חמים היום 🔥" :
                                   "ניתוחים אחרונים 📊";
 
-  const valueBetCount = liveMatches.filter((m: any) =>
-    m.value_bets && Object.values(m.value_bets as Record<string, any>).some((v: any) => v?.is_value_bet)
-  ).length;
+  const valueBetCount = hasLive
+    ? liveMatches.filter((m: any) =>
+        m.value_bets && Object.values(m.value_bets as Record<string, any>).some((v: any) => v?.is_value_bet)
+      ).length
+    : (demo?.value_bets && Object.values(demo.value_bets as Record<string, any>).some((v: any) => v?.is_value_bet) ? 1 : 0);
 
-  const lockCount = liveMatches.filter((m: any) =>
-    m.consensus?.type === "LOCK"
-  ).length;
+  const lockCount = hasLive
+    ? liveMatches.filter((m: any) => m.consensus?.type === "LOCK").length
+    : (demo?.consensus?.type === "LOCK" ? 1 : 0);
+
+  const matchCount = hasLive ? liveMatches.length : (demo ? 1 : 0);
 
   const modeLabel =
     displayMode === "live"      ? "בזמן אמת" :
@@ -82,7 +86,7 @@ export default async function Home() {
   const stats = [
     { label: "דיוק האלגוריתם",    value: accuracy,                                          sub: accSub,                    color: "text-emerald-400" },
     { label: "הימורי ערך שנמצאו", value: valueBetCount > 0 ? `${valueBetCount} ⚡` : "0",   sub: "מהמשחקים הנוכחיים",       color: "text-amber-400"  },
-    { label: "משחקים בניתוח",      value: liveMatches.length.toString(),                     sub: modeLabel,                 color: "text-blue-400"   },
+    { label: "משחקים בניתוח",      value: matchCount.toString(),                              sub: modeLabel,                 color: "text-blue-400"   },
     { label: "נעילות קונסנזוס",   value: lockCount > 0 ? lockCount.toString() : "0",        sub: "הסכמה מלאה במשחקים הנוכחיים", color: "text-purple-400" },
   ];
 

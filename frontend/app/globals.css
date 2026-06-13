@@ -114,8 +114,8 @@ body {
   main { padding: 20px 16px !important; }
   h1   { font-size: 24px !important; }
 
-  /* Stats grid: 2×2 */
-  div[style*="gridTemplateColumns: repeat(4, 1fr)"] {
+  /* Stats grid: 2×2 — React renders kebab-case in DOM */
+  div[style*="grid-template-columns: repeat(4, 1fr)"] {
     grid-template-columns: repeat(2, 1fr) !important;
   }
 
@@ -211,22 +211,33 @@ body {
     font-size: 14px !important;
   }
 
-  /* Module chart label column: narrower */
-  div[style*="minWidth: 110"] {
+  /* Module chart label column: narrower — React renders min-width: 110px */
+  div[style*="min-width: 110"] {
     min-width: 80px !important;
   }
 
-  /* League filter tabs: always scrollable */
-  div[style*="overflowX: \"auto\""],
-  div[style*='overflowX: "auto"'] {
+  /* League filter tabs / any overflow-x: auto wrapper */
+  div[style*="overflow-x: auto"] {
     -webkit-overflow-scrolling: touch;
     padding-bottom: 6px !important;
   }
 
   /* Stats grid on main page: 2 cols */
-  div[style*="gridTemplateColumns: repeat(4, 1fr)"] {
+  div[style*="grid-template-columns: repeat(4, 1fr)"] {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 10px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   WINNING METHOD TABLE — mobile scrollable
+══════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Reduce padding inside the table cells */
+  .card-expanded table th,
+  .card-expanded table td {
+    padding: 7px 8px !important;
+    font-size: 10px !important;
   }
 }
 
