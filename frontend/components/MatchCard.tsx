@@ -435,6 +435,14 @@ export default function MatchCard({
   const awayWin    = displayProbs.away > displayProbs.home && displayProbs.away > displayProbs.draw;
   const isWorldCup = /world.?cup|fifa|מונדיאל/i.test(league ?? "");
 
+  // Monte Carlo leader — show whichever outcome has higher MC probability
+  const mcHome      = prediction.monte_carlo.home;
+  const mcAway      = prediction.monte_carlo.away;
+  const mcLeader    = mcHome >= mcAway ? "home" : "away";
+  const mcLeaderPct = mcLeader === "home" ? mcHome : mcAway;
+  const mcLeaderLabel = mcLeader === "home" ? "MC בית" : "MC אורחים";
+  const mcLeaderColor = mcLeader === "home" ? "#10b981" : "#ef4444";
+
   return (
     <div
       ref={cardRef}
@@ -781,13 +789,13 @@ export default function MatchCard({
               </div>
             )}
 
-            {/* Monte Carlo stats — direction:ltr so בית (home) is LEFT, consistent with scoreboard */}
+            {/* Monte Carlo stats — first column shows the LEADING team, not always home */}
             <div className="monte-carlo-row" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center", direction: "ltr" }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: "#10b981" }}>
-                  📈 {pct0(prediction.monte_carlo.home)}
+                <div style={{ fontSize: 18, fontWeight: 900, color: mcLeaderColor }}>
+                  📈 {pct0(mcLeaderPct)}
                 </div>
-                <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>MC בית</div>
+                <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>{mcLeaderLabel}</div>
               </div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444" }}>

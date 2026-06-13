@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "360scout-frontend",
+      "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "cwd": "D:/clod projects/360scout/frontend",
+      "cwd": "${workspaceFolder}/frontend",
       "port": 3000
     }
   ]
