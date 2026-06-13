@@ -572,6 +572,27 @@ def build_match_analysis_sync(
     injuries    = []
     city        = fix.get("venue", {}).get("city", "") or ""
 
+    # If both teams got the default xG (1.2) from stats — meaning no real xG data was
+    # available (e.g. national teams at WC, new season) — recalibrate from market odds.
+    # Without this, teams with very different market odds are treated as equal.
+    _XG_DEFAULT = 1.2
+    if odds and xg_home == _XG_DEFAULT and xg_away == _XG_DEFAULT:
+        try:
+            oh = float(odds.get("odds_home") or 0)
+            oa = float(odds.get("odds_away") or 0)
+            if oh > 1.0 and oa > 1.0:
+                ph_raw = 1 / oh
+                pa_raw = 1 / oa
+                total_raw = ph_raw + pa_raw
+                xg_home = max(0.60, (ph_raw / total_raw) * 2.55 * 1.05)
+                xg_away = max(0.60, (pa_raw / total_raw) * 2.55 * 0.95)
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+
+    # World Cup (league_id=1) is played at neutral venues — no home advantage
+    league_id   = league.get("id", 0)
+    venue_type  = "neutral" if league_id == 1 else "home"
+
     # בנה MatchContext
     ctx = MatchContext(
         match_id              = str(fix.get("id", "")),
@@ -588,7 +609,7 @@ def build_match_analysis_sync(
         home_injury_impact    = home_injury,
         away_injury_impact    = away_injury,
         crowd_size            = fix.get("venue", {}).get("capacity", 40000) or 40000,
-        venue_type            = "home",
+        venue_type            = venue_type,
         tournament_stage      = "group",
         pressure_index        = 0.6,
         rest_days_home        = 7,
