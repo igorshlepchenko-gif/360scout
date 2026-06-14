@@ -57,6 +57,83 @@ async def send_message(text: str, parse_mode: str = "Markdown") -> bool:
 
 import re
 
+
+# ── Goals line table formatter ────────────────────────────────────────────────
+
+def format_goals_row(home_team: str, away_team: str, gs: dict | None) -> str:
+    """
+    Format a goals-market row for Telegram.
+
+    Output (Markdown pre block so columns align in monospace):
+    ```
+    ⚽ Over/Under 2.5 Goals
+    ─────────────────────────────────────
+     אנדר   45.2%  @ 2.10   MODERATE +18%
+     אובר   54.8%  @ 1.75   NONE      -3%
+    ─────────────────────────────────────
+     xG בית 1.42 │ xG חוץ 1.18 │ סה"כ 2.60
+    ```
+    Returns empty string if gs is None or signal is completely absent.
+    """
+    if not gs:
+        return ""
+
+    under_prob = gs.get("under_prob", 0) * 100
+    over_prob  = gs.get("over_prob",  0) * 100
+    under_edge = gs.get("under_edge", 0)
+    over_edge  = gs.get("over_edge",  0)
+    under_rat  = gs.get("under_rating", "NONE")
+    over_rat   = gs.get("over_rating",  "NONE")
+    under_odds = gs.get("under_odds", 0)
+    over_odds  = gs.get("over_odds",  0)
+    xg_home    = gs.get("xg_home", 0)
+    xg_away    = gs.get("xg_away", 0)
+    total      = gs.get("expected_total", 0)
+    line       = gs.get("line", 2.5)
+    signal     = gs.get("signal", "NO_SIGNAL")
+    mods       = gs.get("modifiers_applied") or []
+
+    # signal emoji
+    def _sig_icon(rat: str) -> str:
+        return {"STRONG": "🔥", "MODERATE": "✅", "WEAK": "📊"}.get(rat, "")
+
+    under_sign = f"+{under_edge:.1f}%" if under_edge > 0 else f"{under_edge:.1f}%"
+    over_sign  = f"+{over_edge:.1f}%"  if over_edge  > 0 else f"{over_edge:.1f}%"
+
+    under_row = (
+        f" {'אנדר':<6} {under_prob:4.1f}%  @ {under_odds:.2f}  "
+        f"{under_rat:<8} {under_sign}  {_sig_icon(under_rat)}"
+    )
+    over_row = (
+        f" {'אובר':<6} {over_prob:4.1f}%  @ {over_odds:.2f}  "
+        f"{over_rat:<8} {over_sign}  {_sig_icon(over_rat)}"
+    )
+
+    mods_line = ""
+    if mods:
+        mods_line = f"\n⚠️ _מתקנים פעילים: {', '.join(mods)}_"
+
+    signal_line = ""
+    if signal != "NO_SIGNAL":
+        s_edge = gs.get("signal_edge", 0)
+        s_rat  = gs.get("signal_rating", "")
+        s_icon = _sig_icon(s_rat)
+        s_name = "אובר" if signal == "OVER" else "אנדר"
+        signal_line = f"\n🎯 *סיגנל שערים:* {s_icon} *{s_name} {line} — VALUE +{s_edge:.1f}%* ({s_rat})"
+
+    return (
+        f"\n━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚽ *ניתוח שערים — Over/Under {line}*\n"
+        f"```\n"
+        f"{under_row}\n"
+        f"{over_row}\n"
+        f"```\n"
+        f"📐 xG בית `{xg_home:.2f}` │ xG חוץ `{xg_away:.2f}` │ סה\"כ `{total:.2f}`"
+        f"{signal_line}"
+        f"{mods_line}"
+    )
+
+
 def _is_world_cup(league: str) -> bool:
     """זיהוי משחק מונדיאל לפי שם הליגה"""
     return bool(re.search(r"world.?cup|fifa|מונדיאל", league or "", re.IGNORECASE))
@@ -113,6 +190,8 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
     # שם הקבוצה המומלצת — ברור ואינו תלוי בכיווניות BiDi של טלגרם
     outcome_team = home_team if outcome == "home" else (away_team if outcome == "away" else "תיקו")
 
+    goals_row = format_goals_row(home_team, away_team, match.get("goals_signal"))
+
     text = f"""
 🔥 *התראת VALUE BET* {stars}
 
@@ -128,7 +207,7 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
 📈 יתרון:          *+{vb.get('edge_percent',0):.1f}%*
 ⭐ דירוג:          *{vb.get('rating','?')}*
 ━━━━━━━━━━━━━━━━━━━━
-🎯 רמת ביטחון: {match.get('confidence','?')}%
+🎯 רמת ביטחון: {match.get('confidence','?')}%{goals_row}
 
 _360SCOUT · ניתוח 360 מעלות_
 """
@@ -188,6 +267,8 @@ async def send_live_value_alert(
         except Exception as ke:
             logger.debug(f"Kelly calc skipped: {ke}")
 
+    goals_row = format_goals_row(home_team, away_team, match.get("goals_signal"))
+
     text = f"""
 🔴 *VALUE BET — LIVE* {stars}
 
@@ -200,7 +281,7 @@ async def send_live_value_alert(
 💰 יחס:     `{vb.get('bookmaker_odds', '?')}`
 📈 יתרון:   *+{vb.get('edge_percent', 0):.1f}%*
 ⭐ דירוג:   *{vb.get('rating', '?')}*
-🎯 ביטחון:  `{match.get('confidence', '?')}%`{kelly_row}
+🎯 ביטחון:  `{match.get('confidence', '?')}%`{kelly_row}{goals_row}
 ━━━━━━━━━━━━━━━━━━━━
 [360SCOUT — ניתוח מלא](https://www.analyst365.net/)
 """

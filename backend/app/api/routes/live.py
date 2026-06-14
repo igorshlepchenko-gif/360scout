@@ -22,6 +22,9 @@ from app.engine.prediction_model import (
     calculate_under_over_25_edge,
 )
 from app.engine.dynamic_adjuster import adjust_probabilities, AdjustmentParams
+from app.engine.goals_engine import (
+    calculate_goals_value, injury_flags_from_list, GoalsValueSignal,
+)
 
 # store ידני של overrides לפי fixture_id — נמחק עם restart
 _manual_adjustments: dict[int, dict] = {}
@@ -654,19 +657,44 @@ def build_match_analysis_sync(
                 if vb["is_value_bet"]:          # only positive-EV bets (> 5%)
                     value_bets[outcome] = vb
 
-    # Over/Under 2.5 edge — Poisson על xG + יחסי totals מ-The Odds API
+    # Over/Under 2.5 — two-layer analysis:
+    #   goals_signal : full pre-game Poisson matrix (scipy) with dynamic xG adjustment
+    #   ou_edge      : live in-play Poisson PMF on *remaining* expected goals (backward compat)
+    goals_signal: GoalsValueSignal | None = None
     ou_edge = None
     totals  = find_totals_for_match(all_odds, home.get("name", ""), away.get("name", ""))
     if totals and totals.get("over") and totals.get("under"):
+        # Pre-game / full-match: Goals Engine with dynamic xG modifiers
+        xg_mods = injury_flags_from_list(
+            injuries,
+            home_team_id = home.get("id", 0),
+            away_team_id = away.get("id", 0),
+            weather      = weather,
+        )
+        goals_signal = calculate_goals_value(
+            xg_home    = xg_home,
+            xg_away    = xg_away,
+            over_odds  = totals["over"],
+            under_odds = totals["under"],
+            mods       = xg_mods,
+        )
+
+        # Live in-play: scale by remaining time + goals already scored
+        elapsed_min   = int(fix.get("status", {}).get("elapsed") or 0)
+        current_goals = int((goals.get("home") or 0) + (goals.get("away") or 0))
         ou_edge = calculate_under_over_25_edge(
             expected_goals    = round(xg_home + xg_away, 2),
             bookie_under_odds = totals["under"],
             bookie_over_odds  = totals["over"],
-            current_minutes   = int(fix.get("status", {}).get("elapsed") or 0),
-            current_goals     = int((goals.get("home") or 0) + (goals.get("away") or 0)),
+            current_minutes   = elapsed_min,
+            current_goals     = current_goals,
         )
+        bm_name = totals.get("bookmaker", "")
         if ou_edge:
-            ou_edge["bookmaker"] = totals.get("bookmaker", "")
+            ou_edge["bookmaker"] = bm_name
+        if goals_signal:
+            # attach bookmaker name to the signal dict for Telegram formatting
+            goals_signal = goals_signal  # frozen dataclass — pass bookmaker via ou_edge
 
     # קונסנזוס (ללא אנליסטים אנושיים כרגע)
     consensus = calculate_consensus(prediction["final"], [])
@@ -696,6 +724,7 @@ def build_match_analysis_sync(
         "odds":          odds,
         "value_bets":    value_bets if value_bets else None,
         "ou_edge":       ou_edge,
+        "goals_signal":  goals_signal.to_dict() if goals_signal else None,
         "consensus":     consensus,
         "weather":       weather,
         "xg": {

@@ -139,14 +139,15 @@ async def job_fetch_live_matches():
                         if vb_data and vb_data.get("rating") in ("STRONG", "MODERATE"):
                             try:
                                 match_meta = {
-                                    "fixture_id": result.get("fixture_id"),
-                                    "home_team":  result.get("home_team", ""),
-                                    "away_team":  result.get("away_team", ""),
-                                    "match_date": result.get("match_date", ""),
-                                    "league":     result.get("league", ""),
-                                    "confidence": result.get("prediction", {}).get("confidence", 0),
-                                    "elapsed":    result.get("elapsed"),
-                                    "score":      result.get("score"),
+                                    "fixture_id":   result.get("fixture_id"),
+                                    "home_team":    result.get("home_team", ""),
+                                    "away_team":    result.get("away_team", ""),
+                                    "match_date":   result.get("match_date", ""),
+                                    "league":       result.get("league", ""),
+                                    "confidence":   result.get("prediction", {}).get("confidence", 0),
+                                    "elapsed":      result.get("elapsed"),
+                                    "score":        result.get("score"),
+                                    "goals_signal": result.get("goals_signal"),
                                 }
                                 if is_live:
                                     from app.engine.live_filter import process_live_value_bet
