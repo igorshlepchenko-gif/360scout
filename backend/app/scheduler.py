@@ -102,6 +102,30 @@ async def job_fetch_live_matches():
                 fixture_odds = apisports_map.get(fid)
                 result       = build_match_analysis_sync(f, all_odds, weather, fixture_odds=fixture_odds)
                 if result:
+                    # OLBG consensus enrichment — אם הסלוג נמצא, מחליף ALGORITHM_ONLY
+                    try:
+                        from app.tasks.olbg_scraper import (
+                            build_olbg_url, fetch_olbg_consensus, olbg_to_analyst_predictions,
+                        )
+                        from app.engine.prediction_model import calculate_consensus
+                        olbg_url  = build_olbg_url(
+                            result.get("home_team", ""),
+                            result.get("away_team", ""),
+                        )
+                        olbg_data = await fetch_olbg_consensus(olbg_url)
+                        if olbg_data:
+                            analyst_preds       = olbg_to_analyst_predictions(olbg_data)
+                            result["consensus"] = calculate_consensus(
+                                result["prediction"]["final"], analyst_preds
+                            )
+                            result["consensus"]["olbg_raw"] = olbg_data
+                            logger.info(
+                                f"[OLBG] {result['home_team']} vs {result['away_team']}: "
+                                f"{olbg_data} → {result['consensus']['type']}"
+                            )
+                    except Exception as olbg_err:
+                        logger.debug(f"[OLBG] enrichment skipped: {olbg_err}")
+
                     await save_match_prediction(result)
                     saved += 1
 
