@@ -472,11 +472,11 @@ def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
     edge_percent = value * 100  # EV% = (prob * odds − 1) × 100, consistent with value field
 
     rating = "NONE"
-    if value > 0.20:
+    if value >= 0.25:
         rating = "STRONG"
-    elif value > 0.10:
+    elif value >= 0.15:
         rating = "MODERATE"
-    elif value > 0.05:
+    elif value >= 0.05:
         rating = "WEAK"
 
     return {

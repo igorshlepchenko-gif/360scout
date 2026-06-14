@@ -108,6 +108,7 @@ async def job_fetch_live_matches():
                     # שלח התראת Telegram אם יש Value Bet חזק
                     vb      = result.get("value_bets") or {}
                     is_live = result.get("_status") == "live"
+                    _score  = result.get("score") or {}
                     for outcome, vb_data in vb.items():
                         if vb_data and vb_data.get("rating") in ("STRONG", "MODERATE"):
                             try:
@@ -122,7 +123,18 @@ async def job_fetch_live_matches():
                                     "score":      result.get("score"),
                                 }
                                 if is_live:
+                                    from app.engine.live_filter import process_live_value_bet
                                     from app.telegram_bot import send_live_value_alert
+                                    filt = process_live_value_bet(
+                                        elapsed=int(result.get("elapsed") or 0),
+                                        home_score=int(_score.get("home") or 0),
+                                        away_score=int(_score.get("away") or 0),
+                                        outcome=outcome,
+                                        vb_data=vb_data,
+                                    )
+                                    if filt["status"] != "SEND_ALERT":
+                                        logger.debug(f"[Live Filter] SKIP {outcome}: {filt.get('reason')}")
+                                        continue
                                     sent = await send_live_value_alert(match_meta, outcome, vb_data)
                                 else:
                                     from app.telegram_bot import send_value_bet_alert
