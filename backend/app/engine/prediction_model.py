@@ -491,6 +491,82 @@ def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
 
 
 # ============================================================
+# Over/Under 2.5 Edge (Poisson)
+# ============================================================
+
+import math as _math
+
+def calculate_under_over_25_edge(
+    expected_goals: float,
+    bookie_under_odds: float,
+    bookie_over_odds: float,
+    current_minutes: int = 0,
+    current_goals: int = 0,
+) -> dict | None:
+    """
+    חישוב Edge על Over/Under 2.5 — תומך בפרה-גיים ובלייב.
+
+    expected_goals  : xG_home + xG_away (ציפייה לשערים למשחק מלא)
+    current_minutes : דקה נוכחית (0 לפרה-גיים)
+    current_goals   : שערים שכבר נכבשו (0 לפרה-גיים)
+    """
+    if bookie_under_odds <= 1.0 or bookie_over_odds <= 1.0:
+        return None
+
+    time_remaining = (90 - current_minutes) / 90
+    if time_remaining <= 0:
+        return None
+
+    # אם כבר 3+ שערים — אנדר נגמר, אובר וודאי
+    if current_goals >= 3:
+        return {
+            "expected_goals":  round(expected_goals, 2),
+            "true_under_prob": 0.0,
+            "true_over_prob":  100.0,
+            "under_edge":      round((-1) * 100, 2),
+            "over_edge":       round((bookie_over_odds - 1) * 100, 2),
+            "under_rating":    "NONE",
+            "over_rating":     _ou_rating((bookie_over_odds - 1) * 100),
+            "bookie_under_odds": bookie_under_odds,
+            "bookie_over_odds":  bookie_over_odds,
+        }
+
+    lambda_remaining = expected_goals * time_remaining
+    max_future       = 2 - current_goals           # שערים מותרים נוספים לאנדר
+
+    true_under_prob = sum(
+        _math.exp(-lambda_remaining) * (lambda_remaining ** k) / _math.factorial(k)
+        for k in range(max_future + 1)
+    )
+    true_over_prob = 1.0 - true_under_prob
+
+    under_edge = (true_under_prob * bookie_under_odds - 1) * 100
+    over_edge  = (true_over_prob  * bookie_over_odds  - 1) * 100
+
+    return {
+        "expected_goals":    round(expected_goals, 2),
+        "true_under_prob":   round(true_under_prob * 100, 2),
+        "true_over_prob":    round(true_over_prob  * 100, 2),
+        "under_edge":        round(under_edge, 2),
+        "over_edge":         round(over_edge,  2),
+        "under_rating":      _ou_rating(under_edge),
+        "over_rating":       _ou_rating(over_edge),
+        "bookie_under_odds": bookie_under_odds,
+        "bookie_over_odds":  bookie_over_odds,
+    }
+
+
+def _ou_rating(edge_pct: float) -> str:
+    if edge_pct >= 25.0:
+        return "STRONG"
+    if edge_pct >= 15.0:
+        return "MODERATE"
+    if edge_pct >= 5.0:
+        return "WEAK"
+    return "NONE"
+
+
+# ============================================================
 # Consensus Engine
 # ============================================================
 

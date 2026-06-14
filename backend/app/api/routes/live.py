@@ -18,7 +18,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.engine.prediction_model import (
-    PredictionEngine, MatchContext, calculate_value, calculate_consensus
+    PredictionEngine, MatchContext, calculate_value, calculate_consensus,
+    calculate_under_over_25_edge,
 )
 from app.cache import get as cache_get, set as cache_set, stats as cache_stats, clear_all as cache_clear_all
 from app.db.repository import save_match_prediction, get_track_record, update_match_result
@@ -628,6 +629,20 @@ def build_match_analysis_sync(
                 if vb["is_value_bet"]:          # only positive-EV bets (> 5%)
                     value_bets[outcome] = vb
 
+    # Over/Under 2.5 edge — Poisson על xG + יחסי totals מ-The Odds API
+    ou_edge = None
+    totals  = find_totals_for_match(all_odds, home.get("name", ""), away.get("name", ""))
+    if totals and totals.get("over") and totals.get("under"):
+        ou_edge = calculate_under_over_25_edge(
+            expected_goals    = round(xg_home + xg_away, 2),
+            bookie_under_odds = totals["under"],
+            bookie_over_odds  = totals["over"],
+            current_minutes   = int(fix.get("status", {}).get("elapsed") or 0),
+            current_goals     = int((goals.get("home") or 0) + (goals.get("away") or 0)),
+        )
+        if ou_edge:
+            ou_edge["bookmaker"] = totals.get("bookmaker", "")
+
     # קונסנזוס (ללא אנליסטים אנושיים כרגע)
     consensus = calculate_consensus(prediction["final"], [])
 
@@ -655,6 +670,7 @@ def build_match_analysis_sync(
         "prediction":    prediction,
         "odds":          odds,
         "value_bets":    value_bets if value_bets else None,
+        "ou_edge":       ou_edge,
         "consensus":     consensus,
         "weather":       weather,
         "xg": {
