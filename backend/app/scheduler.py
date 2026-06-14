@@ -109,6 +109,8 @@ async def job_fetch_live_matches():
                     vb      = result.get("value_bets") or {}
                     is_live = result.get("_status") == "live"
                     _score  = result.get("score") or {}
+                    _final  = result.get("prediction", {}).get("final", {})
+                    _primary_winner = max(_final, key=_final.get) if _final else ""
                     for outcome, vb_data in vb.items():
                         if vb_data and vb_data.get("rating") in ("STRONG", "MODERATE"):
                             try:
@@ -131,6 +133,7 @@ async def job_fetch_live_matches():
                                         away_score=int(_score.get("away") or 0),
                                         outcome=outcome,
                                         vb_data=vb_data,
+                                        primary_winner=_primary_winner,
                                     )
                                     if filt["status"] != "SEND_ALERT":
                                         logger.debug(f"[Live Filter] SKIP {outcome}: {filt.get('reason')}")

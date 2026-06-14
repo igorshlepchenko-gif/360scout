@@ -625,7 +625,7 @@ def build_match_analysis_sync(
             bm_odd = odds.get(odd_key, 0)
             if bm_odd:
                 vb = calculate_value(prediction["final"][outcome], bm_odd)
-                if vb["value"] != 0:
+                if vb["is_value_bet"]:          # only positive-EV bets (> 5%)
                     value_bets[outcome] = vb
 
     # קונסנזוס (ללא אנליסטים אנושיים כרגע)

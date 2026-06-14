@@ -650,16 +650,17 @@ export default function MatchCard({
           {expanded ? "למה? ▲" : "למה? ▼"}
         </button>
 
-        {/* Inline value badge — only when value bet exists */}
+        {/* Inline value badge — direction:ltr prevents RTL flip of emoji/sign */}
         {anyValueBet && bestVB && (
           <div style={{
-            display: "flex", alignItems: "center", gap: 5,
+            display: "flex", alignItems: "center", gap: 5, direction: "ltr",
             background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)",
             borderRadius: 99, padding: "4px 10px",
           }}>
             <span style={{ fontSize: 12 }}>⚡</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#10b981" }}>
               {OUTCOME_HE[bestVB[0]] ?? bestVB[0]}
+              {" "}({OUTCOME_12X[bestVB[0]] ?? "?"})
             </span>
             <span style={{ fontSize: 11, color: "rgba(16,185,129,0.8)" }}>
               +{bestVB[1]?.edge_percent?.toFixed(1)}%
