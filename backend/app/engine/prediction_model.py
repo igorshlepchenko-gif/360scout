@@ -459,16 +459,31 @@ class PredictionEngine:
 # Value Bet Calculator
 # ============================================================
 
+_NO_VALUE = {"value": 0, "edge_percent": 0, "is_value_bet": False, "rating": "NONE"}
+
+# Edge > 100% = impossible in real markets → reversed/stale odds mapping bug
+_MAX_VALID_EDGE = 1.0
+
+
 def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
     """
     Returns the statistical edge vs. the bookmaker.
     Positive value = we think it's more likely than the market.
     """
     if bookmaker_odds <= 1.0:
-        return {"value": 0, "edge_percent": 0, "is_value_bet": False, "rating": "NONE"}
+        return _NO_VALUE
+
+    # Guardrail 1: auto-convert if caller accidentally passed percentage (e.g. 26 → 0.26)
+    if our_prob > 1.0:
+        our_prob = our_prob / 100.0
 
     implied_prob = 1 / bookmaker_odds
     value = (our_prob * bookmaker_odds) - 1
+
+    # Guardrail 2: edge > 100% → odds are reversed / stale / wrong market
+    if value > _MAX_VALID_EDGE:
+        return _NO_VALUE
+
     edge_percent = value * 100  # EV% = (prob * odds − 1) × 100, consistent with value field
 
     rating = "NONE"
