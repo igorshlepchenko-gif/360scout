@@ -65,23 +65,59 @@ interface MatchWeather {
   source:              string;
 }
 
+interface GoalsSignal {
+  line:           number;
+  xg_home:        number;
+  xg_away:        number;
+  expected_total: number;
+  over_prob:      number;   // 0–1
+  under_prob:     number;   // 0–1
+  btts_yes_prob:  number;
+  btts_no_prob:   number;
+  over_odds:      number;
+  under_odds:     number;
+  over_edge:      number;   // EV% (e.g. 18.3)
+  under_edge:     number;
+  over_rating:    string;
+  under_rating:   string;
+  signal:         string;   // "OVER" | "UNDER" | "NO_SIGNAL"
+  signal_edge:    number;
+  signal_rating:  string;
+  modifiers_applied: string[];
+}
+
+interface OuEdge {
+  expected_goals:    number;
+  true_under_prob:   number;  // 0–100
+  true_over_prob:    number;  // 0–100
+  under_edge:        number;
+  over_edge:         number;
+  under_rating:      string;
+  over_rating:       string;
+  bookie_under_odds: number;
+  bookie_over_odds:  number;
+  bookmaker?:        string;
+}
+
 interface MatchCardProps {
-  homeTeam:    string;
-  awayTeam:    string;
-  homeLogo?:   string;
-  awayLogo?:   string;
-  league?:     string;
-  leagueLogo?: string;
-  matchDate?:  string;
-  isLive?:     boolean;
-  prediction:  Prediction;
-  value_bets?: ValueBets;
-  consensus?:  Consensus;
-  fixtureId?:  number;
-  matchId?:    string;
-  odds?:       MatchOdds | null;
-  weather?:    MatchWeather | null;
-  xg?:         { home: number; away: number } | null;
+  homeTeam:     string;
+  awayTeam:     string;
+  homeLogo?:    string;
+  awayLogo?:    string;
+  league?:      string;
+  leagueLogo?:  string;
+  matchDate?:   string;
+  isLive?:      boolean;
+  prediction:   Prediction;
+  value_bets?:  ValueBets;
+  consensus?:   Consensus;
+  fixtureId?:   number;
+  matchId?:     string;
+  odds?:        MatchOdds | null;
+  weather?:     MatchWeather | null;
+  xg?:          { home: number; away: number } | null;
+  goals_signal?: GoalsSignal | null;
+  ou_edge?:     OuEdge | null;
 }
 
 const pct  = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -358,11 +394,205 @@ function WinningMethodTable({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// ── Goals Market Block ────────────────────────────────────────────────────────
+function GoalsMarketBlock({ gs, ouEdge }: { gs: GoalsSignal | null; ouEdge: OuEdge | null }) {
+  // Prefer goals_signal (richer); fall back to ou_edge (live in-play)
+  const hasGs = !!gs;
+
+  const line       = gs?.line       ?? 2.5;
+  const underProb  = hasGs ? (gs!.under_prob * 100) : (ouEdge?.true_under_prob ?? 0);
+  const overProb   = hasGs ? (gs!.over_prob  * 100) : (ouEdge?.true_over_prob  ?? 0);
+  const underOdds  = hasGs ? gs!.under_odds          : (ouEdge?.bookie_under_odds ?? 0);
+  const overOdds   = hasGs ? gs!.over_odds           : (ouEdge?.bookie_over_odds  ?? 0);
+  const underEdge  = hasGs ? gs!.under_edge          : (ouEdge?.under_edge ?? 0);
+  const overEdge   = hasGs ? gs!.over_edge           : (ouEdge?.over_edge  ?? 0);
+  const underRat   = hasGs ? gs!.under_rating        : (ouEdge?.under_rating ?? "NONE");
+  const overRat    = hasGs ? gs!.over_rating         : (ouEdge?.over_rating  ?? "NONE");
+  const xgHome     = gs?.xg_home       ?? null;
+  const xgAway     = gs?.xg_away       ?? null;
+  const xgTotal    = gs?.expected_total ?? (ouEdge?.expected_goals ?? null);
+  const bttsYes    = gs ? gs.btts_yes_prob * 100 : null;
+  const signal     = gs?.signal ?? "NO_SIGNAL";
+  const signalEdge = gs?.signal_edge ?? 0;
+  const signalRat  = gs?.signal_rating ?? "NONE";
+  const mods       = gs?.modifiers_applied ?? [];
+
+  const RATING_STYLE: Record<string, React.CSSProperties> = {
+    STRONG:   { background: "rgba(74,222,128,0.15)",  color: "#4ade80",  border: "1px solid rgba(74,222,128,0.3)"  },
+    MODERATE: { background: "rgba(56,189,248,0.12)",  color: "#38bdf8",  border: "1px solid rgba(56,189,248,0.25)" },
+    WEAK:     { background: "rgba(245,158,11,0.10)",  color: "#f59e0b",  border: "1px solid rgba(245,158,11,0.2)"  },
+    NONE:     { background: "rgba(100,116,139,0.08)", color: "#475569",  border: "1px solid rgba(100,116,139,0.15)"},
+  };
+
+  const TH: React.CSSProperties = {
+    padding: "9px 12px", fontSize: 10, fontWeight: 700,
+    color: "#64748b", textAlign: "center",
+    background: "rgba(15,23,42,0.6)",
+  };
+  const TD: React.CSSProperties = {
+    padding: "9px 12px", fontSize: 12, textAlign: "center",
+    fontFamily: "monospace", color: "#cbd5e1",
+  };
+  const LABEL_COL: React.CSSProperties = {
+    padding: "9px 12px", fontSize: 12, fontWeight: 700,
+    color: "#94a3b8", textAlign: "right", whiteSpace: "nowrap",
+  };
+
+  const rows = [
+    {
+      key: "under", label: `אנדר ${line}`, emoji: "🔽",
+      prob: underProb, odds: underOdds, edge: underEdge, rating: underRat,
+    },
+    {
+      key: "over", label: `אובר ${line}`, emoji: "🔼",
+      prob: overProb, odds: overOdds, edge: overEdge, rating: overRat,
+    },
+  ];
+
+  const hasSignal = signal !== "NO_SIGNAL";
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <div style={{ height: 14, width: 3, background: "#a78bfa", borderRadius: 99 }} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>
+          שוק השערים — Over/Under {line}
+        </span>
+        {hasGs && (
+          <span style={{ fontSize: 9, color: "#475569" }}>· Poisson (scipy)</span>
+        )}
+      </div>
+
+      {/* Table */}
+      <div style={{ border: "1px solid #334155", borderRadius: 10, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 340 }} dir="ltr">
+          <thead>
+            <tr style={{ borderBottom: "2px solid #a78bfa" }}>
+              <th style={{ ...TH, textAlign: "right" }}>ליין</th>
+              <th style={TH}>הסתברות</th>
+              <th style={TH}>יחס שוק</th>
+              <th style={TH}>Edge %</th>
+              <th style={TH}>דירוג</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const rat = r.rating as keyof typeof RATING_STYLE;
+              const isValue = r.edge >= 5;
+              return (
+                <tr key={r.key} style={{
+                  borderBottom: "1px solid #1e293b",
+                  background: isValue ? "rgba(74,222,128,0.04)" : undefined,
+                }}>
+                  <td style={{ ...LABEL_COL, color: isValue ? "#4ade80" : "#94a3b8" }}>
+                    {r.emoji} {r.label}
+                  </td>
+                  <td style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 14 }}>
+                    {r.prob.toFixed(1)}%
+                  </td>
+                  <td style={TD}>
+                    {r.odds > 0 ? r.odds.toFixed(2) : "—"}
+                  </td>
+                  <td style={{
+                    ...TD,
+                    fontWeight: 700,
+                    color: r.edge >= 15 ? "#4ade80" : r.edge >= 5 ? "#f59e0b" : "#475569",
+                  }}>
+                    {r.edge > 0 ? `+${r.edge.toFixed(1)}%` : `${r.edge.toFixed(1)}%`}
+                  </td>
+                  <td style={{ ...TD, padding: "6px 12px" }}>
+                    <span style={{
+                      ...RATING_STYLE[rat] ?? RATING_STYLE.NONE,
+                      borderRadius: 6, padding: "2px 7px",
+                      fontSize: 9, fontWeight: 800,
+                    }}>
+                      {r.rating}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* xG + BTTS footer */}
+      {(xgTotal != null || bttsYes != null) && (
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          marginTop: 6, padding: "5px 10px",
+          background: "rgba(255,255,255,0.02)", borderRadius: 7,
+          fontSize: 10, color: "#64748b", direction: "ltr",
+        }}>
+          {xgHome != null && xgAway != null ? (
+            <span>
+              ⚽ xG: <b style={{ color: "#94a3b8" }}>{xgHome.toFixed(2)}</b> — <b style={{ color: "#94a3b8" }}>{xgAway.toFixed(2)}</b>
+              {" "}· סה&quot;כ: <b style={{ color: "#cbd5e1" }}>{xgTotal?.toFixed(2)}</b>
+            </span>
+          ) : xgTotal != null ? (
+            <span>⚽ צפי שערים: <b style={{ color: "#cbd5e1" }}>{xgTotal.toFixed(2)}</b></span>
+          ) : <span />}
+          {bttsYes != null && (
+            <span>BTTS: <b style={{ color: "#94a3b8" }}>{bttsYes.toFixed(0)}%</b></span>
+          )}
+        </div>
+      )}
+
+      {/* VALUE SIGNAL badge */}
+      {hasSignal && (
+        <div style={{
+          marginTop: 8,
+          background: signalRat === "STRONG"   ? "rgba(74,222,128,0.10)"
+                    : signalRat === "MODERATE" ? "rgba(56,189,248,0.08)"
+                    : "rgba(245,158,11,0.07)",
+          border: `1px solid ${
+            signalRat === "STRONG"   ? "rgba(74,222,128,0.3)"
+            : signalRat === "MODERATE" ? "rgba(56,189,248,0.25)"
+            : "rgba(245,158,11,0.2)"}`,
+          borderRadius: 8, padding: "6px 12px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          direction: "ltr",
+        }}>
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+            🎯 {signal === "OVER" ? `אובר ${line}` : `אנדר ${line}`} — VALUE BET
+          </span>
+          <span style={{
+            fontSize: 12, fontWeight: 900,
+            color: signalRat === "STRONG" ? "#4ade80" : signalRat === "MODERATE" ? "#38bdf8" : "#f59e0b",
+          }}>
+            +{signalEdge.toFixed(1)}% · {signalRat}
+          </span>
+        </div>
+      )}
+
+      {/* Active modifiers */}
+      {mods.length > 0 && (
+        <div style={{
+          marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap",
+        }}>
+          {mods.map((m, i) => (
+            <span key={i} style={{
+              fontSize: 9, color: "#f59e0b",
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.18)",
+              borderRadius: 99, padding: "2px 7px",
+            }}>
+              ⚠️ {m}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MatchCard({
   homeTeam, awayTeam, homeLogo, awayLogo, league, leagueLogo,
   matchDate, isLive = false,
   prediction, value_bets, consensus,
   fixtureId, matchId, odds, weather, xg,
+  goals_signal, ou_edge,
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -668,6 +898,23 @@ export default function MatchCard({
           </div>
         )}
 
+        {/* Goals signal badge */}
+        {goals_signal?.signal && goals_signal.signal !== "NO_SIGNAL" && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5, direction: "ltr",
+            background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)",
+            borderRadius: 99, padding: "4px 10px",
+          }}>
+            <span style={{ fontSize: 12 }}>⚽</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa" }}>
+              {goals_signal.signal === "OVER" ? `אובר ${goals_signal.line}` : `אנדר ${goals_signal.line}`}
+            </span>
+            <span style={{ fontSize: 11, color: "rgba(167,139,250,0.8)" }}>
+              +{goals_signal.signal_edge.toFixed(1)}%
+            </span>
+          </div>
+        )}
+
         {/* Weather chip — right side */}
         {weather?.source === "live" && (
           <span style={{
@@ -695,6 +942,14 @@ export default function MatchCard({
                 homeTeam={homeTeam}
                 awayTeam={awayTeam}
                 xg={xg ?? undefined}
+              />
+            )}
+
+            {/* ── GOALS MARKET (Over/Under 2.5) ── */}
+            {(goals_signal || ou_edge) && (
+              <GoalsMarketBlock
+                gs={goals_signal ?? null}
+                ouEdge={ou_edge ?? null}
               />
             )}
 
