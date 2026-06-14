@@ -135,8 +135,18 @@ _360SCOUT · ניתוח 360 מעלות_
     return await send_message(text.strip())
 
 
-async def send_live_value_alert(match: dict, outcome: str, vb: dict) -> bool:
-    """התראת Value Bet בליין רץ — עם dedup למניעת ספאם"""
+async def send_live_value_alert(
+    match: dict,
+    outcome: str,
+    vb: dict,
+    bankroll: float = 0.0,
+) -> bool:
+    """
+    התראת Value Bet בליין רץ — עם dedup ו-Kelly sizing אופציונלי.
+
+    Args:
+        bankroll: קופה ב-₪ לחישוב Kelly (0 = לא מוצג)
+    """
     fixture_id = match.get("fixture_id") or match.get("home_team", "?")
     signal_key = f"{fixture_id}:{outcome}"
     if signal_key in _sent_signals:
@@ -161,6 +171,23 @@ async def send_live_value_alert(match: dict, outcome: str, vb: dict) -> bool:
     elapsed   = match.get("elapsed")
     time_txt  = f"{elapsed}'" if elapsed else "LIVE"
 
+    # Kelly Criterion — מוצג רק אם הועברה קופה
+    kelly_row = ""
+    if bankroll > 0:
+        try:
+            from app.engine.kelly import kelly_criterion
+            our_prob = vb.get("our_prob", 0)
+            bk_odds  = vb.get("bookmaker_odds", 0)
+            if our_prob and bk_odds:
+                kr = kelly_criterion(bankroll, our_prob, bk_odds)
+                if kr.verdict == "BET":
+                    kelly_row = (
+                        f"\n💼 Kelly (¼):  `{kr.quarter_kelly*100:.1f}%` → "
+                        f"*₪{kr.bet_size:.0f}* מתוך ₪{bankroll:,.0f}"
+                    )
+        except Exception as ke:
+            logger.debug(f"Kelly calc skipped: {ke}")
+
     text = f"""
 🔴 *VALUE BET — LIVE* {stars}
 
@@ -173,7 +200,7 @@ async def send_live_value_alert(match: dict, outcome: str, vb: dict) -> bool:
 💰 יחס:     `{vb.get('bookmaker_odds', '?')}`
 📈 יתרון:   *+{vb.get('edge_percent', 0):.1f}%*
 ⭐ דירוג:   *{vb.get('rating', '?')}*
-🎯 ביטחון:  `{match.get('confidence', '?')}%`
+🎯 ביטחון:  `{match.get('confidence', '?')}%`{kelly_row}
 ━━━━━━━━━━━━━━━━━━━━
 [360SCOUT — ניתוח מלא](https://www.analyst365.net/)
 """
