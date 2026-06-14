@@ -21,6 +21,10 @@ from app.engine.prediction_model import (
     PredictionEngine, MatchContext, calculate_value, calculate_consensus,
     calculate_under_over_25_edge,
 )
+from app.engine.dynamic_adjuster import adjust_probabilities, AdjustmentParams
+
+# store ידני של overrides לפי fixture_id — נמחק עם restart
+_manual_adjustments: dict[int, dict] = {}
 from app.cache import get as cache_get, set as cache_set, stats as cache_stats, clear_all as cache_clear_all
 from app.db.repository import save_match_prediction, get_track_record, update_match_result
 
@@ -620,12 +624,33 @@ def build_match_analysis_sync(
     # הרץ את מנוע החיזוי
     prediction = engine.predict(ctx)
 
+    # ── Dynamic Adjustment ───────────────────────────────────────────────────
+    # auto: injury_impact > 0.45 → squad_rotation
+    # manual: override ידני דרך POST /api/live/adjust/{fixture_id}
+    fid     = fix.get("id")
+    _manual = _manual_adjustments.get(fid, {}) if fid else {}
+    adj_params = AdjustmentParams(
+        home_rotation   = home_injury > 0.45 or bool(_manual.get("home_rotation")),
+        away_rotation   = away_injury > 0.45 or bool(_manual.get("away_rotation")),
+        home_motivation = float(_manual.get("home_motivation", 0.5)),
+        away_motivation = float(_manual.get("away_motivation", 0.5)),
+        home_sentiment  = float(_manual.get("home_sentiment",  0.0)),
+        away_sentiment  = float(_manual.get("away_sentiment",  0.0)),
+    )
+    adjusted_probs = adjust_probabilities(prediction["final"], adj_params)
+    adj_active = (
+        adj_params.home_rotation or adj_params.away_rotation or bool(_manual)
+    )
+    prediction["adjusted"] = adjusted_probs if adj_active else None
+
     value_bets  = {}
     if odds:
         for outcome, odd_key in [("home","odds_home"),("draw","odds_draw"),("away","odds_away")]:
             bm_odd = odds.get(odd_key, 0)
             if bm_odd:
-                vb = calculate_value(prediction["final"][outcome], bm_odd)
+                # השתמש בהסתברות מותאמת אם הייתה התאמה, אחרת הסתברות גולמית
+                prob = adjusted_probs[outcome] if adj_active else prediction["final"][outcome]
+                vb = calculate_value(prob, bm_odd)
                 if vb["is_value_bet"]:          # only positive-EV bets (> 5%)
                     value_bets[outcome] = vb
 
@@ -1050,4 +1075,59 @@ async def auto_update_results():
         "checked": len(fixture_ids),
         "updated": updated,
         "message": f"עודכנו {updated} תוצאות",
+    }
+
+
+# ── Dynamic Adjuster endpoints ────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel, Field as _Field
+
+class AdjustmentBody(_BaseModel):
+    home_motivation: float = _Field(0.5, ge=0.0, le=1.0)
+    away_motivation: float = _Field(0.5, ge=0.0, le=1.0)
+    home_sentiment:  float = _Field(0.0, ge=-1.0, le=1.0)
+    away_sentiment:  float = _Field(0.0, ge=-1.0, le=1.0)
+    home_rotation:   bool  = False
+    away_rotation:   bool  = False
+
+
+@router.post("/adjust/{fixture_id}")
+async def set_dynamic_adjustment(fixture_id: int, body: AdjustmentBody):
+    """
+    הזן פרמטרי התאמה דינמית ידניים עבור משחק ספציפי.
+    ישפיעו על חישוב Value Bet בריצת ה-scheduler הבאה.
+
+    דוגמה:
+        POST /api/live/adjust/1035456
+        {"home_motivation": 0.9, "away_rotation": true}
+    """
+    _manual_adjustments[fixture_id] = body.model_dump()
+    logger.info(f"[DynAdj] Manual override set for fixture {fixture_id}: {body}")
+    return {
+        "status":     "ok",
+        "fixture_id": fixture_id,
+        "adjustment": body.model_dump(),
+        "note":       "יושם בריצת ה-scheduler הבאה (עד 5 דקות)",
+    }
+
+
+@router.delete("/adjust/{fixture_id}")
+async def clear_dynamic_adjustment(fixture_id: int):
+    """מחק override ידני — המשחק יחזור להתאמה אוטומטית בלבד."""
+    removed = _manual_adjustments.pop(fixture_id, None)
+    if removed:
+        return {"status": "ok", "fixture_id": fixture_id, "removed": removed}
+    return {"status": "not_found", "fixture_id": fixture_id}
+
+
+@router.get("/adjust")
+async def list_active_adjustments():
+    """רשימת כל ה-overrides הידניים הפעילים כרגע."""
+    return {
+        "status": "ok",
+        "count":  len(_manual_adjustments),
+        "adjustments": {
+            str(fid): params
+            for fid, params in _manual_adjustments.items()
+        },
     }
