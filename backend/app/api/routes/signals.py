@@ -22,12 +22,12 @@ router = APIRouter(prefix="/api/signals", tags=["signals"])
 logger = logging.getLogger(__name__)
 
 # ── פילטרים ברירת מחדל (ניתן לעקוף ב-query params) ─────────────────────────
-_DEFAULT_MIN_CONFIDENCE  = 65.0   # ביטחון מינימלי (%)
+_DEFAULT_MIN_CONFIDENCE  = 75.0   # ביטחון מינימלי (%) — v3: raised from 65 → 75
 _DEFAULT_MIN_EDGE        = 15.0   # EV% מינימלי (MODERATE threshold)
 _DEFAULT_MIN_ODDS        = 1.50   # יחס מינימלי (מהקוד ה-JS)
-_DEFAULT_MIN_MOMENTUM    = 45     # liveMomentumScore
-_DEFAULT_MAX_FATIGUE     = 75     # squadFatigueIndex
-_DEFAULT_MIN_MOTIVATION  = 3      # motivationLevel (1–5)
+_DEFAULT_MIN_MOMENTUM    = 45     # liveDominanceScore
+_DEFAULT_MAX_FATIGUE     = 80     # playerFatigueIndex — v3: raised from 75 → 80
+_DEFAULT_MIN_MOTIVATION  = 3      # motivationLevel (1–5); v3 JS uses > 2 → same as ≥ 3
 
 
 # ── Analytics derivation ─────────────────────────────────────────────────────
@@ -71,32 +71,38 @@ def _derive_analytics(match: dict) -> dict:
             best_vb_odds = float(vb_data.get("bookmaker_odds") or 0)
             best_outcome = outcome
 
-    # ── liveMomentumScore ─────────────────────────────────────────────────────
+    # ── liveMomentumScore / liveDominanceScore ───────────────────────────────
+    # שני שמות לאותו מדד: עוצמת הסיגנל (0–100)
+    # לפרה-גיים: confidence + value bonus + יחס xG
+    # ללייב: מוסיפים בונוס סקור (קבוצה מובילה = יתרון מומנטום)
     has_value_bonus = 20 if value_edge >= 5 else 0
-    # xG ratio bonus: more asymmetric xG = more predictable match
     xg_h = float(xg.get("home") or 1.2)
     xg_a = float(xg.get("away") or 1.2)
     xg_ratio = max(xg_h, xg_a) / (min(xg_h, xg_a) + 0.1)
     xg_bonus = min(20, int((xg_ratio - 1) * 10))    # 0–20
 
-    momentum = min(100, int(confidence * 0.60 + has_value_bonus + xg_bonus))
+    # live dominance bonus: if leading team matches model prediction → stronger signal
+    score  = match.get("score") or {}
+    sh, sa = int(score.get("home") or 0), int(score.get("away") or 0)
+    live_bonus = 0
+    if sh != sa and final_probs:
+        leading = "home" if sh > sa else "away"
+        model_top = max(final_probs, key=final_probs.get)
+        live_bonus = 8 if leading == model_top else -5
 
-    # ── squadFatigueIndex ─────────────────────────────────────────────────────
-    # home_injury_impact + away_injury_impact are stored in prediction.by_module
-    # (human factors layer); if not available, default 20 (healthy)
+    momentum = min(100, max(0, int(confidence * 0.60 + has_value_bonus + xg_bonus + live_bonus)))
+
+    # ── playerFatigueIndex / squadFatigueIndex ───────────────────────────────
+    # שני שמות לאותו מדד: עומס שחקנים (0–100, גבוה = עייף)
     by_module     = prediction.get("by_module") or {}
     human_factors = by_module.get("human") or {}
-    # Injury impact stored in MatchContext, not directly in by_module output.
-    # Approximate from human module imbalance: large h/a spread → injury effect
     home_mod = float(human_factors.get("home") or 0.33)
     away_mod = float(human_factors.get("away") or 0.33)
     injury_delta = abs(home_mod - away_mod)
-    # 30 = healthy baseline; only rises above 50 when delta > 0.15 (genuine injury effect)
-    # avoids false-high fatigue for naturally unequal teams
     fatigue = min(100, int(30 + max(0, injury_delta - 0.15) * 110))
 
     # ── motivationLevel (1–5) ─────────────────────────────────────────────────
-    motivation = 3  # neutral default
+    motivation = 3
     if any(kw in league for kw in ("champions", "europa", "world", "מונדיאל", "אלופות")):
         motivation = min(5, motivation + 1)
     if any(kw in league for kw in ("knockout", "final", "semi", "quarter", "הכרעה")):
@@ -113,13 +119,17 @@ def _derive_analytics(match: dict) -> dict:
             best_vb_odds = float(odds_map.get(f"odds_{top}") or 0)
 
     return {
-        "liveMomentumScore": momentum,
-        "squadFatigueIndex": fatigue,
-        "motivationLevel":   motivation,
-        "valueEdge":         round(value_edge, 2),
-        "_pick":             pick_he,
-        "_best_odds":        best_vb_odds,
-        "_best_outcome":     best_outcome,
+        # שמות ראשיים (v2 Cloud Function)
+        "playerFatigueIndex":  fatigue,
+        "motivationLevel":     motivation,
+        "liveDominanceScore":  momentum,
+        "valueEdge":           round(value_edge, 2),
+        # aliases לתאימות לאחור (v1 Cloud Function)
+        "liveMomentumScore":   momentum,
+        "squadFatigueIndex":   fatigue,
+        "_pick":               pick_he,
+        "_best_odds":          best_vb_odds,
+        "_best_outcome":       best_outcome,
     }
 
 
@@ -163,10 +173,14 @@ def _format_signal(match: dict) -> dict | None:
         "elapsed":     match.get("elapsed"),
         "score":       match.get("score"),
         "analytics": {
-            "liveMomentumScore": analytics["liveMomentumScore"],
-            "squadFatigueIndex": analytics["squadFatigueIndex"],
-            "motivationLevel":   analytics["motivationLevel"],
-            "valueEdge":         analytics["valueEdge"],
+            # v3 field names (new Cloud Function)
+            "playerFatigueIndex": analytics["playerFatigueIndex"],
+            "liveDominanceScore": analytics["liveDominanceScore"],
+            "motivationLevel":    analytics["motivationLevel"],
+            "valueEdge":          analytics["valueEdge"],
+            # v1/v2 backward-compat aliases
+            "liveMomentumScore":  analytics["liveMomentumScore"],
+            "squadFatigueIndex":  analytics["squadFatigueIndex"],
         },
         # שמור גם את הנתונים המלאים לשימוש מתקדם
         "value_bets":   match.get("value_bets"),
@@ -231,12 +245,12 @@ async def get_signals(
         odds_val = float(sig["odds"]) if sig["odds"] not in ("-", "", None) else 0.0
 
         passes = (
-            sig["confidence"]        >= min_confidence
-            and odds_val             >= min_odds
-            and an["valueEdge"]      >= min_edge
-            and an["liveMomentumScore"] >= min_momentum
-            and an["squadFatigueIndex"] <= max_fatigue
-            and an["motivationLevel"]   >= min_motivation
+            sig["confidence"]              >= min_confidence
+            and odds_val                   >= min_odds
+            and an["valueEdge"]            >= min_edge
+            and an["liveDominanceScore"]   >= min_momentum
+            and an["playerFatigueIndex"]   <= max_fatigue
+            and an["motivationLevel"]      >= min_motivation
         )
 
         if passes:
