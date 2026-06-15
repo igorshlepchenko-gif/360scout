@@ -16,7 +16,7 @@ interface MatchData {
     adjusted?: { home: number; draw: number; away: number } | null;
     confidence?: number;
   } | null;
-  value_bets?: Record<string, { is_value_bet?: boolean; edge_percent?: number } | null> | null;
+  value_bets?: Record<string, { is_value_bet?: boolean; edge_percent?: number; bookmaker_odds?: number } | null> | null;
 }
 
 // נתוני דמה כ-fallback
@@ -34,7 +34,11 @@ const FALLBACK: MatchData = {
     final:      { home: 0.52, draw: 0.23, away: 0.25 },
     confidence: 78,
   },
-  value_bets: { home: { is_value_bet: true, edge_percent: 22 } },
+  value_bets: {
+    home: { is_value_bet: false, edge_percent: 3,  bookmaker_odds: 1.85 },
+    draw: { is_value_bet: false, edge_percent: -2, bookmaker_odds: 3.60 },
+    away: { is_value_bet: true,  edge_percent: 22, bookmaker_odds: 6.09 },
+  },
 };
 
 function fmt(n: number): string {
@@ -136,26 +140,41 @@ export default function MatchAnalysisCard({ matchData }: { matchData?: MatchData
             )}
           </div>
 
-          {/* הסתברויות */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-              <span className="block text-[11px] text-slate-500 font-bold">ביתי (1)</span>
-              <span className="text-lg font-mono font-black text-cyan-400">
-                {probs ? fmt(probs.home) : '—'}
-              </span>
-            </div>
-            <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-              <span className="block text-[11px] text-slate-500 font-bold">תיקו (X)</span>
-              <span className="text-lg font-mono font-black text-slate-400">
-                {probs ? fmt(probs.draw) : '—'}
-              </span>
-            </div>
-            <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
-              <span className="block text-[11px] text-slate-500 font-bold">אורחת (2)</span>
-              <span className="text-lg font-mono font-black text-blue-400">
-                {probs ? fmt(probs.away) : '—'}
-              </span>
-            </div>
+          {/* הסתברויות + יחסים */}
+          <div className="grid grid-cols-3 gap-2 text-center my-3">
+            {(['home', 'draw', 'away'] as const).map((outcome) => {
+              const vb      = (m.value_bets ?? {})[outcome];
+              const isValue = vb?.is_value_bet ?? false;
+              const odds    = vb?.bookmaker_odds;
+              const prob    = probs?.[outcome];
+              const label   = outcome === 'home' ? 'בית (1)' : outcome === 'draw' ? 'תיקו (X)' : 'אורחים (2)';
+
+              return isValue ? (
+                <div key={outcome} className="bg-emerald-950/20 p-2 rounded-lg border border-emerald-500/30">
+                  <span className="block text-[11px] text-emerald-400 font-medium">{label}</span>
+                  <span className="text-base font-mono font-bold text-emerald-400">
+                    {prob != null ? fmt(prob) : '—'}
+                  </span>
+                  {odds != null && (
+                    <span className="block text-xs font-mono text-emerald-300 mt-0.5 font-bold">
+                      יחס: {odds.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div key={outcome} className="bg-slate-800/50 p-2 rounded-lg border border-slate-700/40">
+                  <span className="block text-[11px] text-slate-400">{label}</span>
+                  <span className="text-base font-mono font-bold text-slate-200">
+                    {prob != null ? fmt(prob) : '—'}
+                  </span>
+                  {odds != null && (
+                    <span className="block text-xs font-mono text-slate-500 mt-0.5">
+                      יחס: {odds.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* ביטחון */}
