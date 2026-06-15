@@ -464,6 +464,14 @@ _NO_VALUE = {"value": 0, "edge_percent": 0, "is_value_bet": False, "rating": "NO
 # Edge > 100% = impossible in real markets → reversed/stale odds mapping bug
 _MAX_VALID_EDGE = 1.0
 
+# Value-Trap guardrail:
+# If our model gives a team < 40% prob AND the market gives it less than
+# 60% of what we give it → likely the model is missing something
+# (squad rotation, news, injury) rather than a genuine bookmaker error.
+# Example: Belgium-Egypt → model=28%, market=15.2% → 15.2/28=0.54 < 0.60 → suppress.
+_UNDERDOG_PROB_CAP       = 0.40   # extreme underdog threshold
+_MARKET_DIVERGENCE_RATIO = 0.60   # market must agree to ≥ 60% of our prob
+
 
 def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
     """
@@ -486,22 +494,33 @@ def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
 
     edge_percent = value * 100  # EV% = (prob * odds − 1) × 100, consistent with value field
 
+    # Guardrail 3: Value Trap — underdog + heavy market divergence
+    # market gives team far less than our model → probably missing something
+    market_divergence = implied_prob / our_prob   # < 1 means model > market
+    is_suspicious = (
+        our_prob < _UNDERDOG_PROB_CAP
+        and market_divergence < _MARKET_DIVERGENCE_RATIO
+    )
+
     rating = "NONE"
-    if value >= 0.25:
-        rating = "STRONG"
-    elif value >= 0.15:
-        rating = "MODERATE"
-    elif value >= 0.05:
-        rating = "WEAK"
+    if not is_suspicious:
+        if value >= 0.25:
+            rating = "STRONG"
+        elif value >= 0.15:
+            rating = "MODERATE"
+        elif value >= 0.05:
+            rating = "WEAK"
 
     return {
-        "value":         round(value, 4),
-        "edge_percent":  round(edge_percent, 2),
-        "is_value_bet":  value > 0.05,
-        "rating":        rating,
-        "our_prob":      round(our_prob, 4),
-        "implied_prob":  round(implied_prob, 4),
-        "bookmaker_odds": bookmaker_odds,
+        "value":              round(value, 4),
+        "edge_percent":       round(edge_percent, 2),
+        "is_value_bet":       value > 0.05 and not is_suspicious,
+        "is_suspicious":      is_suspicious,
+        "rating":             rating,
+        "our_prob":           round(our_prob, 4),
+        "implied_prob":       round(implied_prob, 4),
+        "market_divergence":  round(market_divergence, 3),
+        "bookmaker_odds":     bookmaker_odds,
     }
 
 
