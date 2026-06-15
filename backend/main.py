@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.matches import router as matches_router
 from app.api.routes.live import router as live_router
 from app.api.routes.analysts import router as analysts_router
+from app.api.routes.signals import router as signals_router
 from app.telegram_bot import test_bot, send_message, ENABLED as TELEGRAM_ENABLED
 from app.db.database import init_db, close_db
 from app.scheduler import start_scheduler, stop_scheduler
@@ -59,6 +60,7 @@ app.add_middleware(
 app.include_router(matches_router)
 app.include_router(live_router)
 app.include_router(analysts_router)
+app.include_router(signals_router)
 
 
 @app.get("/")
