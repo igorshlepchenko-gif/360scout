@@ -138,6 +138,15 @@ def _format_signal(match: dict) -> dict | None:
     analytics = _derive_analytics(match)
     confidence = float((match.get("prediction") or {}).get("confidence") or 0)
 
+    # isValueBet: True אם יש לפחות value bet אחד חיובי
+    any_value = any(
+        (v or {}).get("is_value_bet")
+        for v in (match.get("value_bets") or {}).values()
+    )
+
+    # weather temperature (°C) — ישירות מה-weather dict
+    weather_celsius = (match.get("weather") or {}).get("temperature_celsius")
+
     return {
         "id":          match.get("fixture_id"),
         "homeTeam":    match.get("home_team", ""),
@@ -147,6 +156,9 @@ def _format_signal(match: dict) -> dict | None:
         "confidence":  confidence,
         "odds":        str(analytics["_best_odds"]) if analytics["_best_odds"] else "-",
         "pick":        analytics["_pick"],
+        "isValueBet":  any_value,
+        "weather":     weather_celsius,
+        "referee":     match.get("referee", ""),
         "isLive":      match.get("_status") == "live",
         "elapsed":     match.get("elapsed"),
         "score":       match.get("score"),
@@ -161,7 +173,7 @@ def _format_signal(match: dict) -> dict | None:
         "ou_edge":      match.get("ou_edge"),
         "goals_signal": match.get("goals_signal"),
         "xg":           match.get("xg"),
-        "weather":      match.get("weather"),
+        "weather_data": match.get("weather"),   # dict מלא — לא override "weather" (מספר)
         "prediction":   match.get("prediction"),
     }
 

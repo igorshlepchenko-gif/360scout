@@ -720,6 +720,7 @@ def build_match_analysis_sync(
         "match_date":    match_date_display,
         "city":          city,
         "venue":         fix.get("venue", {}).get("name", ""),
+        "referee":       fix.get("referee") or "",
         "prediction":    prediction,
         "odds":          odds,
         "value_bets":    value_bets if value_bets else None,
