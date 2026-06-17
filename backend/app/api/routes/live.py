@@ -572,6 +572,9 @@ def build_match_analysis_sync(
     if odds is None and fixture_odds:
         odds = fixture_odds
 
+    # World Cup (league_id=1) is played at a neutral venue — no home advantage
+    _is_neutral = league.get("id", 0) == 1
+
     if home_stats:
         xg_home   = extract_xg(home_stats, "for")
         form_home = extract_form_score(home_stats)
@@ -589,7 +592,7 @@ def build_match_analysis_sync(
                     pa_raw = 1 / oa
                     total_raw = ph_raw + pa_raw
                     ph = ph_raw / total_raw  # עוצמה יחסית של בית
-                    xg_home = max(0.60, ph * 2.55 * 1.05)  # בוסט קל לבית
+                    xg_home = max(0.60, ph * 2.55 * (1.00 if _is_neutral else 1.05))
                 else:
                     xg_home = 1.3
             except (TypeError, ValueError, ZeroDivisionError):
@@ -613,7 +616,7 @@ def build_match_analysis_sync(
                     pa_raw = 1 / oa
                     total_raw = ph_raw + pa_raw
                     pa = pa_raw / total_raw  # עוצמה יחסית של אורחים
-                    xg_away = max(0.60, pa * 2.55 * 0.95)  # הנחה קלה לאורחים
+                    xg_away = max(0.60, pa * 2.55 * (1.00 if _is_neutral else 0.95))
                 else:
                     xg_away = 1.1
             except (TypeError, ValueError, ZeroDivisionError):
@@ -639,8 +642,8 @@ def build_match_analysis_sync(
                 ph_raw = 1 / oh
                 pa_raw = 1 / oa
                 total_raw = ph_raw + pa_raw
-                xg_home = max(0.60, (ph_raw / total_raw) * 2.55 * 1.05)
-                xg_away = max(0.60, (pa_raw / total_raw) * 2.55 * 0.95)
+                xg_home = max(0.60, (ph_raw / total_raw) * 2.55 * (1.00 if _is_neutral else 1.05))
+                xg_away = max(0.60, (pa_raw / total_raw) * 2.55 * (1.00 if _is_neutral else 0.95))
         except (TypeError, ValueError, ZeroDivisionError):
             pass
 
