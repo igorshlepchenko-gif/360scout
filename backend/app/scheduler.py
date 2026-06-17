@@ -129,6 +129,36 @@ async def job_fetch_live_matches():
                     await save_match_prediction(result)
                     saved += 1
 
+                    # HT recalculation — runs once per match (DB guard: halftime_matrix IS NULL)
+                    if result.get("_status") == "HT":
+                        try:
+                            from app.db.database import get_db
+                            from app.db.repository import (
+                                get_match_uuid_by_fixture,
+                                get_pre_match_matrix,
+                                update_match_halftime_matrix,
+                            )
+                            from app.engine.prediction_model import calculate_halftime_matrix
+
+                            _pool = await get_db()
+                            _fid  = result.get("fixture_id")
+                            _uuid = await get_match_uuid_by_fixture(int(_fid)) if _fid else None
+                            if _uuid and _pool:
+                                _live = {
+                                    "xg_home_h1": result.get("xg_home", 1.3),
+                                    "xg_away_h1": result.get("xg_away", 1.1),
+                                }
+                                _pre = await get_pre_match_matrix(_pool, _uuid)
+                                if _pre:
+                                    _ht = calculate_halftime_matrix(_live, _pre)
+                                    await update_match_halftime_matrix(_pool, _uuid, _ht)
+                                    logger.info(
+                                        f"[HT] Matrix saved for fixture {_fid} | "
+                                        f"H2 xG: {_ht['xg_home_h2']} / {_ht['xg_away_h2']}"
+                                    )
+                        except Exception as ht_err:
+                            logger.debug(f"[HT] recalc error for fixture {result.get('fixture_id')}: {ht_err}")
+
                     # שלח התראת Telegram אם יש Value Bet חזק
                     vb      = result.get("value_bets") or {}
                     is_live = result.get("_status") == "live"

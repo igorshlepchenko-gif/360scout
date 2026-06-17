@@ -661,6 +661,44 @@ def calculate_consensus(algorithm_probs: dict, analyst_predictions: list) -> dic
 
 
 # ============================================================
+# Halftime Matrix Recalculator
+# ============================================================
+
+def calculate_halftime_matrix(live_stats: dict, pre_match_matrix: dict) -> dict:
+    """
+    Bayesian update at HT: blends pre-match xG with actual H1 performance.
+    Weights: 60% observed H1, 40% pre-match model.
+    Floor: 0.30 (consistent with goals_engine._XG_FLOOR).
+    """
+    actual_h1_home = (
+        live_stats.get("xg_home_h1")
+        or live_stats.get("shots_on_target_home", 3) * 0.33
+    )
+    actual_h1_away = (
+        live_stats.get("xg_away_h1")
+        or live_stats.get("shots_on_target_away", 2) * 0.33
+    )
+
+    pre_xg_home = pre_match_matrix.get("xg_home", 1.3)
+    pre_xg_away = pre_match_matrix.get("xg_away", 1.1)
+
+    h2_xg_home = max(0.30, round(0.4 * pre_xg_home + 0.6 * actual_h1_home, 3))
+    h2_xg_away = max(0.30, round(0.4 * pre_xg_away + 0.6 * actual_h1_away, 3))
+
+    new_probs = poisson_match_probabilities(h2_xg_home, h2_xg_away)
+    return {
+        "xg_home_h2":  h2_xg_home,
+        "xg_away_h2":  h2_xg_away,
+        "prob_home":   new_probs["home"],
+        "prob_draw":   new_probs["draw"],
+        "prob_away":   new_probs["away"],
+        "h1_xg_home":  round(float(actual_h1_home), 3),
+        "h1_xg_away":  round(float(actual_h1_away), 3),
+        "source":      "halftime_recalc",
+    }
+
+
+# ============================================================
 # Goals Totals Scanner (Under/Over 1.5 & 2.5)
 # ============================================================
 
