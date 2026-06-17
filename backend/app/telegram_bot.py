@@ -168,7 +168,7 @@ def format_world_cup_alert(match: dict, outcome: str, vb: dict, is_live: bool) -
 🎯 *ההמלצה:* {pick_team} — {he_name} [ {sign_12x} ]
 💰 *יחס שוק נוכחי:* `{vb.get('bookmaker_odds', '?')}`
 🔥 *Edge (יתרון):* *+{vb.get('edge_percent', 0):.1f}%* {stars}
-🤖 *ביטחון המודל:* `{match.get('confidence', '?')}%`
+📊 *הסתברות מודל ({he_name}):* `{vb.get('our_prob', 0)*100:.1f}%` _(שוק: {vb.get('implied_prob', 0)*100:.1f}%)_
 ━━━━━━━━━━━━━━━━━━━━
 {validity}
 
@@ -207,7 +207,7 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
 📈 יתרון:          *+{vb.get('edge_percent',0):.1f}%*
 ⭐ דירוג:          *{vb.get('rating','?')}*
 ━━━━━━━━━━━━━━━━━━━━
-🎯 רמת ביטחון: {match.get('confidence','?')}%{goals_row}
+🎯 אמינות הסיגנל: {match.get('confidence','?')}%{goals_row}
 
 _360SCOUT · ניתוח 360 מעלות_
 """
@@ -278,10 +278,10 @@ async def send_live_value_alert(
 
 {emoji} *{he_name}*
 ━━━━━━━━━━━━━━━━━━━━
-💰 יחס:     `{vb.get('bookmaker_odds', '?')}`
-📈 יתרון:   *+{vb.get('edge_percent', 0):.1f}%*
-⭐ דירוג:   *{vb.get('rating', '?')}*
-🎯 ביטחון:  `{match.get('confidence', '?')}%`{kelly_row}{goals_row}
+💰 יחס:       `{vb.get('bookmaker_odds', '?')}`
+📊 מודל:      `{vb.get('our_prob', 0)*100:.1f}%` _(שוק: {vb.get('implied_prob', 0)*100:.1f}%)_
+📈 יתרון:     *+{vb.get('edge_percent', 0):.1f}%*
+⭐ דירוג:     *{vb.get('rating', '?')}*{kelly_row}{goals_row}
 ━━━━━━━━━━━━━━━━━━━━
 [360SCOUT — ניתוח מלא](https://www.analyst365.net/)
 """

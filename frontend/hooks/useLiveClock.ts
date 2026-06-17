@@ -24,25 +24,34 @@ export function useLiveClock(
 ): string {
   const [localElapsed, setLocalElapsed] = useState<number>(serverElapsed ?? 0);
   const prevServerRef = useRef<number | null>(serverElapsed ?? null);
+  const prevStatusRef = useRef<string | null>(statusShort ?? null);
 
-  // ── Snap to server value when the API reports a new elapsed ─────────────
-  // A change in serverElapsed means an event (goal, card, HT) was detected.
+  // ── Snap to server value on elapsed change OR status transition ──────────
+  // Tracking statusShort fixes HT→2H: the API can send elapsed=45 for both
+  // the last HT poll and the first 2H poll (same number, different half).
+  // Without the status check, prevServerRef=45 blocks the snap and the ticker
+  // runs uncapped from 45 with no re-anchor.
   useEffect(() => {
     const se = serverElapsed ?? null;
     if (se === null) return;
-    if (se !== prevServerRef.current) {
+    if (se !== prevServerRef.current || statusShort !== prevStatusRef.current) {
       setLocalElapsed(prev => (se > prev ? se : prev)); // never go backwards
       prevServerRef.current = se;
+      prevStatusRef.current = statusShort ?? null;
     }
-  }, [serverElapsed]);
+  }, [serverElapsed, statusShort]);
 
   // ── Independent minute ticker ────────────────────────────────────────────
+  // Cap prevents overflow during stoppage time, VAR delays, or long ET.
   const isTicking = TICKING_STATUSES.has(statusShort ?? "");
   useEffect(() => {
     if (!isTicking) return;
-    const id = setInterval(() => setLocalElapsed(prev => prev + 1), 60_000);
+    const id = setInterval(() => {
+      const max = statusShort === "ET" ? 120 : statusShort === "2H" ? 90 : 45;
+      setLocalElapsed(prev => Math.min(prev + 1, max));
+    }, 60_000);
     return () => clearInterval(id);
-  }, [isTicking]);
+  }, [isTicking, statusShort]);
 
   // ── Display string ───────────────────────────────────────────────────────
   if (statusShort === "HT")  return "מחצית";

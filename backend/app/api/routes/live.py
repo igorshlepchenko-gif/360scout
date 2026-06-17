@@ -748,6 +748,24 @@ def build_match_analysis_sync(
     # הרץ את מנוע החיזוי
     prediction = engine.predict(ctx)
 
+    # ── Market-derived xG recalibration ──────────────────────────────────────
+    # When xG is derived from market odds (no real stats), the non-stats modules
+    # (environment + human + psychology, combined 60% weight) all start at 50-50.
+    # This pulls underdog probability well above what the market implies, creating
+    # false value signals (e.g. Croatia at 5.0 gets 28.9% instead of the correct ~20%).
+    # Fix: blend final probs 60% toward vig-free market anchor, 40% toward model signal.
+    if _xg_from_market and odds:
+        _oh = float(odds.get("odds_home") or 0)
+        _od = float(odds.get("odds_draw") or 0)
+        _oa = float(odds.get("odds_away") or 0)
+        if _oh > 1.0 and _od > 1.0 and _oa > 1.0:
+            _S  = 1/_oh + 1/_od + 1/_oa
+            _vf = {"home": (1/_oh)/_S, "draw": (1/_od)/_S, "away": (1/_oa)/_S}
+            _f  = prediction["final"]
+            _bl = {k: 0.60 * _vf[k] + 0.40 * _f[k] for k in ("home", "draw", "away")}
+            _s  = sum(_bl.values())
+            prediction["final"] = {k: round(v / _s, 4) for k, v in _bl.items()}
+
     # ── Dynamic Adjustment ───────────────────────────────────────────────────
     # auto: injury_impact > 0.45 → squad_rotation
     # manual: override ידני דרך POST /api/live/adjust/{fixture_id}

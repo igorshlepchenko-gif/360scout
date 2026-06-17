@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ── Poisson goal-distribution model (The Winning Method) ──────────────────────
-_FACT = np.array([math.factorial(k) for k in range(11)], dtype=float)
+_FACT = np.array([math.factorial(k) for k in range(16)], dtype=float)
 
 
 def poisson_match_probabilities(xg_home: float, xg_away: float, max_goals: int = 8) -> dict:
@@ -24,7 +24,9 @@ def poisson_match_probabilities(xg_home: float, xg_away: float, max_goals: int =
     lh = max(float(xg_home), 0.05)
     la = max(float(xg_away), 0.05)
     ks = np.arange(max_goals + 1)
-    fact = _FACT[: max_goals + 1]
+    fact = _FACT[:max_goals + 1] if max_goals < len(_FACT) else np.array(
+        [math.factorial(k) for k in ks], dtype=float
+    )
     home_pmf = np.exp(-lh) * lh ** ks / fact
     away_pmf = np.exp(-la) * la ** ks / fact
     matrix = np.outer(home_pmf, away_pmf)
@@ -290,21 +292,20 @@ class PredictionEngine:
     #  Monte Carlo — 10,000 simulations                                   #
     # ------------------------------------------------------------------ #
     def _monte_carlo(self, base_probs: dict, n: int = 10_000) -> dict:
-        p = np.array([base_probs["home"], base_probs["draw"], base_probs["away"]])
-        results = np.zeros(3)
-
-        for _ in range(n):
-            noise = np.random.normal(0, 0.04, 3)
-            sample = np.clip(p + noise, 0.01, 0.98)
-            sample /= sample.sum()
-            winner = np.random.choice(3, p=sample)
-            results[winner] += 1
-
-        total = results.sum()
+        p       = np.array([base_probs["home"], base_probs["draw"], base_probs["away"]])
+        noise   = np.random.normal(0, 0.04, (n, 3))
+        samples = np.clip(p + noise, 0.01, 0.98)
+        samples /= samples.sum(axis=1, keepdims=True)
+        # Vectorized winner selection via inverse CDF (equivalent to np.random.choice per row)
+        cumsum  = samples.cumsum(axis=1)
+        u       = np.random.uniform(size=(n, 1))
+        winners = (u > cumsum).sum(axis=1)          # 0=home, 1=draw, 2=away
+        counts  = np.bincount(winners, minlength=3)
+        total   = float(counts.sum())
         return {
-            "home": results[0] / total,
-            "draw": results[1] / total,
-            "away": results[2] / total,
+            "home": counts[0] / total,
+            "draw": counts[1] / total,
+            "away": counts[2] / total,
         }
 
     # ------------------------------------------------------------------ #
