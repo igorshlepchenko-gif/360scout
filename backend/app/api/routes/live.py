@@ -112,15 +112,18 @@ def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> boo
 
 async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     """
-    משוך משחקים בסדר עדיפויות:
-    1. חיים עכשיו
+    משוך משחקים מכל העולם בסדר עדיפויות:
+    1. חיים עכשיו  — כל ליגה בכל מדינה
     2. מתוכננים היום
-    3. 7 ימים אחורה — כל ליגה שיש בה משחקים
+    3. 7 ימים אחורה (fallback כשאין אחרים)
+
+    אין סינון לפי ליגה — המסנן המתמטי (passes_odds_threshold + 8% edge
+    לנתוני שוק) מחליף את הרשימה הסטטית.
     """
     today = datetime.now().strftime("%Y-%m-%d")
     all_fixtures = []
 
-    async with httpx.AsyncClient(timeout=30) as client:   # 30s for production
+    async with httpx.AsyncClient(timeout=30) as client:
         # 1. חיים עכשיו — cache 2 דקות בלבד
         live_key = "fixtures:live:all"
         live = await cache_get(live_key, "live")
@@ -137,12 +140,11 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                 logger.warning(f"Live fetch failed: {e}")
                 live = []
 
-        premium_live = [f for f in live if is_premium_league(f)]
-        for f in premium_live:
+        for f in live:
             f["_league_name"] = f.get("league", {}).get("name", "")
             f["_status"] = "live"
-        all_fixtures.extend(premium_live)
-        logger.info(f"Live: {len(live)} total → {len(premium_live)} premium")
+        all_fixtures.extend(live)
+        logger.info(f"Live: {len(live)} fixtures worldwide")
 
         # 2. מתוכננים היום — cache 60 דקות
         if len(all_fixtures) < 5:
@@ -161,17 +163,16 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                     logger.warning(f"Today scheduled failed: {e}")
                     scheduled = []
 
-            premium_sched = [f for f in scheduled if is_premium_league(f)]
-            for f in premium_sched:
+            for f in scheduled:
                 f["_league_name"] = f.get("league", {}).get("name", "")
                 f["_status"] = "scheduled"
-            all_fixtures.extend(premium_sched)
-            logger.info(f"Scheduled today: {len(scheduled)} total → {len(premium_sched)} premium")
+            all_fixtures.extend(scheduled)
+            logger.info(f"Scheduled today: {len(scheduled)} fixtures worldwide")
 
         # 3. אחרונים — cache 60 דקות
         if len(all_fixtures) < 5:
-            from_date   = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-            recent_key  = f"fixtures:recent:{from_date}:{today}"
+            from_date  = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            recent_key = f"fixtures:recent:{from_date}:{today}"
             finished = await cache_get(recent_key, "fixtures")
             if finished is None:
                 try:
@@ -186,13 +187,12 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                     logger.warning(f"Recent finished failed: {e}")
                     finished = []
 
-            premium_finished = [f for f in finished if is_premium_league(f)]
-            for f in premium_finished:
+            for f in finished:
                 f["_league_name"] = f.get("league", {}).get("name", "")
                 f["_status"] = "finished"
-            premium_finished.sort(key=lambda f: f.get("fixture", {}).get("date", ""), reverse=True)
-            all_fixtures.extend(premium_finished[:40])
-            logger.info(f"Recent finished: {len(finished)} total → {len(premium_finished)} premium")
+            finished.sort(key=lambda f: f.get("fixture", {}).get("date", ""), reverse=True)
+            all_fixtures.extend(finished[:80])
+            logger.info(f"Recent finished: {len(finished)} fixtures worldwide (capped at 80)")
 
     # מיין סופי: חיים → מתוכננים → אחרונים
     status_order = {"live": 0, "scheduled": 1, "finished": 2}
@@ -926,7 +926,7 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
 # ============================================================
 
 @router.get("/matches")
-async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, limit: int = 20):
+async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, limit: int = 30):
     """
     משחקים אמיתיים עם חיזויים — לימים הקרובים.
     days=1 → היום + מחר
@@ -947,7 +947,7 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
                    else "recent"
 
     # הגבל לפי limit parameter
-    fixtures = fixtures[:min(limit, 20)]
+    fixtures = fixtures[:min(limit, 50)]
 
     # ─── משוך odds מרוכז + נתח כל fixture עם team stats (cached 6h) ──────
     all_odds = await fetch_all_odds()
