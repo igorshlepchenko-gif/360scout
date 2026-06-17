@@ -280,6 +280,59 @@ async def job_daily_results_recap():
         logger.error(f"[Scheduler] job_daily_results_recap error: {e}", exc_info=True)
 
 
+async def job_olbg_enrichment(pool, fixtures: list):
+    """לוגיקת הליבה: OLBG enrichment מקבילי (עד 3 דפדפנים בו-זמנית)."""
+    if not fixtures:
+        return
+
+    logger.info(f"[OLBG] Starting enrichment for {len(fixtures)} fixtures")
+    sem = asyncio.Semaphore(3)
+
+    async def _enrich_one(fixture: dict):
+        async with sem:
+            fixture_id = fixture.get("id")
+            if not fixture_id:
+                return
+            try:
+                from app.db.repository import get_match_uuid, inject_auto_consensus_predictions
+                from app.tasks.olbg_scraper import build_olbg_url, fetch_olbg_consensus
+
+                match_uuid = await get_match_uuid(pool, fixture_id)
+                if not match_uuid:
+                    logger.debug(f"[OLBG] Fixture {fixture_id} not in DB, skipping")
+                    return
+
+                url = build_olbg_url(fixture.get("home_team", ""), fixture.get("away_team", ""))
+                consensus_data = await asyncio.wait_for(
+                    fetch_olbg_consensus(url), timeout=12.0
+                )
+                if consensus_data:
+                    await inject_auto_consensus_predictions(
+                        pool, match_uuid, fixture.get("league_name", ""), consensus_data
+                    )
+                    logger.info(f"[OLBG] Injected consensus for match {match_uuid}")
+            except asyncio.TimeoutError:
+                logger.warning(f"[OLBG] Timeout (12s) for fixture {fixture_id}")
+            except Exception as e:
+                logger.error(f"[OLBG] Failed fixture {fixture_id}: {e}", exc_info=True)
+
+    await asyncio.gather(*[_enrich_one(f) for f in fixtures])
+    logger.info("[OLBG] Enrichment cycle completed")
+
+
+async def job_olbg_enrichment_wrapper():
+    """Wrapper — fetches fresh fixtures at runtime so kwargs are never stale."""
+    try:
+        from app.db.database import get_db
+        from app.db.repository import get_todays_fixtures
+
+        pool     = await get_db()
+        fixtures = await get_todays_fixtures(pool)
+        await job_olbg_enrichment(pool, fixtures)
+    except Exception as e:
+        logger.error(f"[OLBG] job_olbg_enrichment_wrapper error: {e}", exc_info=True)
+
+
 async def job_cleanup_cache():
     """כל 24 שעות — מנקה cache פגי תוקף"""
     try:
@@ -342,6 +395,13 @@ def start_scheduler() -> AsyncIOScheduler:
         trigger="cron", hour=23, minute=0,
         timezone=ISRAEL_TZ,
         id="daily_recap", replace_existing=True,
+    )
+
+    # כל 5 דקות — OLBG consensus enrichment (מקבילי, 3 browsers)
+    _scheduler.add_job(
+        job_olbg_enrichment_wrapper,
+        trigger="interval", minutes=5,
+        id="olbg_enrichment", replace_existing=True,
     )
 
     _scheduler.start()

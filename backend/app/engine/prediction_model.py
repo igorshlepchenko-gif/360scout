@@ -658,3 +658,74 @@ def calculate_consensus(algorithm_probs: dict, analyst_predictions: list) -> dic
         "master":    master,
         "algo_edge": round(algo_edge_val, 3),
     }
+
+
+# ============================================================
+# Goals Totals Scanner (Under/Over 1.5 & 2.5)
+# ============================================================
+
+def find_high_confidence_totals(
+    matches: list, min_edge: float = 0.05
+) -> dict:
+    """
+    Scans matches for value bets in Under/Over 1.5 and 2.5 markets.
+    Returns four sorted lists (highest edge first).
+    Requires each match dict to have: xg_home, xg_away,
+    under_odds, over_odds, under_15_odds, over_15_odds.
+    """
+    under_25_picks: list = []
+    over_25_picks:  list = []
+    under_15_picks: list = []
+    over_15_picks:  list = []
+
+    for m in matches:
+        home_team = m.get("home_team", "Unknown Home")
+        away_team = m.get("away_team", "Unknown Away")
+        xg_home   = float(m.get("xg_home", 1.3))
+        xg_away   = float(m.get("xg_away", 1.1))
+
+        try:
+            probs_25 = poisson_goal_markets(xg_home, xg_away, line=2.5)
+            probs_15 = poisson_goal_markets(xg_home, xg_away, line=1.5)
+        except Exception as e:
+            logger.error(f"Poisson failed for {home_team} vs {away_team}: {e}")
+            continue
+
+        raw_u25 = m.get("under_odds");    odds_u25 = float(raw_u25) if raw_u25 else None
+        raw_o25 = m.get("over_odds");     odds_o25 = float(raw_o25) if raw_o25 else None
+        raw_u15 = m.get("under_15_odds"); odds_u15 = float(raw_u15) if raw_u15 else None
+        raw_o15 = m.get("over_15_odds");  odds_o15 = float(raw_o15) if raw_o15 else None
+
+        def _pick(prob, odds, line):
+            if not odds or prob <= 0:
+                return None
+            edge = (prob * odds) - 1
+            if edge < min_edge:
+                return None
+            return {
+                "match":       f"{home_team} vs {away_team}",
+                "xg_total":    round(xg_home + xg_away, 2),
+                "model_prob":  round(prob * 100, 1),
+                "fair_odds":   round(1 / prob, 2),
+                "market_odds": odds,
+                "edge":        round(edge * 100, 2),
+                "line":        line,
+            }
+
+        for prob, odds, bucket, line in [
+            (probs_25["under"], odds_u25, under_25_picks, 2.5),
+            (probs_25["over"],  odds_o25, over_25_picks,  2.5),
+            (probs_15["under"], odds_u15, under_15_picks, 1.5),
+            (probs_15["over"],  odds_o15, over_15_picks,  1.5),
+        ]:
+            pick = _pick(prob, odds, line)
+            if pick:
+                bucket.append(pick)
+
+    _sort = lambda lst: sorted(lst, key=lambda x: x["edge"], reverse=True)
+    return {
+        "under_25_value_bets": _sort(under_25_picks),
+        "over_25_value_bets":  _sort(over_25_picks),
+        "under_15_value_bets": _sort(under_15_picks),
+        "over_15_value_bets":  _sort(over_15_picks),
+    }

@@ -729,3 +729,206 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
     except Exception as e:
         logger.error(f"update_match_result failed: {e}")
         return False
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# OLBG Auto-Consensus
+# ────────────────────────────────────────────────────────────────────────────
+
+async def get_match_uuid(pool, fixture_id: int) -> Optional[str]:
+    """Convert API-Football integer fixture ID to internal match UUID."""
+    try:
+        async with pool.acquire() as conn:
+            result = await conn.fetchval(
+                "SELECT id FROM matches WHERE api_football_id = $1",
+                int(fixture_id),
+            )
+            return str(result) if result else None
+    except Exception as e:
+        logger.error(f"get_match_uuid failed for fixture {fixture_id}: {e}")
+        return None
+
+
+async def inject_auto_consensus_predictions(
+    pool, match_uuid: str, league_name: str, consensus_probs: dict
+) -> list:
+    """
+    Distributes OLBG consensus percentages across 10 fixed auto-analysts in DB.
+    Feeds real expert consensus into calculate_consensus() to produce genuine LOCKs.
+    """
+    if not consensus_probs:
+        return []
+
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                analyst_ids = []
+                for i in range(1, 11):
+                    analyst_name = f"Auto_Expert_{i}_{league_name.replace(' ', '_')}"
+                    analyst_id = await conn.fetchval("""
+                        INSERT INTO analysts (name, expertise_league, win_rate)
+                        VALUES ($1, $2, 0.55)
+                        ON CONFLICT (name) DO UPDATE SET expertise_league = $2
+                        RETURNING id
+                    """, analyst_name, league_name)
+                    if not analyst_id:
+                        analyst_id = await conn.fetchval(
+                            "SELECT id FROM analysts WHERE name = $1", analyst_name
+                        )
+                    analyst_ids.append(analyst_id)
+
+                # distribute 10 slots by percentage
+                outcomes: list = []
+                for outcome, prob in consensus_probs.items():
+                    outcomes.extend([outcome] * round(prob * 10))
+                while len(outcomes) < 10:
+                    outcomes.append(max(consensus_probs, key=consensus_probs.get))
+                while len(outcomes) > 10:
+                    minority = min(consensus_probs, key=consensus_probs.get)
+                    idx = len(outcomes) - 1 - outcomes[::-1].index(minority)
+                    outcomes.pop(idx)
+
+                inserted = []
+                for idx, analyst_id in enumerate(analyst_ids):
+                    outcome = outcomes[idx]
+                    await conn.execute("""
+                        DELETE FROM analyst_predictions
+                        WHERE match_id = $1::uuid AND analyst_id = $2
+                    """, match_uuid, analyst_id)
+                    await conn.execute("""
+                        INSERT INTO analyst_predictions
+                            (match_id, analyst_id, predicted_outcome, confidence_level, reasoning)
+                        VALUES ($1::uuid, $2, $3, $4, $5)
+                    """, match_uuid, analyst_id, outcome, 7, "Generated via Auto-Consensus Stream")
+                    inserted.append({
+                        "analyst_id": str(analyst_id),
+                        "outcome":    outcome,
+                        "confidence": 7,
+                        "win_rate":   0.55,
+                    })
+                return inserted
+    except Exception as e:
+        logger.error(f"inject_auto_consensus_predictions failed for {match_uuid}: {e}")
+        return []
+
+
+async def get_match_analyst_predictions_by_uuid(pool, match_uuid: str) -> list:
+    """Fetch analyst predictions by match UUID (returns keys expected by calculate_consensus)."""
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT
+                    ap.predicted_outcome AS outcome,
+                    ap.confidence_level  AS confidence,
+                    a.win_rate
+                FROM analyst_predictions ap
+                JOIN analysts a ON a.id = ap.analyst_id
+                WHERE ap.match_id = $1::uuid
+            """, match_uuid)
+            return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"get_match_analyst_predictions_by_uuid failed for {match_uuid}: {e}")
+        return []
+
+
+async def get_todays_fixtures(pool) -> list:
+    """Fetch today's active fixtures for OLBG enrichment job."""
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT
+                    api_football_id  AS id,
+                    home_team_name   AS home_team,
+                    away_team_name   AS away_team,
+                    league_name,
+                    status
+                FROM matches
+                WHERE match_date::date = CURRENT_DATE
+                  AND status IN ('scheduled', 'live', '1H', '2H', 'HT', 'ET')
+                ORDER BY match_date
+            """)
+            return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"get_todays_fixtures failed: {e}")
+        return []
+
+
+async def get_pre_match_matrix(pool, match_uuid: str) -> Optional[dict]:
+    """Fetch pre-match matrix snapshot."""
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchval(
+                "SELECT pre_match_matrix FROM match_predictions WHERE match_id = $1::uuid",
+                match_uuid,
+            )
+        if not row:
+            return None
+        if isinstance(row, str):
+            return json.loads(row)
+        return row
+    except Exception as e:
+        logger.error(f"get_pre_match_matrix failed for {match_uuid}: {e}")
+        return None
+
+
+async def update_match_halftime_matrix(pool, match_uuid: str, matrix: dict) -> None:
+    """Save halftime recalculated matrix. Writes once — skips if already set."""
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                UPDATE match_predictions
+                   SET halftime_matrix = $2
+                 WHERE match_id = $1::uuid
+                   AND halftime_matrix IS NULL
+            """, match_uuid, json.dumps(matrix))
+    except Exception as e:
+        logger.error(f"update_match_halftime_matrix failed for {match_uuid}: {e}")
+
+
+async def get_complete_match_data(pool, match_uuid: str) -> Optional[dict]:
+    """
+    Single-query fetch of all prediction data for a match.
+    Computes consensus on-the-fly from DB analyst predictions.
+    Returns consistent shape whether analysts exist or not.
+    """
+    from app.engine.prediction_model import calculate_consensus
+
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT
+                    final_prob_home, final_prob_draw, final_prob_away,
+                    pre_match_matrix, halftime_matrix,
+                    confidence_score
+                FROM match_predictions
+                WHERE match_id = $1::uuid
+            """, match_uuid)
+
+        if not row:
+            return None
+
+        analyst_preds = await get_match_analyst_predictions_by_uuid(pool, match_uuid)
+        final_probs = {
+            "home": float(row["final_prob_home"] or 0),
+            "draw": float(row["final_prob_draw"] or 0),
+            "away": float(row["final_prob_away"] or 0),
+        }
+
+        def _parse(field):
+            if field is None:           return None
+            if isinstance(field, str):  return json.loads(field)
+            if isinstance(field, dict): return field
+            if isinstance(field, (bytes, bytearray)): return json.loads(field.decode())
+            return field
+
+        return {
+            "final_probs":      final_probs,
+            "pre_match_matrix": _parse(row["pre_match_matrix"]),
+            "halftime_matrix":  _parse(row["halftime_matrix"]),
+            "consensus_cached": calculate_consensus(final_probs, analyst_preds),
+            "confidence":       float(row["confidence_score"]) if row["confidence_score"] else None,
+        }
+
+    except Exception as e:
+        logger.error(f"get_complete_match_data failed for {match_uuid}: {e}")
+        return None
