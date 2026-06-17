@@ -1,6 +1,7 @@
 "use client";
 import { Play, RefreshCw } from "lucide-react";
 import MatchLiveRow, { type LiveMatch } from "./MatchLiveRow";
+import MatchLiveRowBoundary from "./MatchLiveRowBoundary";
 import { useLivePolling } from "@/hooks/useLivePolling";
 
 export default function LiveInPlayTab({ matches: initialMatches = [] }: { matches?: LiveMatch[] }) {
@@ -58,7 +59,9 @@ export default function LiveInPlayTab({ matches: initialMatches = [] }: { matche
       ) : (
         <div className="space-y-4">
           {live.map(m => (
-            <MatchLiveRow key={m.fixture_id} match={m} />
+            <MatchLiveRowBoundary key={m.fixture_id} match={m}>
+              <MatchLiveRow match={m} />
+            </MatchLiveRowBoundary>
           ))}
           <p className="text-center text-[10px] text-slate-600">
             היחס ההוגן מבוסס על מודל טרום-משחק — אינו מתעדכן לפי מהלך המשחק. למטרות מחקר בלבד.

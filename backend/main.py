@@ -8,6 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from contextlib import asynccontextmanager
+import fastapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.matches import router as matches_router
@@ -96,8 +97,13 @@ async def telegram_test():
 
 
 @app.post("/api/telegram/send")
-async def telegram_send(message: str):
-    """שלח הודעה ידנית לערוץ"""
+async def telegram_send(message: str, x_scout_token: str = fastapi.Header(default="")):
+    """שלח הודעה ידנית לערוץ — requires X-Scout-Token header"""
+    expected = os.getenv("SCOUT_API_TOKEN", "")
+    if not expected or x_scout_token != expected:
+        raise fastapi.HTTPException(status_code=401, detail="Unauthorized")
+    if len(message) > 4000:
+        message = message[:4000]
     ok = await send_message(message)
     return {"sent": ok, "telegram_enabled": TELEGRAM_ENABLED}
 

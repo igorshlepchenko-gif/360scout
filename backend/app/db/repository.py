@@ -181,6 +181,23 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                         is_vb,
                     )
 
+        # odds snapshot for CLV tracking — fire-and-forget, non-blocking
+        if odds and odds.get("odds_home"):
+            try:
+                pool2 = await get_db()
+                if pool2:
+                    await save_odds_snapshot(
+                        pool2,
+                        str(match_uuid),
+                        float(odds.get("odds_home") or 0),
+                        float(odds.get("odds_draw") or 0),
+                        float(odds.get("odds_away") or 0),
+                        bookmaker=odds.get("bookmaker", ""),
+                        snapshot_type="scheduler",
+                    )
+            except Exception:
+                pass
+
         logger.info(f"Saved prediction: {match_data.get('home_team')} vs {match_data.get('away_team')} | uuid={match_uuid}")
         return str(match_uuid)
 
@@ -729,6 +746,47 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
     except Exception as e:
         logger.error(f"update_match_result failed: {e}")
         return False
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Odds Snapshot (CLV prep)
+# ────────────────────────────────────────────────────────────────────────────
+
+async def save_odds_snapshot(
+    pool,
+    match_uuid: str,
+    odds_home: float,
+    odds_draw: float,
+    odds_away: float,
+    bookmaker: str = "",
+    snapshot_type: str = "live",
+) -> None:
+    """
+    Appends a timestamped odds snapshot to bookmaker_line_history.
+    Used for CLV (Closing Line Value) tracking.
+    Table is created on first call if it does not exist.
+    """
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS bookmaker_line_history (
+                    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    match_id    UUID REFERENCES matches(id),
+                    bookmaker   VARCHAR(50),
+                    odds_home   FLOAT,
+                    odds_draw   FLOAT,
+                    odds_away   FLOAT,
+                    snapshot_type VARCHAR(20) DEFAULT 'live',
+                    recorded_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            await conn.execute("""
+                INSERT INTO bookmaker_line_history
+                    (match_id, bookmaker, odds_home, odds_draw, odds_away, snapshot_type)
+                VALUES ($1::uuid, $2, $3, $4, $5, $6)
+            """, match_uuid, bookmaker, odds_home, odds_draw, odds_away, snapshot_type)
+    except Exception as e:
+        logger.debug(f"save_odds_snapshot failed for {match_uuid}: {e}")
 
 
 # ────────────────────────────────────────────────────────────────────────────
