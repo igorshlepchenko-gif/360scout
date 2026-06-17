@@ -2,6 +2,7 @@
 import { Clock, TrendingUp, Zap } from "lucide-react";
 import { calculateValueBets, marketOddsFromValueBets, type OutcomeEdge } from "@/utils/analytics";
 import { bestValueBet } from "@/lib/valueBets";
+import { useLiveClock } from "@/hooks/useLiveClock";
 
 export interface LiveMatch {
   fixture_id: number;
@@ -85,8 +86,10 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
     m.score && m.score.home !== null
       ? `${m.score.home} - ${m.score.away}`
       : "0 - 0";
-  const timeTxt =
-    m.status_short === "HT" ? "מחצית" : m.elapsed ? `${m.elapsed}'` : "LIVE";
+
+  // useLiveClock: ticks every real minute independently of API polling.
+  // Snaps to server elapsed when a new value arrives (goal / card / HT event).
+  const timeTxt = useLiveClock(m.elapsed, m.status_short) || "LIVE";
 
   const OUTCOME_HE: Record<string, string> = {
     home: "ניצחון בית (1)",

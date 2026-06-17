@@ -64,6 +64,50 @@ TEAM_NAME_MAP = {
     "Atletico Madrid":   ["Atletico de Madrid", "Atletico Mineiro"],
 }
 
+# ── Filtering ──────────────────────────────────────────────────────────────────
+
+# Whitelist — league IDs the public feed is allowed to show.
+# Anything outside this set is blocked, regardless of data availability.
+TRACKED_LEAGUE_IDS: set[int] = {lg["id"] for lg in TRACKED_LEAGUES}
+
+# Minimum decimal odds for the market's shortest-priced outcome.
+# If the heavy favourite is below this floor, the match is a near-certainty
+# with no meaningful value — skip it even when confidence is high.
+MIN_MARKET_ODDS: float = 1.40
+
+
+def is_premium_league(fixture: dict) -> bool:
+    """True only for fixtures whose league.id is in TRACKED_LEAGUE_IDS."""
+    return fixture.get("league", {}).get("id") in TRACKED_LEAGUE_IDS
+
+
+def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> bool:
+    """
+    True when the cheapest available outcome still clears the minimum floor.
+
+    Logic:
+    - Take the three decimal odds (home / draw / away).
+    - Discard any that are missing or ≤ 1.0 (invalid).
+    - If none remain → no odds data at all → let the match through
+      (quota may be exhausted; don't silently drop matches for an API reason).
+    - If the smallest valid odd is below min_odds → near-certainty → block.
+
+    Example: home=1.10, draw=5.00, away=12.0 → min=1.10 < 1.40 → blocked.
+    Example: home=1.55, draw=3.80, away=5.20 → min=1.55 ≥ 1.40 → allowed.
+    """
+    odds = match.get("odds")
+    if not odds:
+        return True
+    candidates = [
+        float(odds.get("odds_home") or 0),
+        float(odds.get("odds_draw") or 0),
+        float(odds.get("odds_away") or 0),
+    ]
+    valid = [o for o in candidates if o > 1.0]
+    if not valid:
+        return True
+    return min(valid) >= min_odds
+
 
 async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     """
@@ -92,11 +136,12 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                 logger.warning(f"Live fetch failed: {e}")
                 live = []
 
-        for f in live:
+        premium_live = [f for f in live if is_premium_league(f)]
+        for f in premium_live:
             f["_league_name"] = f.get("league", {}).get("name", "")
             f["_status"] = "live"
-        all_fixtures.extend(live)
-        logger.info(f"Live: {len(live)}")
+        all_fixtures.extend(premium_live)
+        logger.info(f"Live: {len(live)} total → {len(premium_live)} premium")
 
         # 2. מתוכננים היום — cache 60 דקות
         if len(all_fixtures) < 5:
@@ -115,11 +160,12 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                     logger.warning(f"Today scheduled failed: {e}")
                     scheduled = []
 
-            for f in scheduled:
+            premium_sched = [f for f in scheduled if is_premium_league(f)]
+            for f in premium_sched:
                 f["_league_name"] = f.get("league", {}).get("name", "")
                 f["_status"] = "scheduled"
-            all_fixtures.extend(scheduled)
-            logger.info(f"Scheduled today: {len(scheduled)}")
+            all_fixtures.extend(premium_sched)
+            logger.info(f"Scheduled today: {len(scheduled)} total → {len(premium_sched)} premium")
 
         # 3. אחרונים — cache 60 דקות
         if len(all_fixtures) < 5:
@@ -139,12 +185,13 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
                     logger.warning(f"Recent finished failed: {e}")
                     finished = []
 
-            for f in finished:
+            premium_finished = [f for f in finished if is_premium_league(f)]
+            for f in premium_finished:
                 f["_league_name"] = f.get("league", {}).get("name", "")
                 f["_status"] = "finished"
-            finished.sort(key=lambda f: f.get("fixture", {}).get("date", ""), reverse=True)
-            all_fixtures.extend(finished[:40])
-            logger.info(f"Recent finished: {len(finished)}")
+            premium_finished.sort(key=lambda f: f.get("fixture", {}).get("date", ""), reverse=True)
+            all_fixtures.extend(premium_finished[:40])
+            logger.info(f"Recent finished: {len(finished)} total → {len(premium_finished)} premium")
 
     # מיין סופי: חיים → מתוכננים → אחרונים
     status_order = {"live": 0, "scheduled": 1, "finished": 2}
@@ -837,6 +884,17 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
 
     results = await asyncio.gather(*[_analyze(f) for f in fixtures])
     matches = [r for r in results if r]
+
+    # ── Odds threshold filter ────────────────────────────────────────────────
+    # Remove near-certainties: any match where the market's cheapest outcome
+    # (the favourite) sits below MIN_MARKET_ODDS has no meaningful value for
+    # the user. Matches without odds data are kept (API quota may be exhausted).
+    before_odds_filter = len(matches)
+    matches = [m for m in matches if passes_odds_threshold(m)]
+    logger.info(
+        f"Odds filter: {before_odds_filter} → {len(matches)} matches "
+        f"(removed {before_odds_filter - len(matches)} below {MIN_MARKET_ODDS}x)"
+    )
 
     # מיין — value bets קודם, אחר כך לפי confidence
     matches.sort(key=lambda m: (
