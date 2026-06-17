@@ -41,8 +41,9 @@ def _file_path(key: str) -> Path:
 
 def _file_get(key: str, cache_type: str) -> Optional[Any]:
     path = _file_path(key)
-    if not path.exists():
-        return None
+    # No exists() check — avoids TOCTOU race between check and read.
+    # FileNotFoundError and JSONDecodeError are clean misses; other exceptions
+    # indicate a corrupted file that should be deleted.
     try:
         entry = json.loads(path.read_text(encoding="utf-8"))
         ttl   = TTL_MAP.get(cache_type, CACHE_MINUTES * 60)
@@ -50,6 +51,8 @@ def _file_get(key: str, cache_type: str) -> Optional[Any]:
             path.unlink(missing_ok=True)
             return None
         return entry["data"]
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
     except Exception:
         path.unlink(missing_ok=True)
         return None
@@ -84,7 +87,11 @@ async def _db_get(key: str, cache_type: str) -> Optional[Any]:
         import datetime
         if row["expires_at"] < datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc):
             return None
-        return json.loads(row["data"])
+        try:
+            return json.loads(row["data"])
+        except json.JSONDecodeError as e:
+            logger.warning(f"DB cache corrupted entry for key={key[:50]}: {e}")
+            return None
     except Exception as e:
         logger.debug(f"DB cache get error: {e}")
         return None

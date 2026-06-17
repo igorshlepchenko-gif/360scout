@@ -80,11 +80,11 @@ async def job_fetch_live_matches():
         all_odds        = all_results[0] if isinstance(all_results[0], list) else []
         weather_results = all_results[1: 1 + len(cities)]
         apisports_raw   = all_results[1 + len(cities):]
-        valid_ids       = [fid for fid in fixture_ids if fid]
-        apisports_map   = {
-            valid_ids[i]: apisports_raw[i]
-            for i in range(len(valid_ids))
-            if isinstance(apisports_raw[i], dict)
+        valid_ids     = [fid for fid in fixture_ids if fid]
+        apisports_map = {
+            fid: raw
+            for fid, raw in zip(valid_ids, apisports_raw)
+            if isinstance(raw, dict)
         }
 
         city_weather = {
@@ -101,7 +101,7 @@ async def job_fetch_live_matches():
                 fid          = f.get("fixture", {}).get("id")
                 fixture_odds = apisports_map.get(fid)
                 result       = build_match_analysis_sync(f, all_odds, weather, fixture_odds=fixture_odds)
-                if result:
+                if result is not None:
                     # OLBG consensus enrichment — אם הסלוג נמצא, מחליף ALGORITHM_ONLY
                     try:
                         from app.tasks.olbg_scraper import (
@@ -213,22 +213,30 @@ async def job_auto_update_results():
             for row in rows:
                 fid = row["api_football_id"]
                 try:
-                    r    = await client.get(f"{API_BASE}/fixtures",
-                                            headers={"x-apisports-key": API_KEY},
-                                            params={"id": fid})
-                    data = r.json().get("response", [])
+                    r = await client.get(f"{API_BASE}/fixtures",
+                                         headers={"x-apisports-key": API_KEY},
+                                         params={"id": fid})
+                    try:
+                        data = r.json().get("response", [])
+                    except Exception:
+                        logger.warning(f"[Scheduler] Non-JSON response for fixture {fid} (HTTP {r.status_code})")
+                        continue
                     if not data:
                         continue
                     fix    = data[0].get("fixture", {})
-                    goals  = data[0].get("goals", {})
+                    goals  = data[0].get("goals", {}) or {}
                     status = fix.get("status", {}).get("short", "")
                     if status not in ("FT", "AET", "PEN"):
                         continue
-                    hs = goals.get("home")
+                    hs  = goals.get("home")
                     as_ = goals.get("away")
                     if hs is None or as_ is None:
                         continue
-                    ok = await update_match_result(fid, int(hs), int(as_))
+                    try:
+                        ok = await update_match_result(fid, int(hs), int(as_))
+                    except (TypeError, ValueError):
+                        logger.warning(f"[Scheduler] Non-integer goals for fixture {fid}: home={hs} away={as_}")
+                        continue
                     if ok:
                         updated += 1
                 except Exception as e:
