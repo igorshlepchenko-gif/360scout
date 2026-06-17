@@ -70,6 +70,7 @@ export function useLivePolling(initialMatches: LiveMatch[]): UseLivePollingResul
   const pollTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const driftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef    = useRef(true);
+  const abortCtrlRef  = useRef<AbortController | null>(null);
 
   // ── Fetch function ─────────────────────────────────────────────────────────
   const doFetch = useCallback(async () => {
@@ -77,8 +78,15 @@ export function useLivePolling(initialMatches: LiveMatch[]): UseLivePollingResul
     isFetchingRef.current = true;
     if (mountedRef.current) setIsPending(true);
 
+    // Cancel any still-in-flight request before starting a new one
+    abortCtrlRef.current?.abort();
+    abortCtrlRef.current = new AbortController();
+
     try {
-      const res = await fetch("/api/live-matches?limit=8", { cache: "no-store" });
+      const res = await fetch("/api/live-matches?limit=8", {
+        cache: "no-store",
+        signal: abortCtrlRef.current.signal,
+      });
       if (!res.ok || !mountedRef.current) return;
 
       const data = await res.json();
@@ -95,7 +103,8 @@ export function useLivePolling(initialMatches: LiveMatch[]): UseLivePollingResul
         setMatches(fresh);
         setLastUpdated(new Date());
       }
-    } catch {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return; // intentional cancel
       // Network error — silent, next scheduled poll will retry
     } finally {
       isFetchingRef.current = false;
@@ -123,6 +132,7 @@ export function useLivePolling(initialMatches: LiveMatch[]): UseLivePollingResul
       mountedRef.current = false;
       if (pollTimerRef.current)  clearTimeout(pollTimerRef.current);
       if (driftTimerRef.current) clearTimeout(driftTimerRef.current);
+      abortCtrlRef.current?.abort(); // cancel any pending in-flight request
     };
   }, []);
 

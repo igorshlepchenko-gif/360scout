@@ -19,8 +19,29 @@ export interface LiveMatch {
   };
   value_bets?: Record<
     string,
-    { is_value_bet: boolean; edge_percent: number; rating: string; bookmaker_odds: number }
+    { is_value_bet: boolean; edge_percent: number; rating: string; bookmaker_odds: number; xg_estimated?: boolean }
   > | null;
+  data_quality?: {
+    xg_source: string;
+    xg_method: string;
+    xg_estimated: boolean;
+    form_source: string;
+    h2h_used: boolean;
+  } | null;
+}
+
+function DataQualityBadge({ dq }: { dq: NonNullable<LiveMatch["data_quality"]> }) {
+  const isReal    = !dq.xg_estimated;
+  const isTotals  = dq.xg_method === "totals";
+  const label     = isReal ? "xG · Real" : isTotals ? "xG · Totals" : "xG · Est";
+  const color     = isReal ? "#3b82f6" : isTotals ? "#f59e0b" : "#64748b";
+  const bg        = isReal ? "rgba(59,130,246,0.08)" : isTotals ? "rgba(245,158,11,0.08)" : "rgba(100,116,139,0.08)";
+  const border    = isReal ? "rgba(59,130,246,0.2)"  : isTotals ? "rgba(245,158,11,0.2)"  : "rgba(100,116,139,0.15)";
+  return (
+    <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: bg, color, border: `1px solid ${border}`, fontFamily: "monospace", letterSpacing: "0.03em" }}>
+      {label}
+    </span>
+  );
 }
 
 function EdgePill({ o }: { o: OutcomeEdge }) {
@@ -158,9 +179,12 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
             {m.home_team} vs {m.away_team}
           </span>
         </div>
-        {m.league && (
-          <span style={{ color: "#475569", fontSize: 11 }}>{m.league}</span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {m.league && (
+            <span style={{ color: "#475569", fontSize: 11 }}>{m.league}</span>
+          )}
+          {m.data_quality && <DataQualityBadge dq={m.data_quality} />}
+        </div>
       </div>
 
       <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
