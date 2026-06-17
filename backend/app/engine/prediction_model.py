@@ -163,6 +163,9 @@ class PredictionEngine:
                 "draw": round(final["draw"], 4),
                 "away": round(final["away"], 4),
             },
+            "recommendation": get_recommendation(
+                final, ctx.home_team, ctx.away_team
+            ),
             "by_module": {
                 "stats":       stats,
                 "environment": env,
@@ -522,6 +525,86 @@ def calculate_value(our_prob: float, bookmaker_odds: float) -> dict:
         "implied_prob":       round(implied_prob, 4),
         "market_divergence":  round(market_divergence, 3),
         "bookmaker_odds":     bookmaker_odds,
+    }
+
+
+# ============================================================
+# Recommendation Layer (The Winning Method — draw filter)
+# ============================================================
+
+def get_recommendation(
+    final_probs: dict,
+    home_team: str = "Home",
+    away_team: str = "Away",
+    bookmaker_odds: Optional[dict] = None,
+    draw_threshold: float = 0.28,
+) -> dict:
+    """
+    Translates final_probs into a betting recommendation with draw-risk filter.
+
+    draw_threshold : suppress 1X2 pick when prob_draw exceeds this (default 0.28).
+    bookmaker_odds : optional {"home": float, "draw": float, "away": float}
+                     used to compute edge on the recommended outcome.
+    """
+    prob_home = float(final_probs.get("home", 0.0))
+    prob_draw = float(final_probs.get("draw", 0.0))
+    prob_away = float(final_probs.get("away", 0.0))
+
+    total = prob_home + prob_draw + prob_away or 1.0
+    prob_home /= total
+    prob_draw /= total
+    prob_away /= total
+
+    def _edge(prob: float, odds_key: str) -> Optional[float]:
+        if not bookmaker_odds:
+            return None
+        odds = bookmaker_odds.get(odds_key)
+        if not odds or float(odds) <= 1.0:
+            return None
+        return round((prob * float(odds) - 1) * 100, 2)
+
+    if prob_draw > draw_threshold:
+        if prob_home > prob_away:
+            return {
+                "recommendation": "Double Chance: 1X",
+                "status":         "DOUBLE_CHANCE",
+                "reason":         f"Draw prob {round(prob_draw * 100, 1)}% exceeds threshold — home stronger",
+                "draw_prob":      round(prob_draw, 3),
+                "edge":           None,
+            }
+        elif prob_away > prob_home:
+            return {
+                "recommendation": "Double Chance: X2",
+                "status":         "DOUBLE_CHANCE",
+                "reason":         f"Draw prob {round(prob_draw * 100, 1)}% exceeds threshold — away stronger",
+                "draw_prob":      round(prob_draw, 3),
+                "edge":           None,
+            }
+        else:
+            return {
+                "recommendation": "No Bet",
+                "status":         "FILTERED_SYMMETRIC",
+                "reason":         "Symmetric draw risk — no clear direction",
+                "draw_prob":      round(prob_draw, 3),
+                "edge":           None,
+            }
+
+    if prob_home >= prob_away:
+        outcome = "home"
+        label   = f"Home Win — {home_team}"
+        prob    = prob_home
+    else:
+        outcome = "away"
+        label   = f"Away Win — {away_team}"
+        prob    = prob_away
+
+    return {
+        "recommendation": label,
+        "outcome":        outcome,
+        "status":         "APPROVED",
+        "draw_prob":      round(prob_draw, 3),
+        "prob":           round(prob, 3),
+        "edge":           _edge(prob, outcome),
     }
 
 
