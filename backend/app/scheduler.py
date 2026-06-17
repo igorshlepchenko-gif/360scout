@@ -137,6 +137,16 @@ async def job_fetch_live_matches():
                     _primary_winner = max(_final, key=_final.get) if _final else ""
                     for outcome, vb_data in vb.items():
                         if vb_data and vb_data.get("rating") in ("STRONG", "MODERATE"):
+                            # Sanity guard: edge > 25% on underdog (odds > 4.0) signals
+                            # Option-B draw-collapse artifact — block before it hits Telegram.
+                            _edge   = vb_data.get("edge_percent", 0)
+                            _bk_odd = float(vb_data.get("bookmaker_odds") or 0)
+                            if _edge > 25.0 and _bk_odd > 4.0:
+                                logger.warning(
+                                    f"[Sanity] Blocking suspicious signal: {result.get('home_team')} vs "
+                                    f"{result.get('away_team')} | {outcome} | odds={_bk_odd} edge={_edge:.1f}%"
+                                )
+                                continue
                             try:
                                 match_meta = {
                                     "fixture_id":   result.get("fixture_id"),
