@@ -404,10 +404,10 @@ def start_scheduler() -> AsyncIOScheduler:
         next_run_time=datetime.now(timezone.utc),  # run immediately on startup
     )
 
-    # כל 60 דקות
+    # כל 15 דקות
     _scheduler.add_job(
         job_auto_update_results,
-        trigger="interval", minutes=60,
+        trigger="interval", minutes=15,
         id="auto_results", replace_existing=True,
     )
 

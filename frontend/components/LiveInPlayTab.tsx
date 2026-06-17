@@ -8,7 +8,7 @@ export default function LiveInPlayTab({ matches: initialMatches = [] }: { matche
     initialMatches as LiveMatch[]
   );
 
-  const live = allMatches.filter(m => m._status === "live");
+  const live = (allMatches ?? []).filter(m => m._status === "live");
 
   return (
     <div className="mt-10 w-full">

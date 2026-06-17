@@ -21,8 +21,8 @@ def poisson_match_probabilities(xg_home: float, xg_away: float, max_goals: int =
     matrix[h][a] = P(בית=h, חוץ=a). בית מנצח = מתחת לאלכסון, חוץ = מעל, תיקו = האלכסון.
     מנורמל ל-1 כדי לפצות על קטיעת הזנב ב-max_goals.
     """
-    lh = max(float(xg_home), 0.05)
-    la = max(float(xg_away), 0.05)
+    lh = max(float(xg_home), 0.30)
+    la = max(float(xg_away), 0.30)
     ks = np.arange(max_goals + 1)
     fact = _FACT[:max_goals + 1] if max_goals < len(_FACT) else np.array(
         [math.factorial(k) for k in ks], dtype=float
@@ -43,8 +43,8 @@ def poisson_goal_markets(xg_home: float, xg_away: float, line: float = 2.5, max_
     שווקי שערים מאותה מטריצת פואסון: Over/Under (ברירת מחדל 2.5) ו-BTTS.
     סוכם את תאי המטריצה לפי סכום השערים (h+a) ולפי שתי הקבוצות שכבשו.
     """
-    lh = max(float(xg_home), 0.05)
-    la = max(float(xg_away), 0.05)
+    lh = max(float(xg_home), 0.30)
+    la = max(float(xg_away), 0.30)
     ks = np.arange(max_goals + 1)
     fact = _FACT[: max_goals + 1] if max_goals < len(_FACT) else np.array([math.factorial(k) for k in ks], dtype=float)
     home_pmf = np.exp(-lh) * lh ** ks / fact
