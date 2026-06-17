@@ -26,13 +26,12 @@ function pickInterval(matches: LiveMatch[]): number {
   return INTERVAL_IDLE;
 }
 
-function oddsOf(m: any): [number, number, number] {
-  const o = m?.odds;
-  if (!o) return [0, 0, 0];
+function oddsOf(m: LiveMatch): [number, number, number] {
+  if (!m.value_bets) return [0, 0, 0];
   return [
-    Number(o.odds_home ?? 0),
-    Number(o.odds_draw ?? 0),
-    Number(o.odds_away ?? 0),
+    m.value_bets["home"]?.bookmaker_odds ?? 0,
+    m.value_bets["draw"]?.bookmaker_odds ?? 0,
+    m.value_bets["away"]?.bookmaker_odds ?? 0,
   ];
 }
 

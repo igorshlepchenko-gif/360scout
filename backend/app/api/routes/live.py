@@ -707,6 +707,21 @@ def build_match_analysis_sync(
     league_id   = league.get("id", 0)
     venue_type  = "neutral" if league_id == 1 else "home"
 
+    # ── In-play xG decay ─────────────────────────────────────────────────────
+    # Scale pre-match xG by fraction of time remaining, then add goals already
+    # scored.  Result = total expected goals by the final whistle, which drives
+    # the Poisson 1X2 and O/U probability correctly for live matches.
+    # Not applied during HT (short="HT") or for scheduled/finished matches.
+    _inplay_elapsed = int(fix.get("status", {}).get("elapsed") or 0)
+    _inplay_short   = fix.get("status", {}).get("short", "")
+    _inplay_active  = _inplay_short in ("1H", "2H", "ET", "LIVE") and _inplay_elapsed > 0
+
+    if _inplay_active:
+        _total_min = 120 if _inplay_short == "ET" else 90
+        _frac      = max(0.0, (_total_min - _inplay_elapsed) / _total_min)
+        xg_home    = max(0.30, xg_home * _frac + home_score)
+        xg_away    = max(0.30, xg_away * _frac + away_score)
+
     # בנה MatchContext
     ctx = MatchContext(
         match_id              = str(fix.get("id", "")),
@@ -861,11 +876,12 @@ def build_match_analysis_sync(
             "away": form_away,
         },
         "data_quality": {
-            "xg_source":    "real_stats" if (home_stats and away_stats) else "market",
-            "xg_method":    _xg_method,       # "real_stats"|"totals"|"1x2_vigfree"|"default"
-            "xg_estimated": _xg_from_market,
-            "form_source":  "real_stats" if home_stats else "last_result",
-            "h2h_used":     h2h_advantage != 0.0,
+            "xg_source":       "real_stats" if (home_stats and away_stats) else "market",
+            "xg_method":       _xg_method,    # "real_stats"|"totals"|"1x2_vigfree"|"default"
+            "xg_estimated":    _xg_from_market,
+            "inplay_adjusted": _inplay_active,
+            "form_source":     "real_stats" if home_stats else "last_result",
+            "h2h_used":        h2h_advantage != 0.0,
         },
     }
 
@@ -981,8 +997,10 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
 
 
 async def _save_predictions_bg(matches: list) -> None:
-    """שמור ניבויים ל-DB ברקע — שגיאות לא גורמות לקריסה"""
+    """שמור ל-DB ברקע — רק משחקים שהמנוע זיהה בהם value bet."""
     for m in matches:
+        if not m.get("value_bets"):
+            continue
         try:
             await save_match_prediction(m)
         except Exception as e:

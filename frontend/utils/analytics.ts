@@ -1,11 +1,11 @@
 /**
- * Frontend value-bet calculator.
+ * Frontend value-bet calculator — mirrors the backend Winning Method exactly.
  *
- * אלגוריתם זהה לbackend: edge = algo_prob − (1/market_odds)
- * ספף: 5% (VALUE_THRESHOLD = 0.05)
+ * edge  = algo_prob × bookmaker_odds − 1   (EV fraction)
+ * edgePct = edge × 100                     (EV%, same unit as backend edge_percent)
+ * isValue  when edgePct ≥ VALUE_THRESHOLD (5.0%)
  *
- * זה helper לתצוגה בלבד — מקור האמת הוא ה-backend.
- * השתמש ב-is_value_bet מה-API לאזהרות, כאן רק לפירוק ויזואלי.
+ * Display-only helper — authoritative flag is is_value_bet from the API.
  */
 
 export interface AlgoProbs {
@@ -27,8 +27,8 @@ export interface OutcomeEdge {
   labelHe: string;    // "בית" | "תיקו" | "חוץ"
   algoProb: number;   // 0–1
   impliedProb: number;
-  edge: number;       // algoProb − impliedProb
-  edgePct: number;    // ×100, 1 decimal
+  edge: number;       // EV fraction: (algoProb × odds) − 1
+  edgePct: number;    // EV%: edge × 100, 1 decimal
   marketOdds: number;
   fairOdds: string;   // "2.15" — (1/algoProb)
   isValue: boolean;
@@ -40,7 +40,7 @@ export interface ValueAnalysis {
   breakdown: OutcomeEdge[];
 }
 
-const VALUE_THRESHOLD = 0.05;
+const VALUE_THRESHOLD = 5.0; // EV% — matches backend _min_edge scale
 
 const LABELS: Record<string, [string, string]> = {
   home: ["1", "בית"],
@@ -63,8 +63,8 @@ export function calculateValueBets(
 
   const breakdown: OutcomeEdge[] = pairs.map(([key, algoProb, mOdds]) => {
     const impliedProb = 1 / mOdds;
-    const edge = algoProb - impliedProb;
-    const edgePct = Math.round(edge * 1000) / 10;
+    const edge    = algoProb * mOdds - 1;            // EV fraction: (prob × odds) − 1
+    const edgePct = Math.round(edge * 1000) / 10;    // EV% with 1 decimal, e.g. 7.3
     return {
       key: key as "home" | "draw" | "away",
       label12X: LABELS[key][0],
@@ -75,7 +75,7 @@ export function calculateValueBets(
       edgePct,
       marketOdds: mOdds,
       fairOdds: algoProb > 0 ? (1 / algoProb).toFixed(2) : "—",
-      isValue: edge >= VALUE_THRESHOLD,
+      isValue: edgePct >= VALUE_THRESHOLD,
     };
   });
 

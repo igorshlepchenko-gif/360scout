@@ -122,17 +122,42 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                 datetime.utcnow(),
             )
 
-            # 3. Upsert יחסים (אם יש)
+            # 3. Upsert יחסים — תמיד מעדכן אם כבר קיים (מונע שמירת יחסים ישנים)
             if odds and odds.get("odds_home"):
-                # בדוק אם כבר יש odds למשחק הזה
-                existing = await conn.fetchval(
+                home_vb = (value_bets.get("home") or {})
+                draw_vb = (value_bets.get("draw") or {})
+                away_vb = (value_bets.get("away") or {})
+                is_vb   = bool(
+                    home_vb.get("is_value_bet") or
+                    draw_vb.get("is_value_bet") or
+                    away_vb.get("is_value_bet")
+                )
+                existing_id = await conn.fetchval(
                     "SELECT id FROM bookmaker_odds WHERE match_id = $1 LIMIT 1",
                     match_uuid
                 )
-                if not existing:
-                    home_vb = (value_bets.get("home") or {})
-                    draw_vb = (value_bets.get("draw") or {})
-                    away_vb = (value_bets.get("away") or {})
+                if existing_id:
+                    await conn.execute("""
+                        UPDATE bookmaker_odds
+                        SET odds_home    = $2,
+                            odds_draw    = $3,
+                            odds_away    = $4,
+                            value_home   = $5,
+                            value_draw   = $6,
+                            value_away   = $7,
+                            is_value_bet = $8
+                        WHERE id = $1
+                    """,
+                        existing_id,
+                        odds.get("odds_home"),
+                        odds.get("odds_draw"),
+                        odds.get("odds_away"),
+                        home_vb.get("value"),
+                        draw_vb.get("value"),
+                        away_vb.get("value"),
+                        is_vb,
+                    )
+                else:
                     await conn.execute("""
                         INSERT INTO bookmaker_odds (
                             match_id, bookmaker,
@@ -153,7 +178,7 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                         home_vb.get("value"),
                         draw_vb.get("value"),
                         away_vb.get("value"),
-                        bool(home_vb.get("is_value_bet") or draw_vb.get("is_value_bet") or away_vb.get("is_value_bet")),
+                        is_vb,
                     )
 
         logger.info(f"Saved prediction: {match_data.get('home_team')} vs {match_data.get('away_team')} | uuid={match_uuid}")
