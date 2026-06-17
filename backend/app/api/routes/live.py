@@ -7,6 +7,7 @@
 import os
 import asyncio
 import logging
+import math
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -541,6 +542,90 @@ def calculate_h2h_advantage(h2h_matches: list, home_id: int) -> float:
     return 0.0 if total == 0 else round((wins - losses) / total, 2)
 
 
+# ── xG Calibration Helpers (Option B: Totals-based, Vig-free) ────────────────
+
+def _poisson_under25(lam: float) -> float:
+    """P(total goals ≤ 2 | Poisson(λ)) — probability of Under 2.5."""
+    e = math.exp(-lam)
+    return e * (1 + lam + lam * lam * 0.5)
+
+
+def _lambda_from_under25(p_under: float) -> float:
+    """Binary-search inversion: find λ s.t. P(X ≤ 2 | Poisson(λ)) ≈ p_under."""
+    p = max(0.05, min(0.99, p_under))
+    lo, hi = 0.3, 9.0
+    for _ in range(50):
+        mid = (lo + hi) * 0.5
+        if _poisson_under25(mid) > p:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) * 0.5
+
+
+def _calibrate_xg_from_market(
+    odds: dict,
+    totals: dict | None,
+    is_neutral: bool,
+) -> tuple[float, float, str]:
+    """
+    Derive (xg_home, xg_away, method) from bookmaker markets.
+
+    Priority:
+      1. Over/Under 2.5 total λ split by vig-free 1X2 ratio  → "totals"
+      2. Vig-free 1X2 ratio with fixed 2.55 total             → "1x2_vigfree"
+      3. Fallback defaults                                      → "default"
+
+    3-way vig removal: S = 1/H + 1/D + 1/A; P_fair = (1/odds) / S
+    This removes the bookmaker overround (~3–8%) before deriving strength ratios,
+    eliminating the systematic false-positive VALUE that 2-way normalization created.
+    """
+    try:
+        oh = float(odds.get("odds_home") or 0)
+        od = float(odds.get("odds_draw") or 0)
+        oa = float(odds.get("odds_away") or 0)
+        if not (oh > 1.0 and od > 1.0 and oa > 1.0):
+            return 1.3, 1.1, "default"
+
+        # 3-way vig removal — draw odds included
+        S = 1 / oh + 1 / od + 1 / oa
+        p_h = (1 / oh) / S
+        p_a = (1 / oa) / S
+
+        h_boost = 1.00 if is_neutral else 1.05
+        a_disc  = 1.00 if is_neutral else 0.95
+
+        # Strength ratio from fair 1X2 probs
+        R = p_h / max(p_a, 0.01)
+        h_split = R / (1 + R)
+        a_split = 1.0 - h_split
+
+        # Option B: total λ from Over/Under 2.5 — breaks circularity with 1X2
+        if totals:
+            ov = float(totals.get("over") or 0)
+            un = float(totals.get("under") or 0)
+            if ov > 1.0 and un > 1.0:
+                S_tot = 1 / ov + 1 / un
+                p_under_fair = (1 / un) / S_tot
+                xg_total = _lambda_from_under25(p_under_fair)
+                return (
+                    max(0.60, xg_total * h_split * h_boost),
+                    max(0.60, xg_total * a_split * a_disc),
+                    "totals",
+                )
+
+        # Fallback: fixed 2.55 total, vig-free ratio split
+        xg_total = 2.55
+        return (
+            max(0.60, xg_total * h_split * h_boost),
+            max(0.60, xg_total * a_split * a_disc),
+            "1x2_vigfree",
+        )
+
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 1.3, 1.1, "default"
+
+
 def build_match_analysis_sync(
     fixture: dict,
     all_odds: list,
@@ -575,6 +660,11 @@ def build_match_analysis_sync(
     # World Cup (league_id=1) is played at a neutral venue — no home advantage
     _is_neutral = league.get("id", 0) == 1
 
+    # Totals lookup — needed for Option-B xG calibration; fetch once, reuse below
+    _totals = find_totals_for_match(all_odds, home.get("name", ""), away.get("name", ""))
+    _xg_from_market = False   # True when xG is market-derived (no real stats)
+    _xg_method      = "real_stats"
+
     if home_stats:
         xg_home   = extract_xg(home_stats, "for")
         form_home = extract_form_score(home_stats)
@@ -582,21 +672,8 @@ def build_match_analysis_sync(
         if home_score:
             xg_home = max(float(home_score) * 0.9 + 0.5, 1.1)
         elif odds:
-            # כיול xG מיחסי הסוחר: p_win יחסי → xG יחסי
-            # סך שערים ממוצע במשחק בינלאומי ≈ 2.55 שערים
-            try:
-                oh = float(odds.get("odds_home") or 0)
-                oa = float(odds.get("odds_away") or 0)
-                if oh > 1.0 and oa > 1.0:
-                    ph_raw = 1 / oh
-                    pa_raw = 1 / oa
-                    total_raw = ph_raw + pa_raw
-                    ph = ph_raw / total_raw  # עוצמה יחסית של בית
-                    xg_home = max(0.60, ph * 2.55 * (1.00 if _is_neutral else 1.05))
-                else:
-                    xg_home = 1.3
-            except (TypeError, ValueError, ZeroDivisionError):
-                xg_home = 1.3
+            xg_home, _, _xg_method = _calibrate_xg_from_market(odds, _totals, _is_neutral)
+            _xg_from_market = True
         else:
             xg_home = 1.3
         form_home = 0.4 if home.get("winner") is True else (-0.3 if home.get("winner") is False else 0.0)
@@ -608,19 +685,8 @@ def build_match_analysis_sync(
         if away_score:
             xg_away = max(float(away_score) * 0.9 + 0.5, 1.0)
         elif odds:
-            try:
-                oh = float(odds.get("odds_home") or 0)
-                oa = float(odds.get("odds_away") or 0)
-                if oh > 1.0 and oa > 1.0:
-                    ph_raw = 1 / oh
-                    pa_raw = 1 / oa
-                    total_raw = ph_raw + pa_raw
-                    pa = pa_raw / total_raw  # עוצמה יחסית של אורחים
-                    xg_away = max(0.60, pa * 2.55 * (1.00 if _is_neutral else 0.95))
-                else:
-                    xg_away = 1.1
-            except (TypeError, ValueError, ZeroDivisionError):
-                xg_away = 1.1
+            _, xg_away, _xg_method = _calibrate_xg_from_market(odds, _totals, _is_neutral)
+            _xg_from_market = True
         else:
             xg_away = 1.1
         form_away = 0.4 if away.get("winner") is True else (-0.3 if away.get("winner") is False else 0.0)
@@ -630,22 +696,12 @@ def build_match_analysis_sync(
     injuries    = []
     city        = fix.get("venue", {}).get("city", "") or ""
 
-    # If both teams got the default xG (1.2) from stats — meaning no real xG data was
-    # available (e.g. national teams at WC, new season) — recalibrate from market odds.
-    # Without this, teams with very different market odds are treated as equal.
+    # If both teams got extract_xg's fallback (1.2) — stats exist but no real xG data
+    # (e.g. national teams at WC, new season) — recalibrate via Option B.
     _XG_DEFAULT = 1.2
     if odds and xg_home == _XG_DEFAULT and xg_away == _XG_DEFAULT:
-        try:
-            oh = float(odds.get("odds_home") or 0)
-            oa = float(odds.get("odds_away") or 0)
-            if oh > 1.0 and oa > 1.0:
-                ph_raw = 1 / oh
-                pa_raw = 1 / oa
-                total_raw = ph_raw + pa_raw
-                xg_home = max(0.60, (ph_raw / total_raw) * 2.55 * (1.00 if _is_neutral else 1.05))
-                xg_away = max(0.60, (pa_raw / total_raw) * 2.55 * (1.00 if _is_neutral else 0.95))
-        except (TypeError, ValueError, ZeroDivisionError):
-            pass
+        xg_home, xg_away, _xg_method = _calibrate_xg_from_market(odds, _totals, _is_neutral)
+        _xg_from_market = True
 
     # World Cup (league_id=1) is played at neutral venues — no home advantage
     league_id   = league.get("id", 0)
@@ -704,7 +760,12 @@ def build_match_analysis_sync(
                 # השתמש בהסתברות מותאמת אם הייתה התאמה, אחרת הסתברות גולמית
                 prob = adjusted_probs[outcome] if adj_active else prediction["final"][outcome]
                 vb = calculate_value(prob, bm_odd)
-                if vb["is_value_bet"]:          # only positive-EV bets (> 5%)
+                # When xG is market-derived, require a larger edge (8%) to suppress noise
+                # from the residual circularity. Still show the bet; just raise the bar.
+                _min_edge = 8.0 if _xg_from_market else 0.0
+                if vb["is_value_bet"] and vb.get("edge_percent", 0) >= _min_edge:
+                    if _xg_from_market:
+                        vb["xg_estimated"] = True
                     value_bets[outcome] = vb
 
     # Over/Under 2.5 — two-layer analysis:
@@ -712,7 +773,7 @@ def build_match_analysis_sync(
     #   ou_edge      : live in-play Poisson PMF on *remaining* expected goals (backward compat)
     goals_signal: GoalsValueSignal | None = None
     ou_edge = None
-    totals  = find_totals_for_match(all_odds, home.get("name", ""), away.get("name", ""))
+    totals  = _totals  # already looked up above for xG calibration
     if totals and totals.get("over") and totals.get("under"):
         # Pre-game / full-match: Goals Engine with dynamic xG modifiers
         xg_mods = injury_flags_from_list(
@@ -800,9 +861,11 @@ def build_match_analysis_sync(
             "away": form_away,
         },
         "data_quality": {
-            "xg_source":   "real_stats" if home_stats else "estimated",
-            "form_source": "real_stats" if home_stats else "last_result",
-            "h2h_used":    h2h_advantage != 0.0,
+            "xg_source":    "real_stats" if (home_stats and away_stats) else "market",
+            "xg_method":    _xg_method,       # "real_stats"|"totals"|"1x2_vigfree"|"default"
+            "xg_estimated": _xg_from_market,
+            "form_source":  "real_stats" if home_stats else "last_result",
+            "h2h_used":     h2h_advantage != 0.0,
         },
     }
 
