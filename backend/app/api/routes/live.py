@@ -397,6 +397,37 @@ async def fetch_odds_apisports(fixture_id: int) -> dict | None:
             return None
 
 
+async def fetch_live_lineups(fixture_id: int) -> list | None:
+    """
+    Fetch official lineups for a fixture — published ~1h before kickoff.
+    Returns raw API list (one entry per team) or None.
+    Cached 30 minutes to preserve daily API quota.
+    """
+    if not fixture_id or not API_FOOTBALL_KEY:
+        return None
+
+    cache_key = f"lineups:{fixture_id}"
+    cached = await cache_get(cache_key, "lineups")
+    if cached is not None:
+        return cached
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            r = await client.get(
+                f"{API_FOOTBALL_BASE}/lineups",
+                headers={"x-apisports-key": API_FOOTBALL_KEY},
+                params={"fixture": fixture_id},
+            )
+            resp = r.json().get("response", [])
+            if not resp:
+                return None
+            await cache_set(cache_key, resp, "lineups")
+            return resp
+        except Exception as e:
+            logger.debug(f"Lineups {fixture_id}: {e}")
+            return None
+
+
 def find_odds_for_match(all_odds: list, home_team: str, away_team: str) -> dict | None:
     """חפש יחסים למשחק ספציפי — גמיש עם שמות שונים"""
     home_lower = home_team.lower()
@@ -634,6 +665,7 @@ def build_match_analysis_sync(
     away_stats: dict | None = None,
     h2h_advantage: float = 0.0,
     fixture_odds: dict | None = None,
+    lineups: list | None = None,
 ) -> dict:
     """
     ניתוח מהיר ללא קריאות API נוספות — משתמש בנתוני ה-fixture עצמו.
@@ -695,6 +727,25 @@ def build_match_analysis_sync(
     away_injury = 0.0
     injuries    = []
     city        = fix.get("venue", {}).get("city", "") or ""
+
+    # ── Lineup processing ────────────────────────────────────────────────────
+    home_lineup_data = None
+    away_lineup_data = None
+    if lineups:
+        home_id_fix = home.get("id")
+        away_id_fix = away.get("id")
+        home_lineup_data = next((t for t in lineups if t.get("team", {}).get("id") == home_id_fix), None)
+        away_lineup_data = next((t for t in lineups if t.get("team", {}).get("id") == away_id_fix), None)
+
+        # Rotation signal: if confirmed startXI has fewer than 9 players something is unusual
+        if home_lineup_data:
+            n = len(home_lineup_data.get("startXI", []))
+            if 0 < n < 9:
+                home_injury = min(0.4, (11 - n) * 0.1)
+        if away_lineup_data:
+            n = len(away_lineup_data.get("startXI", []))
+            if 0 < n < 9:
+                away_injury = min(0.4, (11 - n) * 0.1)
 
     # If both teams got extract_xg's fallback (1.2) — stats exist but no real xG data
     # (e.g. national teams at WC, new season) — recalibrate via Option B.
@@ -903,6 +954,22 @@ def build_match_analysis_sync(
             "away_impact": away_injury,
             "count":       len(injuries),
         },
+        "lineups": {
+            "home": {
+                "formation": home_lineup_data.get("formation", ""),
+                "startXI": [
+                    {"name": p["player"].get("name"), "number": p["player"].get("number"), "pos": p["player"].get("pos")}
+                    for p in home_lineup_data.get("startXI", [])
+                ],
+            } if home_lineup_data else None,
+            "away": {
+                "formation": away_lineup_data.get("formation", ""),
+                "startXI": [
+                    {"name": p["player"].get("name"), "number": p["player"].get("number"), "pos": p["player"].get("pos")}
+                    for p in away_lineup_data.get("startXI", [])
+                ],
+            } if away_lineup_data else None,
+        } if (home_lineup_data or away_lineup_data) else None,
         "form": {
             "home": form_home,
             "away": form_away,
@@ -936,12 +1003,13 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
     season    = league.get("season", 2024)
 
     # משוך הכל במקביל: סטטיסטיקות + H2H + מזג אוויר + יחסים ישירים
-    home_stats, away_stats, h2h_matches, weather, fixture_odds = await asyncio.gather(
+    home_stats, away_stats, h2h_matches, weather, fixture_odds, lineups = await asyncio.gather(
         fetch_team_stats_cached(home_id, league_id, season),
         fetch_team_stats_cached(away_id, league_id, season),
         fetch_h2h_cached(home_id, away_id),
         fetch_weather_for_city(city if city else "London"),
         fetch_odds_apisports(fix.get("id", 0)),
+        fetch_live_lineups(fix.get("id", 0)),
     )
 
     home_stats  = home_stats  if isinstance(home_stats,  dict) else {}
@@ -949,8 +1017,9 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
     h2h_matches = h2h_matches if isinstance(h2h_matches, list) else []
     h2h_adv     = calculate_h2h_advantage(h2h_matches, home_id)
     fixture_odds = fixture_odds if isinstance(fixture_odds, dict) else None
+    lineups      = lineups if isinstance(lineups, list) else None
 
-    return build_match_analysis_sync(fixture, all_odds, weather, home_stats, away_stats, h2h_adv, fixture_odds=fixture_odds)
+    return build_match_analysis_sync(fixture, all_odds, weather, home_stats, away_stats, h2h_adv, fixture_odds=fixture_odds, lineups=lineups)
 
 
 # ============================================================
