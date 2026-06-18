@@ -251,13 +251,14 @@ def _poisson_pmf(lam: float, max_goals: int) -> np.ndarray:
     )
 
 
-def _poisson_matrix(lh: float, la: float, max_goals: int = 10) -> np.ndarray:
+def _poisson_matrix(lh: float, la: float, max_goals: int = 5) -> np.ndarray:
     """
     Build joint probability matrix P(home=h, away=a) for h,a in [0..max_goals].
 
     Uses the manual Poisson PMF: exp(-λ)·λ^k/k!
-    The matrix is renormalized after construction to compensate for the
-    probability mass truncated at max_goals (typically <0.1% for max_goals=10).
+    Default max_goals=5 → 6×6 matrix covering goals 0-5 per team (range(6)),
+    matching the user-specified Winning Method implementation.
+    The matrix is renormalized so that over_prob + under_prob = 1.0 exactly.
     """
     home_pmf = _poisson_pmf(lh, max_goals)
     away_pmf = _poisson_pmf(la, max_goals)
@@ -273,7 +274,7 @@ def calculate_goals_value(
     under_odds: float,
     line:       float = 2.5,
     mods:       XgModifiers | None = None,
-    max_goals:  int = 10,
+    max_goals:  int = 5,
 ) -> GoalsValueSignal | None:
     """
     Full Over/Under goals market analysis using Poisson distribution.
@@ -281,7 +282,7 @@ def calculate_goals_value(
     Pipeline:
       1. Validate inputs
       2. Adjust xG via weather + injury modifiers (adjust_xg)
-      3. Build Poisson probability matrix with scipy
+      3. Build Poisson probability matrix (6×6, goals 0-5 per team)
       4. Sum matrix cells: Over (goal_sum > line), Under, BTTS
       5. Calculate EV% per market using The Winning Method formula
       6. Return best actionable signal
