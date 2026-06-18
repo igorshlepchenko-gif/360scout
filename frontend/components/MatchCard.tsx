@@ -5,6 +5,7 @@ import { bestValueBet } from "@/lib/valueBets";
 
 interface Prediction {
   final: { home: number; draw: number; away: number };
+  active_modules?: string[];
   by_module: {
     stats:       { home: number; draw: number; away: number };
     environment: { home: number; draw: number; away: number };
@@ -224,7 +225,7 @@ function ConfidenceRing({ value }: { value: number }) {
 }
 
 // ===== Module breakdown mini-chart =====
-function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
+function ModuleChart({ modules, activeModules }: { modules: Prediction["by_module"]; activeModules?: string[] }) {
   const rows = [
     { key: "stats",       label: "סטטיסטיקה",   icon: "📊", home: modules.stats.home,       away: modules.stats.away },
     { key: "environment", label: "סביבה",        icon: "🌡", home: modules.environment.home,  away: modules.environment.away },
@@ -233,30 +234,35 @@ function ModuleChart({ modules }: { modules: Prediction["by_module"] }) {
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {rows.map(row => (
-        // direction:ltr — HOME column always left, AWAY column always right
-        <div key={row.key} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center", direction: "ltr" }}>
-          {/* HOME — left (green) */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, alignItems: "center" }}>
-            <span style={{ fontSize: 12, color: "white", fontWeight: 600 }}>{pct0(row.home)}</span>
-            <div style={{ width: 60, height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${row.home * 100}%`, background: "#10b981", borderRadius: 99, transition: "width 0.8s ease" }} />
+      {rows.map(row => {
+        const isActive = !activeModules || activeModules.includes(row.key);
+        const dimStyle = isActive ? {} : { opacity: 0.3 };
+        return (
+          // direction:ltr — HOME column always left, AWAY column always right
+          <div key={row.key} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center", direction: "ltr", ...dimStyle }}>
+            {/* HOME — left (green) */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "white", fontWeight: 600 }}>{pct0(row.home)}</span>
+              <div style={{ width: 60, height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${row.home * 100}%`, background: isActive ? "#10b981" : "#64748b", borderRadius: 99, transition: "width 0.8s ease" }} />
+              </div>
+            </div>
+            {/* Label */}
+            <div style={{ textAlign: "center", minWidth: 110 }}>
+              <span style={{ fontSize: 10 }}>{row.icon}</span>
+              <span style={{ fontSize: 10, color: "#64748b", marginRight: 4 }}>{row.label}</span>
+              {!isActive && <span style={{ fontSize: 9, color: "#475569", marginRight: 2 }}>— אין נתונים</span>}
+            </div>
+            {/* AWAY — right (red) */}
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <div style={{ width: 60, height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${row.away * 100}%`, background: isActive ? "#ef4444" : "#64748b", borderRadius: 99, transition: "width 0.8s ease" }} />
+              </div>
+              <span style={{ fontSize: 12, color: "white", fontWeight: 600 }}>{pct0(row.away)}</span>
             </div>
           </div>
-          {/* Label */}
-          <div style={{ textAlign: "center", minWidth: 110 }}>
-            <span style={{ fontSize: 10 }}>{row.icon}</span>
-            <span style={{ fontSize: 10, color: "#64748b", marginRight: 4 }}>{row.label}</span>
-          </div>
-          {/* AWAY — right (red) */}
-          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            <div style={{ width: 60, height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${row.away * 100}%`, background: "#ef4444", borderRadius: 99, transition: "width 0.8s ease" }} />
-            </div>
-            <span style={{ fontSize: 12, color: "white", fontWeight: 600 }}>{pct0(row.away)}</span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -953,7 +959,7 @@ export default function MatchCard({
               />
             )}
 
-            <ModuleChart modules={prediction.by_module} />
+            <ModuleChart modules={prediction.by_module} activeModules={prediction.active_modules} />
 
             {/* ── LIVE WEATHER ── */}
             {weather?.source === "live" && (
