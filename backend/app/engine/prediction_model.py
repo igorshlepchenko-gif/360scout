@@ -129,7 +129,6 @@ class PredictionEngine:
     def predict(self, ctx: MatchContext) -> dict:
         logger.info(f"Running prediction: {ctx.home_team} vs {ctx.away_team}")
 
-        # Run each module
         stats  = self._stats_module(ctx)
         env    = self._environment_module(ctx)
         human  = self._human_factors_module(ctx)
@@ -137,27 +136,29 @@ class PredictionEngine:
 
         w = self.MODULE_WEIGHTS
 
-        raw_home = (
-            stats["home"]  * w["stats"]  +
-            env["home"]    * w["environment"] +
-            human["home"]  * w["human"]  +
-            psych["home"]  * w["psychology"]
-        )
-        raw_away = (
-            stats["away"]  * w["stats"]  +
-            env["away"]    * w["environment"] +
-            human["away"]  * w["human"]  +
-            psych["away"]  * w["psychology"]
-        )
+        # Only blend modules that have real signal — default 50/50 outputs
+        # dilute the stats signal without adding information.
+        active: dict[str, tuple[dict, float]] = {"stats": (stats, w["stats"])}
+        if self._has_env_signal(ctx):
+            active["environment"] = (env, w["environment"])
+        if self._has_human_signal(ctx):
+            active["human"] = (human, w["human"])
+        if self._has_psych_signal(ctx):
+            active["psychology"] = (psych, w["psychology"])
+
+        total_w  = sum(weight for _, weight in active.values())
+        raw_home = sum(m["home"] * weight for m, weight in active.values()) / total_w
+        raw_away = sum(m["away"] * weight for m, weight in active.values()) / total_w
 
         final = self._to_three_way(raw_home, raw_away, ctx)
         mc    = self._monte_carlo(final, n=10000)
         conf  = self._confidence(stats, env, human, psych, final, mc, ctx)
 
         return {
-            "match_id":   ctx.match_id,
-            "home_team":  ctx.home_team,
-            "away_team":  ctx.away_team,
+            "match_id":       ctx.match_id,
+            "home_team":      ctx.home_team,
+            "away_team":      ctx.away_team,
+            "active_modules": list(active.keys()),
             "final": {
                 "home": round(final["home"], 4),
                 "draw": round(final["draw"], 4),
@@ -398,6 +399,37 @@ class PredictionEngine:
                             "detail": f"{ctx.travel_km_away:,}km traveled"})
 
         return factors
+
+    # ------------------------------------------------------------------ #
+    #  Signal detectors — True only when a module's inputs actually      #
+    #  move the output away from the neutral 50/50 baseline              #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _has_env_signal(ctx: MatchContext) -> bool:
+        return (
+            ctx.precipitation_mm > 5 or
+            (ctx.temperature > 28 and ctx.humidity > 70) or
+            ctx.altitude_meters > 2000
+        )
+
+    @staticmethod
+    def _has_human_signal(ctx: MatchContext) -> bool:
+        return (
+            ctx.home_injury_impact != 0.0 or
+            ctx.away_injury_impact != 0.0 or
+            ctx.referee_home_bias  != 0.0 or
+            ctx.referee_cards_per_game > 4.0
+        )
+
+    @staticmethod
+    def _has_psych_signal(ctx: MatchContext) -> bool:
+        return (
+            ctx.venue_type in ("home", "away") or
+            ctx.tournament_stage in ("knockout", "final", "group_must_win") or
+            abs(ctx.rest_days_home - ctx.rest_days_away) > 1 or
+            ctx.travel_km_away > 5000 or
+            ctx.pressure_index > 0.7
+        )
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                            #
