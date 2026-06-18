@@ -60,6 +60,22 @@ interface MatchOdds {
   odds_away?:  number;
 }
 
+interface LineupPlayer {
+  name:   string | null;
+  number: number | null;
+  pos:    string | null;
+}
+
+interface LineupTeam {
+  formation: string;
+  startXI:   LineupPlayer[];
+}
+
+interface Lineups {
+  home: LineupTeam | null;
+  away: LineupTeam | null;
+}
+
 interface MatchWeather {
   temperature_celsius: number;
   weather_condition:   string;
@@ -119,6 +135,7 @@ interface MatchCardProps {
   xg?:          { home: number; away: number } | null;
   goals_signal?: GoalsSignal | null;
   ou_edge?:     OuEdge | null;
+  lineups?:     Lineups | null;
 }
 
 const pct  = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -400,6 +417,88 @@ function WinningMethodTable({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+const POS_HE: Record<string, string> = { G: "שוע", D: "הגנ", M: "קישור", F: "התקפ" };
+
+// ===== Lineup Display =====
+function LineupDisplay({ lineups, homeTeam, awayTeam }: { lineups: Lineups; homeTeam: string; awayTeam: string }) {
+  const { home, away } = lineups;
+  if (!home && !away) return null;
+
+  function PlayerList({ team, side }: { team: LineupTeam; side: "home" | "away" }) {
+    const isHome = side === "home";
+    const accentColor = isHome ? "#10b981" : "#ef4444";
+    const byPos: Record<string, LineupPlayer[]> = {};
+    for (const p of team.startXI) {
+      const pos = p.pos ?? "?";
+      if (!byPos[pos]) byPos[pos] = [];
+      byPos[pos].push(p);
+    }
+    const posOrder = ["G", "D", "M", "F"];
+    const sorted = [
+      ...posOrder.flatMap(p => byPos[p] ?? []),
+      ...(team.startXI.filter(p => !posOrder.includes(p.pos ?? ""))),
+    ];
+    return (
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, justifyContent: isHome ? "flex-start" : "flex-end" }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{isHome ? homeTeam : awayTeam}</span>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: accentColor,
+            background: `${accentColor}18`, border: `1px solid ${accentColor}40`,
+            borderRadius: 99, padding: "1px 7px",
+          }}>{team.formation}</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {sorted.map((p, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 4,
+              flexDirection: isHome ? "row" : "row-reverse",
+              padding: "2px 0",
+            }}>
+              <span style={{
+                fontSize: 9, fontWeight: 700, color: "#334155",
+                minWidth: 18, textAlign: "center",
+              }}>{p.number ?? ""}</span>
+              <span style={{ fontSize: 10, color: "#94a3b8", flex: 1, textAlign: isHome ? "left" : "right" }}>
+                {p.name ?? "—"}
+              </span>
+              {p.pos && (
+                <span style={{
+                  fontSize: 8, color: "#475569",
+                  background: "rgba(255,255,255,0.04)",
+                  borderRadius: 4, padding: "1px 4px", whiteSpace: "nowrap",
+                }}>
+                  {POS_HE[p.pos] ?? p.pos}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <div style={{ height: 14, width: 3, background: "#64748b", borderRadius: 99 }} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>הרכבי פתיחה</span>
+      </div>
+      <div style={{
+        border: "1px solid #1e293b", borderRadius: 10,
+        padding: "10px 12px",
+        display: "flex", gap: 12, direction: "ltr",
+      }}>
+        {home && <PlayerList team={home} side="home" />}
+        {home && away && (
+          <div style={{ width: 1, background: "#1e293b", flexShrink: 0, alignSelf: "stretch" }} />
+        )}
+        {away && <PlayerList team={away} side="away" />}
+      </div>
+    </div>
+  );
+}
+
 // ── Goals Market Block ────────────────────────────────────────────────────────
 function GoalsMarketBlock({ gs, ouEdge }: { gs: GoalsSignal | null; ouEdge: OuEdge | null }) {
   // Prefer goals_signal (richer); fall back to ou_edge (live in-play)
@@ -598,7 +697,7 @@ export default function MatchCard({
   matchDate, isLive = false,
   prediction, value_bets, consensus,
   fixtureId, matchId, odds, weather, xg,
-  goals_signal, ou_edge,
+  goals_signal, ou_edge, lineups,
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -960,6 +1059,11 @@ export default function MatchCard({
             )}
 
             <ModuleChart modules={prediction.by_module} activeModules={prediction.active_modules} />
+
+            {/* ── LINEUPS ── */}
+            {lineups && (
+              <LineupDisplay lineups={lineups} homeTeam={homeTeam} awayTeam={awayTeam} />
+            )}
 
             {/* ── LIVE WEATHER ── */}
             {weather?.source === "live" && (

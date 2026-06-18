@@ -183,6 +183,7 @@ export default function LeagueFilteredMatches({
             xg={m.xg}
             goals_signal={m.goals_signal}
             ou_edge={m.ou_edge}
+            lineups={m.lineups}
           />
         ))}
         {filtered.length === 0 && (

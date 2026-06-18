@@ -23,6 +23,10 @@ interface WCMatch {
   consensus: any;
   odds?: any;
   weather?: any;
+  xg?: any;
+  goals_signal?: any;
+  ou_edge?: any;
+  lineups?: any;
 }
 
 export default function WorldCupPage() {
@@ -84,6 +88,10 @@ export default function WorldCupPage() {
               matchId={String(m.fixture_id)}
               odds={m.odds}
               weather={m.weather}
+              xg={m.xg}
+              goals_signal={m.goals_signal}
+              ou_edge={m.ou_edge}
+              lineups={m.lineups}
             />
           ))}
         </div>
