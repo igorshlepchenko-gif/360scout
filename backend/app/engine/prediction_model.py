@@ -563,6 +563,22 @@ def get_recommendation(
             return None
         return round((prob * float(odds) - 1) * 100, 2)
 
+    # Draw Value check — only when real odds available (no fallback guessing)
+    if prob_draw > 0.25 and bookmaker_odds:
+        draw_odds = bookmaker_odds.get("draw") or bookmaker_odds.get("odds_draw")
+        if draw_odds and float(draw_odds) > 1.0:
+            draw_edge = (prob_draw * float(draw_odds) - 1) * 100
+            if draw_edge > 5.0:
+                return {
+                    "recommendation": "Draw",
+                    "outcome":        "draw",
+                    "status":         "DRAW_VALUE",
+                    "reason":         f"Draw prob {round(prob_draw * 100, 1)}%, edge +{round(draw_edge, 1)}%",
+                    "draw_prob":      round(prob_draw, 3),
+                    "prob":           round(prob_draw, 3),
+                    "edge":           round(draw_edge, 2),
+                }
+
     if prob_draw > draw_threshold:
         if prob_home > prob_away:
             return {

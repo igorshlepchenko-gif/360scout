@@ -20,7 +20,7 @@ load_dotenv()
 
 from app.engine.prediction_model import (
     PredictionEngine, MatchContext, calculate_value, calculate_consensus,
-    calculate_under_over_25_edge,
+    calculate_under_over_25_edge, get_recommendation,
 )
 from app.engine.dynamic_adjuster import adjust_probabilities, AdjustmentParams
 from app.engine.goals_engine import (
@@ -375,7 +375,7 @@ async def fetch_odds_apisports(fixture_id: int) -> dict | None:
 
             vals = {v["value"]: float(v["odd"]) for v in market.get("values", []) if v.get("odd")}
             home_odds = vals.get("Home")
-            draw_odds = vals.get("Draw", 3.5)
+            draw_odds = vals.get("Draw")
             away_odds = vals.get("Away")
             if not home_odds or not away_odds:
                 return None
@@ -386,7 +386,7 @@ async def fetch_odds_apisports(fixture_id: int) -> dict | None:
                 "odds_draw":         draw_odds,
                 "odds_away":         away_odds,
                 "implied_prob_home": round(1 / home_odds, 4),
-                "implied_prob_draw": round(1 / draw_odds, 4),
+                "implied_prob_draw": round(1 / draw_odds, 4) if draw_odds else None,
                 "implied_prob_away": round(1 / away_odds, 4),
                 "_source":           "apisports",
             }
@@ -423,7 +423,7 @@ def find_odds_for_match(all_odds: list, home_team: str, away_team: str) -> dict 
             outcomes = {o["name"]: o["price"] for o in h2h.get("outcomes", [])}
             home_odds = outcomes.get(event["home_team"], 0)
             away_odds = outcomes.get(event["away_team"], 0)
-            draw_odds = outcomes.get("Draw", 3.5)
+            draw_odds = outcomes.get("Draw")
 
             if home_odds and away_odds:
                 return {
@@ -432,7 +432,7 @@ def find_odds_for_match(all_odds: list, home_team: str, away_team: str) -> dict 
                     "odds_draw":        draw_odds,
                     "odds_away":        away_odds,
                     "implied_prob_home": round(1 / home_odds, 4),
-                    "implied_prob_draw": round(1 / draw_odds, 4),
+                    "implied_prob_draw": round(1 / draw_odds, 4) if draw_odds else None,
                     "implied_prob_away": round(1 / away_odds, 4),
                 }
     return None
@@ -784,6 +784,20 @@ def build_match_analysis_sync(
         adj_params.home_rotation or adj_params.away_rotation or bool(_manual)
     )
     prediction["adjusted"] = adjusted_probs if adj_active else None
+
+    # Override recommendation with real odds — enables DRAW_VALUE detection
+    if odds:
+        _final = adjusted_probs if adj_active else prediction["final"]
+        prediction["recommendation"] = get_recommendation(
+            _final,
+            home.get("name", ""),
+            away.get("name", ""),
+            bookmaker_odds={
+                "home": odds.get("odds_home"),
+                "draw": odds.get("odds_draw"),
+                "away": odds.get("odds_away"),
+            },
+        )
 
     value_bets  = {}
     if odds:
