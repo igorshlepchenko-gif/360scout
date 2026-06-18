@@ -1,22 +1,27 @@
 """
-360SCOUT — Goals Market Engine  v2.0
-Full Poisson-based Over/Under prediction with 3-layer Dynamic xG Calibration.
+360SCOUT — Goals Market Engine  v3.0
+Full Poisson-based Over/Under prediction with Ultra xG Calibration.
 
 Architecture:
-  §0  calculate_calibrated_xg() — The Winning Method 3-multiplier pre-calibration
-  §1  XgModifiers   — all calibration inputs (multipliers + weather + injury flags)
-  §2  adjust_xg()   — applies all 3 layers: calibration → weather → positional injuries
+  §0  calculate_ultra_calibrated_xg() — 6-factor ultra calibration (The Winning Method)
+  §1  XgModifiers   — all calibration inputs
+  §2  adjust_xg()   — applies calibration + positional injury boosts
   §3  GoalsValueSignal — immutable result of a full O/U analysis
   §4  calculate_goals_value() — main entry point
   §5  injury_flags_from_list() — API injury list → XgModifiers
 
-xG Calibration pipeline (The Winning Method):
-  Layer 1 — Multipliers:  xG × home_advantage × motivation × injuries_factor
-  Layer 2 — Weather:      ×0.84–0.93 for extreme rain/cold/heat
-  Layer 3 — Positional:   +0.15–0.25 to opponent when GK/key-defender absent
+xG Calibration pipeline — calculate_ultra_calibrated_xg():
+  xG × home_advantage × motivation × injuries × rest_multiplier × weather_factor
+  + ref_factor × 0.05
+
+  rest_multiplier = 0.92 if rest_days < 3 else 1.0
+  weather_factor  = computed from precipitation_mm + temperature_c
+
+Positional layer (additive, separate):
+  GK / key-defender absent → +0.15–0.25 to opponent's xG
 
 Poisson PMF: P(X=k | λ) = exp(-λ)·λ^k/k!  (manual, no scipy)
-  6×6 matrix (goals 0-5 per team) — covers >99.5% of Poisson mass for λ≤3.
+  6×6 matrix (goals 0-5 per team).
 """
 
 from __future__ import annotations
@@ -36,26 +41,35 @@ logger = logging.getLogger(__name__)
 # §0  THE WINNING METHOD — 3-MULTIPLIER xG CALIBRATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def calculate_calibrated_xg(
-    base_xg:              float,
-    home_advantage:       float = 1.0,
-    match_importance:     float = 1.0,
-    key_injuries_factor:  float = 1.0,
+def calculate_ultra_calibrated_xg(
+    base_xg:        float,
+    home_adv:       float = 1.0,
+    motivation:     float = 1.0,
+    injuries:       float = 1.0,
+    rest_days:      int   = 7,
+    ref_factor:     float = 0.0,
+    weather_factor: float = 1.0,
 ) -> float:
     """
-    Calibrate base xG using three dynamic multipliers (The Winning Method).
+    World-class xG calibration — The Winning Method ultra model.
 
-    Args:
-        base_xg:             Raw Expected Goals from stats pipeline or odds calibration
-        home_advantage:      Crowd + pitch boost; typically 1.15 for home, 1.0 for away/neutral
-        match_importance:    Motivation scaling; e.g. 1.10 must-win, 0.90 dead rubber
-        key_injuries_factor: Composite attacking-output factor; e.g. 0.85 when striker is out
+    Multipliers (applied in order):
+      home_adv        : crowd + pitch boost (1.15 home, 1.0 away/neutral)
+      motivation      : match-importance scaling (1.10 must-win, 0.90 dead rubber)
+      injuries        : composite attacking-output factor (0.85 striker out)
+      rest_multiplier : fatigue penalty when rest_days < 3 (×0.92)
+      weather_factor  : derived from precipitation + temperature
 
-    Returns:
-        Calibrated xG, floored at 0.10 to prevent degenerate Poisson distributions.
+    Additive correction:
+      ref_factor × 0.05 : referee tendency added directly to xG
+                          (positive = lenient/many stoppages; negative = strict)
+
+    Returns calibrated xG, floored at 0.10.
     """
-    calibrated = base_xg * home_advantage * match_importance * key_injuries_factor
-    return max(0.10, round(calibrated, 2))
+    rest_multiplier = 0.92 if rest_days < 3 else 1.0
+    calibrated_xg   = base_xg * home_adv * motivation * injuries * rest_multiplier * weather_factor
+    calibrated_xg  += ref_factor * 0.05
+    return max(0.10, round(calibrated_xg, 2))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -79,12 +93,15 @@ class XgModifiers:
         GK / key-defender absence creates a defensive hole the opponent exploits.
         Striker absence is captured by injuries_factor (Layer 1) — not duplicated.
     """
-    # ── Layer 1: The Winning Method calibration multipliers ───────────────────
+    # ── Layer 1: The Winning Method ultra-calibration factors ────────────────
     home_advantage_multiplier: float = 1.0   # 1.15 home venue; 1.0 neutral/away
     home_motivation:           float = 1.0   # e.g. 1.10 must-win, 0.90 dead rubber
     away_motivation:           float = 1.0
-    home_injuries_factor:      float = 1.0   # e.g. 0.85 when striker is out
+    home_injuries_factor:      float = 1.0   # composite attacking factor; 0.85 striker out
     away_injuries_factor:      float = 1.0
+    home_rest_days:            int   = 7     # days since last match; <3 triggers fatigue ×0.92
+    away_rest_days:            int   = 7
+    ref_factor:                float = 0.0   # referee tendency: +0.05 xG per unit (both teams)
 
     # ── Layer 2: Weather ──────────────────────────────────────────────────────
     precipitation_mm: float = 0.0    # mm/h — heavy rain degrades finishing
@@ -116,6 +133,20 @@ _KEY_DEF_MISSING_BOOST = 0.15   # key CB/FB absent → opponent +0.15 xG
 _XG_FLOOR              = 0.30   # absolute minimum per team (after all adjustments)
 
 
+def _compute_weather_factor(precipitation_mm: float, temperature_c: float) -> float:
+    """Derive a single weather multiplier from OpenWeather fields."""
+    factor = 1.0
+    if precipitation_mm > 10:
+        factor *= _RAIN_SEVERE_FACTOR
+    elif precipitation_mm > 5:
+        factor *= _RAIN_HEAVY_FACTOR
+    if temperature_c < 3:
+        factor *= _COLD_FACTOR
+    elif temperature_c > 35:
+        factor *= _HEAT_FACTOR
+    return factor
+
+
 @dataclass(frozen=True)
 class AdjustedXg:
     """Immutable result of adjust_xg(). Carries both raw and adjusted values."""
@@ -134,16 +165,16 @@ def adjust_xg(
     mods: XgModifiers | None = None,
 ) -> AdjustedXg:
     """
-    Apply all 3 calibration layers to raw xG (The Winning Method pipeline).
+    Apply the full ultra-calibration pipeline to raw xG.
 
     Order of operations:
-      1. Multipliers  — home_advantage × motivation × injuries_factor (per team)
-      2. Weather      — multiplicative global factor (both teams equally)
-      3. Positional   — GK / key-defender absence → additive boost to opponent
-      4. Floor clip   — max(_XG_FLOOR, result)
+      1. Ultra-calibration — calculate_ultra_calibrated_xg() per team
+         (home_advantage × motivation × injuries × rest × weather + ref_factor)
+      2. Positional absences — GK / key-defender out → additive boost to *opponent*
+      3. Floor clip — max(_XG_FLOOR, result)
 
     Args:
-        xg_home: Raw Expected Goals for home team (from stats pipeline or odds)
+        xg_home: Raw Expected Goals for home team
         xg_away: Raw Expected Goals for away team
         mods:    XgModifiers with all calibration inputs
 
@@ -155,21 +186,30 @@ def adjust_xg(
 
     applied: list[str] = []
 
-    # ── Step 1: The Winning Method — 3-multiplier calibration ─────────────────
-    # Home team: home_advantage × motivation × injuries
-    # Away team: no home_advantage multiplier (always 1.0 for visitor)
-    h = calculate_calibrated_xg(
+    # ── Step 1: Ultra-calibration (weather unified inside the function) ────────
+    weather_factor = _compute_weather_factor(mods.precipitation_mm, mods.temperature_c)
+    if weather_factor != 1.0:
+        applied.append(f"weather(×{round(weather_factor, 3)})")
+
+    h = calculate_ultra_calibrated_xg(
         float(xg_home),
         mods.home_advantage_multiplier,
         mods.home_motivation,
         mods.home_injuries_factor,
+        mods.home_rest_days,
+        mods.ref_factor,
+        weather_factor,
     )
-    a = calculate_calibrated_xg(
+    a = calculate_ultra_calibrated_xg(
         float(xg_away),
-        1.0,                       # away team never gets home_advantage bonus
+        1.0,                         # away team never gets home_advantage bonus
         mods.away_motivation,
         mods.away_injuries_factor,
+        mods.away_rest_days,
+        mods.ref_factor,
+        weather_factor,
     )
+
     if mods.home_advantage_multiplier != 1.0:
         applied.append(f"home_advantage(×{mods.home_advantage_multiplier})")
     if mods.home_motivation != 1.0:
@@ -180,27 +220,16 @@ def adjust_xg(
         applied.append(f"home_injuries(×{mods.home_injuries_factor})")
     if mods.away_injuries_factor != 1.0:
         applied.append(f"away_injuries(×{mods.away_injuries_factor})")
+    if mods.home_rest_days < 3:
+        applied.append(f"home_fatigue(rest={mods.home_rest_days}d,×0.92)")
+    if mods.away_rest_days < 3:
+        applied.append(f"away_fatigue(rest={mods.away_rest_days}d,×0.92)")
+    if mods.ref_factor != 0.0:
+        applied.append(f"referee(+{mods.ref_factor * 0.05:.2f}xG)")
 
-    # ── Step 2: Weather — multiplicative, both teams ──────────────────────────
-    if mods.precipitation_mm > 10:
-        h *= _RAIN_SEVERE_FACTOR
-        a *= _RAIN_SEVERE_FACTOR
-        applied.append(f"rain_severe_>10mm(×{_RAIN_SEVERE_FACTOR})")
-    elif mods.precipitation_mm > 5:
-        h *= _RAIN_HEAVY_FACTOR
-        a *= _RAIN_HEAVY_FACTOR
-        applied.append(f"rain_heavy_>5mm(×{_RAIN_HEAVY_FACTOR})")
-
-    if mods.temperature_c < 3:
-        h *= _COLD_FACTOR
-        a *= _COLD_FACTOR
-        applied.append(f"extreme_cold(<3°C,×{_COLD_FACTOR})")
-    elif mods.temperature_c > 35:
-        h *= _HEAT_FACTOR
-        a *= _HEAT_FACTOR
-        applied.append(f"extreme_heat(>35°C,×{_HEAT_FACTOR})")
-
-    # ── Step 3: Positional absences — additive boost to opponent ──────────────
+    # ── Step 2: Positional absences — additive boost to *opponent* ───────────
+    # Home GK/defender absent → away team scores more easily
+    # Away GK/defender absent → home team scores more easily
     if mods.home_gk_injured:
         a += _GK_MISSING_BOOST
         applied.append(f"home_gk_out(away+{_GK_MISSING_BOOST})")
@@ -214,7 +243,7 @@ def adjust_xg(
         h += _KEY_DEF_MISSING_BOOST
         applied.append(f"away_key_def_out(home+{_KEY_DEF_MISSING_BOOST})")
 
-    # ── Step 4: Floor ─────────────────────────────────────────────────────────
+    # ── Step 3: Floor ─────────────────────────────────────────────────────────
     h = max(_XG_FLOOR, h)
     a = max(_XG_FLOOR, a)
 
