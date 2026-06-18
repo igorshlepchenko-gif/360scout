@@ -84,21 +84,21 @@ def is_premium_league(fixture: dict) -> bool:
 
 def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> bool:
     """
-    True when the cheapest available outcome still clears the minimum floor.
+    True only when all three 1X2 odds are present AND the favourite clears the floor.
 
     Logic:
     - Take the three decimal odds (home / draw / away).
     - Discard any that are missing or ≤ 1.0 (invalid).
-    - If none remain → no odds data at all → let the match through
-      (quota may be exhausted; don't silently drop matches for an API reason).
+    - If none remain → no odds data → EXCLUDE the match (not actionable for users).
     - If the smallest valid odd is below min_odds → near-certainty → block.
 
-    Example: home=1.10, draw=5.00, away=12.0 → min=1.10 < 1.40 → blocked.
-    Example: home=1.55, draw=3.80, away=5.20 → min=1.55 ≥ 1.40 → allowed.
+    Example: odds=None                        → False  (no odds — hide match)
+    Example: home=1.10, draw=5.00, away=12.0 → False  (favourite below floor)
+    Example: home=1.55, draw=3.80, away=5.20 → True   (all clear)
     """
     odds = match.get("odds")
     if not odds:
-        return True
+        return False
     candidates = [
         float(odds.get("odds_home") or 0),
         float(odds.get("odds_draw") or 0),
@@ -106,7 +106,7 @@ def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> boo
     ]
     valid = [o for o in candidates if o > 1.0]
     if not valid:
-        return True
+        return False
     return min(valid) >= min_odds
 
 

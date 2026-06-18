@@ -40,6 +40,8 @@ export default function WorldCupPage() {
       const list = (d.matches ?? []).filter((m: WCMatch) => {
         if (seen.has(m.fixture_id)) return false;
         seen.add(m.fixture_id);
+        // hide matches without bookmaker odds — not actionable
+        if (!m.odds || !(m.odds.odds_home > 1)) return false;
         return true;
       });
       setMatches(list);

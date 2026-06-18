@@ -82,7 +82,9 @@ export default function MatchesPage() {
 
   // filter
   const filtered = matches.filter(m => {
-    const { searchQuery, onlyValue, onlyConsensus, onlyWithOdds, leagueGroup } = activeFilters;
+    // Mandatory: hide any match without bookmaker odds — not actionable for users
+    if (!hasMarketOdds(m)) return false;
+    const { searchQuery, onlyValue, onlyConsensus, leagueGroup } = activeFilters;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hit = m.home_team?.toLowerCase().includes(q)
@@ -92,7 +94,6 @@ export default function MatchesPage() {
     }
     if (onlyValue    && !(m.value_bets && Object.values(m.value_bets).some(v => v?.is_value_bet))) return false;
     if (onlyConsensus && m.consensus?.type !== "LOCK") return false;
-    if (onlyWithOdds && !hasMarketOdds(m)) return false;
     if (leagueGroup === "MAJOR" && !isMajorLeague(m)) return false;
     if (leagueGroup === "MINOR" &&  isMajorLeague(m)) return false;
     return true;
