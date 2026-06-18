@@ -47,19 +47,32 @@ API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 ODDS_API_BASE     = "https://api.the-odds-api.com/v4"
 OPENWEATHER_BASE  = "https://api.openweathermap.org/data/2.5"
 
-# ליגות לעקוב — ID של API-Football
-TRACKED_LEAGUES = [
-    {"id": 1,   "name": "מונדיאל 2026",         "season": 2026},
-    {"id": 2,   "name": "ליגת האלופות",         "season": 2025},
-    {"id": 3,   "name": "ליגה אירופית",         "season": 2025},
-    {"id": 39,  "name": "פרמייר ליג",           "season": 2025},
-    {"id": 140, "name": "לה ליגה",              "season": 2025},
-    {"id": 135, "name": "סרייה א",              "season": 2025},
-    {"id": 78,  "name": "בונדסליגה",            "season": 2025},
-    {"id": 61,  "name": "ליג 1",                "season": 2025},
-    {"id": 71,  "name": "ליגה ברזילאית",        "season": 2025},
-    {"id": 253, "name": "MLS",                  "season": 2025},
-]
+# ── Tier 1 & Tier 2 League Whitelist (API-Football IDs) ─────────────────────────
+# The ultra-calibrated Winning Method engine runs for ALL matches in this list.
+# neutral=True → home_advantage_multiplier = 1.0 (tournament on a single host)
+WHITELISTED_LEAGUES: dict[int, dict] = {
+    # ── International Competitions ────────────────────────────────────────────
+    1:   {"name": "FIFA World Cup",              "tier": 1, "neutral": True},
+    4:   {"name": "UEFA Euro",                   "tier": 1, "neutral": True},
+    9:   {"name": "Copa America",                "tier": 1, "neutral": True},
+    2:   {"name": "UEFA Champions League",       "tier": 1, "neutral": False},
+    3:   {"name": "UEFA Europa League",          "tier": 1, "neutral": False},
+    848: {"name": "UEFA Conference League",      "tier": 1, "neutral": False},
+    # ── Tier 1 — Top European Leagues ────────────────────────────────────────
+    39:  {"name": "Premier League",              "tier": 1, "neutral": False},
+    140: {"name": "La Liga",                     "tier": 1, "neutral": False},
+    135: {"name": "Serie A",                     "tier": 1, "neutral": False},
+    78:  {"name": "Bundesliga",                  "tier": 1, "neutral": False},
+    61:  {"name": "Ligue 1",                     "tier": 1, "neutral": False},
+    88:  {"name": "Eredivisie",                  "tier": 1, "neutral": False},
+    94:  {"name": "Primeira Liga",               "tier": 1, "neutral": False},
+    # ── Tier 2 — Additional Top Leagues ──────────────────────────────────────
+    40:  {"name": "Championship",                "tier": 2, "neutral": False},
+    307: {"name": "Saudi Pro League",            "tier": 2, "neutral": False},
+    253: {"name": "MLS",                         "tier": 2, "neutral": False},
+    271: {"name": "Israeli Premier League",      "tier": 2, "neutral": False},
+}
+WHITELISTED_LEAGUE_IDS: frozenset[int] = frozenset(WHITELISTED_LEAGUES.keys())
 
 # מיפוי שמות קבוצות ל-Odds API (שמות שונים לפעמים)
 TEAM_NAME_MAP = {
@@ -70,10 +83,6 @@ TEAM_NAME_MAP = {
 
 # ── Filtering ──────────────────────────────────────────────────────────────────
 
-# Whitelist — league IDs the public feed is allowed to show.
-# Anything outside this set is blocked, regardless of data availability.
-TRACKED_LEAGUE_IDS: set[int] = {lg["id"] for lg in TRACKED_LEAGUES}
-
 # Minimum decimal odds for the market's shortest-priced outcome.
 # If the heavy favourite is below this floor, the match is a near-certainty
 # with no meaningful value — skip it even when confidence is high.
@@ -81,8 +90,8 @@ MIN_MARKET_ODDS: float = 1.40
 
 
 def is_premium_league(fixture: dict) -> bool:
-    """True only for fixtures whose league.id is in TRACKED_LEAGUE_IDS."""
-    return fixture.get("league", {}).get("id") in TRACKED_LEAGUE_IDS
+    """True only for fixtures whose league.id is in WHITELISTED_LEAGUE_IDS."""
+    return fixture.get("league", {}).get("id") in WHITELISTED_LEAGUE_IDS
 
 
 def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> bool:
@@ -115,13 +124,13 @@ def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> boo
 
 async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     """
-    משוך משחקים מכל העולם בסדר עדיפויות:
-    1. חיים עכשיו  — כל ליגה בכל מדינה
+    משוך fixtures לפי עדיפות:
+    1. חיים עכשיו  — כל ליגה בעולם (API מסנן ל-Tier1/2 אחר כך)
     2. מתוכננים היום
     3. 7 ימים אחורה (fallback כשאין אחרים)
 
-    אין סינון לפי ליגה — המסנן המתמטי (passes_odds_threshold + 8% edge
-    לנתוני שוק) מחליף את הרשימה הסטטית.
+    לאחר ה-fetch מתבצע Whitelist filter: נשארים רק fixtures מ-WHITELISTED_LEAGUE_IDS
+    (Tier 1 & Tier 2 — 17 ליגות בסה"כ).
     """
     today = datetime.now().strftime("%Y-%m-%d")
     all_fixtures = []
@@ -196,6 +205,14 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
             finished.sort(key=lambda f: f.get("fixture", {}).get("date", ""), reverse=True)
             all_fixtures.extend(finished[:80])
             logger.info(f"Recent finished: {len(finished)} fixtures worldwide (capped at 80)")
+
+    # Whitelist filter — Tier 1 & Tier 2 leagues only
+    _before_wl = len(all_fixtures)
+    all_fixtures = [
+        f for f in all_fixtures
+        if f.get("league", {}).get("id") in WHITELISTED_LEAGUE_IDS
+    ]
+    logger.info(f"Whitelist filter: {_before_wl} → {len(all_fixtures)} Tier1/2 fixtures")
 
     # מיין סופי: חיים → מתוכננים → אחרונים
     status_order = {"live": 0, "scheduled": 1, "finished": 2}
@@ -722,8 +739,8 @@ def build_match_analysis_sync(
     # Exact ID match cannot hit the wrong game; fuzzy name can.
     odds = fixture_odds if fixture_odds else find_odds_for_match(all_odds, home.get("name", ""), away.get("name", ""))
 
-    # World Cup (league_id=1) is played at a neutral venue — no home advantage
-    _is_neutral = league.get("id", 0) == 1
+    # Neutral venue: World Cup, UEFA Euro, Copa America — no home advantage
+    _is_neutral = WHITELISTED_LEAGUES.get(league.get("id", 0), {}).get("neutral", False)
 
     # Totals lookup — needed for Option-B xG calibration; fetch once, reuse below
     _totals = find_totals_for_match(all_odds, home.get("name", ""), away.get("name", ""))
@@ -795,9 +812,8 @@ def build_match_analysis_sync(
         xg_home, xg_away, _xg_method = _calibrate_xg_from_market(odds, _totals, _is_neutral)
         _xg_from_market = True
 
-    # World Cup (league_id=1) is played at neutral venues — no home advantage
-    league_id   = league.get("id", 0)
-    venue_type  = "neutral" if league_id == 1 else "home"
+    league_id  = league.get("id", 0)
+    venue_type = "neutral" if WHITELISTED_LEAGUES.get(league_id, {}).get("neutral", False) else "home"
 
     # ── In-play xG decay ─────────────────────────────────────────────────────
     # Scale pre-match xG by fraction of time remaining, then add goals already

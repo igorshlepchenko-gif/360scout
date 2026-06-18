@@ -9,9 +9,14 @@ import TelegramCTABanner from "@/components/TelegramCTABanner";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// ליגות בכירות — API-Football IDs
-const MAJOR_LEAGUE_IDS = [1, 2, 3, 39, 140, 135, 78, 61];
-const MAJOR_LEAGUE_KEYWORDS = ["champions", "premier", "liga", "serie a", "bundesliga", "ligue 1", "world cup", "מונדיאל", "אלופות", "פרמייר"];
+// Tier 1 & Tier 2 whitelist — API-Football IDs (mirrors backend WHITELISTED_LEAGUE_IDS)
+const MAJOR_LEAGUE_IDS = [1, 2, 3, 4, 9, 39, 40, 61, 78, 88, 94, 135, 140, 253, 271, 307, 848];
+const MAJOR_LEAGUE_KEYWORDS = [
+  "champions", "premier", "liga", "serie a", "bundesliga", "ligue 1",
+  "world cup", "europa", "conference", "eredivisie", "primeira",
+  "championship", "saudi", "mls", "ligat",
+  "מונדיאל", "אלופות", "פרמייר", "אירופאית",
+];
 
 interface Match {
   fixture_id: number;

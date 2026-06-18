@@ -2,16 +2,26 @@
 import { useState, useRef, useEffect } from "react";
 import MatchCard from "./MatchCard";
 
-/* ── League grouping config ── */
+/* ── League grouping config — Tier 1 & Tier 2 whitelist ── */
 const LEAGUE_GROUPS = [
-  { key: "world-cup",        label: "🏆 מונדיאל 2026",    match: (s: string) => /world.?cup|fifa|מונדיאל/i.test(s) },
-  { key: "premier-league",   label: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 ליגה אנגלית",  match: (s: string) => /premier.?league/i.test(s) },
-  { key: "la-liga",          label: "🇪🇸 ליגה ספרדית",    match: (s: string) => /la.?liga|laliga/i.test(s) },
-  { key: "bundesliga",       label: "🇩🇪 בונדסליגה",       match: (s: string) => /bundesliga/i.test(s) },
-  { key: "serie-a",          label: "🇮🇹 סריה א",          match: (s: string) => /serie.?a/i.test(s) },
-  { key: "champions-league", label: "⭐ צ'מפיונס",         match: (s: string) => /champions.?league/i.test(s) },
-  { key: "usl",              label: "🇺🇸 USL",              match: (s: string) => /^usl/i.test(s) },
-  { key: "asean",            label: "🌏 אסיה",              match: (s: string) => /asean|asian|afc/i.test(s) },
+  // International first — most prominent
+  { key: "world-cup",        label: "🏆 מונדיאל 2026",      match: (s: string) => /world.?cup|fifa|מונדיאל/i.test(s) },
+  { key: "euros-copa",       label: "🌍 יורו / קופה",        match: (s: string) => /\beuro\b|copa.?america|nations.?cup/i.test(s) },
+  { key: "champions-league", label: "⭐ צ'מפיונס",           match: (s: string) => /champions.?league/i.test(s) },
+  { key: "europa",           label: "🟠 אירופה / קונפרנס",   match: (s: string) => /europa.?league|conference.?league/i.test(s) },
+  // Tier 1 European leagues
+  { key: "premier-league",   label: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 ליגה אנגלית",    match: (s: string) => /premier.?league/i.test(s) },
+  { key: "championship",     label: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ",      match: (s: string) => /\bchampionship\b/i.test(s) },
+  { key: "la-liga",          label: "🇪🇸 ליגה ספרדית",       match: (s: string) => /la.?liga|laliga/i.test(s) },
+  { key: "bundesliga",       label: "🇩🇪 בונדסליגה",         match: (s: string) => /bundesliga/i.test(s) },
+  { key: "serie-a",          label: "🇮🇹 סריה א",            match: (s: string) => /serie.?a/i.test(s) },
+  { key: "ligue-1",          label: "🇫🇷 ליג 1",             match: (s: string) => /ligue.?1/i.test(s) },
+  { key: "eredivisie",       label: "🇳🇱 ארדיביזיה",         match: (s: string) => /eredivisie/i.test(s) },
+  { key: "primeira",         label: "🇵🇹 פורטוגל",           match: (s: string) => /primeira|liga.?portugal/i.test(s) },
+  // Tier 2
+  { key: "saudi",            label: "🇸🇦 ערב הסעודית",       match: (s: string) => /saudi|roshn/i.test(s) },
+  { key: "mls",              label: "🇺🇸 MLS",               match: (s: string) => /\bmls\b|major.?league.?soccer/i.test(s) },
+  { key: "israel",           label: "🇮🇱 ישראל",             match: (s: string) => /israel|ligat/i.test(s) },
 ];
 
 function getGroupKey(league: string): string {
