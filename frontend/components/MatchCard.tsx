@@ -417,6 +417,52 @@ function WinningMethodTable({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// ===== Decimal Odds Strip (always visible) =====
+function OddsStrip({ odds, valueBets }: { odds: MatchOdds; valueBets?: ValueBets }) {
+  const items = [
+    { sign: "1", val: odds.odds_home, vb: valueBets?.home },
+    { sign: "X", val: odds.odds_draw, vb: valueBets?.draw },
+    { sign: "2", val: odds.odds_away, vb: valueBets?.away },
+  ];
+  if (!odds.odds_home && !odds.odds_away) return null;
+  return (
+    <div style={{
+      display: "flex", gap: 6, direction: "ltr",
+      marginTop: 8, padding: "6px 0 2px",
+    }}>
+      {items.map(item => {
+        const isValue = !!item.vb?.is_value_bet;
+        return (
+          <div key={item.sign} style={{
+            flex: 1, textAlign: "center",
+            background: isValue ? "rgba(16,185,129,0.08)" : "rgba(255,255,255,0.03)",
+            border: `1px solid ${isValue ? "rgba(16,185,129,0.3)" : "rgba(255,255,255,0.07)"}`,
+            borderRadius: 8, padding: "5px 4px",
+          }}>
+            <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, marginBottom: 2 }}>{item.sign}</div>
+            <div style={{
+              fontSize: 13, fontWeight: 800, fontFamily: "monospace",
+              color: isValue ? "#10b981" : item.val ? "#cbd5e1" : "#334155",
+            }}>
+              {item.val ? item.val.toFixed(2) : "—"}
+            </div>
+            {isValue && (
+              <div style={{ fontSize: 8, color: "#10b981", marginTop: 1 }}>
+                +{item.vb!.edge_percent.toFixed(1)}%
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {odds.bookmaker && (
+        <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 4 }}>
+          <span style={{ fontSize: 8, color: "#334155" }}>{odds.bookmaker}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const POS_HE: Record<string, string> = { G: "שוע", D: "הגנ", M: "קישור", F: "התקפ" };
 
 // ===== Lineup Display =====
@@ -918,6 +964,11 @@ export default function MatchCard({
             <div style={{ flexGrow: displayProbs.away, background: "#ef4444" }} />
           </div>
         </div>
+
+        {/* ── DECIMAL ODDS STRIP ── */}
+        {odds?.odds_home && (
+          <OddsStrip odds={odds} valueBets={value_bets ?? undefined} />
+        )}
 
         {/* ── CONSENSUS LOCK BANNER ── */}
         {consensusData?.is_consensus_lock && (

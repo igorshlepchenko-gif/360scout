@@ -157,11 +157,11 @@ export default function MatchesPage() {
               }}>
                 {/* Header */}
                 <div style={{
-                  display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1fr 1fr",
+                  display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1.4fr 1fr 1fr",
                   padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)",
                   background: "rgba(255,255,255,0.02)",
                 }}>
-                  {["משחק", "ליגה", "ביטחון", "חיזוי", "Value Bet", "קונסנזוס"].map(h => (
+                  {["משחק", "ליגה", "ביטחון", "חיזוי", "יחסים 1·X·2", "Value Bet", "קונסנזוס"].map(h => (
                     <span key={h} style={{ color: "#475569", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>{h}</span>
                   ))}
                 </div>
@@ -173,7 +173,7 @@ export default function MatchesPage() {
 
                   return (
                     <div key={m.fixture_id} style={{
-                      display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1fr 1fr",
+                      display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1.4fr 1fr 1fr",
                       padding: "14px 20px",
                       borderBottom: i < sorted.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
                       background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
@@ -217,6 +217,26 @@ export default function MatchesPage() {
                             {Math.round(final[o] * 100)}%
                           </span>
                         ))}
+                      </div>
+
+                      {/* יחסים 1·X·2 (decimal) */}
+                      <div style={{ display: "flex", gap: 4, direction: "ltr" }}>
+                        {(["odds_home", "odds_draw", "odds_away"] as const).map((k, idx) => {
+                          const val = m.odds?.[k];
+                          const label = ["1", "X", "2"][idx];
+                          return (
+                            <div key={k} style={{
+                              textAlign: "center",
+                              background: "rgba(255,255,255,0.04)",
+                              borderRadius: 6, padding: "3px 5px", minWidth: 36,
+                            }}>
+                              <div style={{ fontSize: 8, color: "#475569", fontWeight: 700 }}>{label}</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: val ? "#cbd5e1" : "#334155" }}>
+                                {val ? val.toFixed(2) : "—"}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       {/* Value Bet */}
@@ -285,7 +305,7 @@ export default function MatchesPage() {
                     </div>
 
                     {/* Row 3: Prediction bars — direction:ltr so home (1) is LEFT, under the home team */}
-                    <div style={{ display: "flex", gap: 6, marginBottom: 10, direction: "ltr" }}>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8, direction: "ltr" }}>
                       {(["home", "draw", "away"] as const).map(o => (
                         <div key={o} style={{ flex: 1, textAlign: "center" }}>
                           <div style={{ height: 4, borderRadius: 99, marginBottom: 4, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
@@ -302,7 +322,33 @@ export default function MatchesPage() {
                       ))}
                     </div>
 
-                    {/* Row 4: Tags */}
+                    {/* Row 4: Decimal odds (1 · X · 2) */}
+                    {m.odds?.odds_home && (
+                      <div style={{ display: "flex", gap: 6, marginBottom: 10, direction: "ltr" }}>
+                        {(["odds_home", "odds_draw", "odds_away"] as const).map((k, idx) => {
+                          const val = m.odds?.[k];
+                          const label = ["1", "X", "2"][idx];
+                          const isVB = idx === 0 ? !!m.value_bets?.home?.is_value_bet
+                                     : idx === 1 ? !!m.value_bets?.draw?.is_value_bet
+                                     : !!m.value_bets?.away?.is_value_bet;
+                          return (
+                            <div key={k} style={{
+                              flex: 1, textAlign: "center",
+                              background: isVB ? "rgba(16,185,129,0.08)" : "rgba(255,255,255,0.03)",
+                              border: `1px solid ${isVB ? "rgba(16,185,129,0.3)" : "rgba(255,255,255,0.07)"}`,
+                              borderRadius: 8, padding: "5px 4px",
+                            }}>
+                              <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, fontFamily: "monospace", color: isVB ? "#10b981" : val ? "#cbd5e1" : "#334155" }}>
+                                {val ? val.toFixed(2) : "—"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Row 5: Tags */}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {vbEntry && (
                         <span style={{
