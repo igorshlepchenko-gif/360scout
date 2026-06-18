@@ -372,11 +372,18 @@ async def fetch_odds_apisports(fixture_id: int) -> dict | None:
                 bookmakers[0],
             )
             bets = bm.get("bets") or bm.get("markets") or []
-            market = next((m for m in bets if m.get("name") == "Match Winner"), None)
+            # API-Football uses "Match Winner"; some regional bookmakers use "1X2" or "Match Result"
+            _1x2_names = ("Match Winner", "1X2", "Match Result", "Home/Draw/Away")
+            market = next((m for m in bets if m.get("name") in _1x2_names), None)
             if not market:
                 return None
 
-            vals = {v["value"]: float(v["odd"]) for v in market.get("values", []) if v.get("odd")}
+            # v["value"] key guard prevents KeyError when API schema varies
+            vals = {
+                v["value"]: float(v["odd"])
+                for v in market.get("values", [])
+                if v.get("value") and v.get("odd")
+            }
             home_odds = vals.get("Home")
             draw_odds = vals.get("Draw")
             away_odds = vals.get("Away")
@@ -687,10 +694,10 @@ def build_match_analysis_sync(
     home_score = goals.get("home") or 0
     away_score = goals.get("away") or 0
 
-    # מצא יחסים מוקדם — ישמשו לכיול xG כשאין סטטיסטיקות
-    odds = find_odds_for_match(all_odds, home.get("name", ""), away.get("name", ""))
-    if odds is None and fixture_odds:
-        odds = fixture_odds
+    # Priority: fixture_odds (API-Football by fixture ID — exact) beats
+    # find_odds_for_match (The Odds API by fuzzy name — broader but imprecise).
+    # Exact ID match cannot hit the wrong game; fuzzy name can.
+    odds = fixture_odds if fixture_odds else find_odds_for_match(all_odds, home.get("name", ""), away.get("name", ""))
 
     # World Cup (league_id=1) is played at a neutral venue — no home advantage
     _is_neutral = league.get("id", 0) == 1

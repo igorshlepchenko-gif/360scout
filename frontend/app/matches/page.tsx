@@ -27,7 +27,7 @@ interface Match {
   value_bets: Record<string, { is_value_bet: boolean; rating: string; edge_percent: number; bookmaker_odds: number }> | null;
   consensus: { type: string };
   weather: { temperature_celsius: number; weather_condition: string; source: string };
-  odds?: { odds_home?: number; odds_draw?: number; odds_away?: number } | null;
+  odds?: { bookmaker?: string; odds_home?: number; odds_draw?: number; odds_away?: number } | null;
 }
 
 const hasMarketOdds = (m: Match): boolean => !!(m.odds && m.odds.odds_home && m.odds.odds_home > 1);
@@ -328,9 +328,8 @@ export default function MatchesPage() {
                         {(["odds_home", "odds_draw", "odds_away"] as const).map((k, idx) => {
                           const val = m.odds?.[k];
                           const label = ["1", "X", "2"][idx];
-                          const isVB = idx === 0 ? !!m.value_bets?.home?.is_value_bet
-                                     : idx === 1 ? !!m.value_bets?.draw?.is_value_bet
-                                     : !!m.value_bets?.away?.is_value_bet;
+                          const vbKey = (["home", "draw", "away"] as const)[idx];
+                          const isVB = !!m.value_bets?.[vbKey]?.is_value_bet;
                           return (
                             <div key={k} style={{
                               flex: 1, textAlign: "center",
