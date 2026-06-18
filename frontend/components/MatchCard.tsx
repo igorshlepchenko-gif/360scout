@@ -417,43 +417,43 @@ function WinningMethodTable({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// ===== Over/Under 2.5 Winning Method mini-table =====
+// ===== Over/Under 2.5 Winning Method comparative table =====
+// Columns: אופציה | הסתברות המודל | יחס עולמי | הסתברות משתמעת | ערך | המלצה סופית
 function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
   const rows = [
     {
-      label: `אובר ${gs.line}`,
-      emoji: "🔼",
-      prob:  gs.over_prob,
-      odds:  gs.over_odds,
-      edge:  gs.over_edge,
-      rating: gs.over_rating,
+      label:    `אובר ${gs.line}`,
+      emoji:    "🔼",
+      prob:     gs.over_prob,
+      odds:     gs.over_odds,
+      edge:     gs.over_edge,
       isSignal: gs.signal === "OVER",
     },
     {
-      label: `אנדר ${gs.line}`,
-      emoji: "🔽",
-      prob:  gs.under_prob,
-      odds:  gs.under_odds,
-      edge:  gs.under_edge,
-      rating: gs.under_rating,
+      label:    `אנדר ${gs.line}`,
+      emoji:    "🔽",
+      prob:     gs.under_prob,
+      odds:     gs.under_odds,
+      edge:     gs.under_edge,
       isSignal: gs.signal === "UNDER",
     },
   ];
 
-  const fairOdds = (p: number) => p > 0 ? (1 / p).toFixed(2) : "—";
+  // implied probability = (1 / market_odds) × 100
+  const impliedProb = (odds: number) => odds > 0 ? ((1 / odds) * 100).toFixed(1) + "%" : "—";
 
   const TH: React.CSSProperties = {
-    padding: "7px 10px", fontSize: 9, fontWeight: 700,
+    padding: "6px 8px", fontSize: 9, fontWeight: 700,
     color: "#475569", textAlign: "center",
     background: "rgba(15,23,42,0.8)",
     whiteSpace: "nowrap",
   };
   const TD: React.CSSProperties = {
-    padding: "7px 10px", fontSize: 11, textAlign: "center",
+    padding: "6px 8px", fontSize: 11, textAlign: "center",
     fontFamily: "monospace", color: "#cbd5e1",
   };
   const LABEL: React.CSSProperties = {
-    padding: "7px 10px", fontSize: 11, fontWeight: 700,
+    padding: "6px 8px", fontSize: 11, fontWeight: 700,
     color: "#94a3b8", whiteSpace: "nowrap",
   };
 
@@ -471,47 +471,83 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
         )}
       </div>
       <div style={{ border: "1px solid #1e293b", borderRadius: 8, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }} dir="ltr">
+        <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
           <thead>
             <tr style={{ borderBottom: "1px solid #a78bfa44" }}>
-              <th style={{ ...TH, textAlign: "right" }}>ליין</th>
-              <th style={TH}>הסתברות</th>
-              <th style={TH}>יחס הוגן</th>
-              <th style={TH}>יחס שוק</th>
-              <th style={TH}>Edge</th>
+              <th style={{ ...TH, textAlign: "right" }}>אופציה</th>
+              <th style={TH}>הסתברות המודל</th>
+              <th style={TH}>יחס עולמי</th>
+              <th style={TH}>הסתברות משתמעת</th>
+              <th style={TH}>ערך</th>
+              <th style={TH}>המלצה סופית</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => {
-              const isValue = r.edge >= 5;
+              const isValue = r.edge > 0;
+              const isStrong = r.edge >= 5;
               return (
                 <tr key={r.label} style={{
                   background: r.isSignal
                     ? "rgba(167,139,250,0.07)"
-                    : isValue ? "rgba(74,222,128,0.04)" : undefined,
+                    : isStrong ? "rgba(74,222,128,0.04)" : undefined,
+                  borderBottom: "1px solid #0f1318",
                 }}>
+                  {/* אופציה */}
                   <td style={{
                     ...LABEL,
-                    color: r.isSignal ? "#a78bfa" : isValue ? "#4ade80" : "#94a3b8",
-                    borderRight: "1px solid #1e293b",
+                    color: r.isSignal ? "#a78bfa" : isStrong ? "#4ade80" : "#94a3b8",
+                    borderLeft: "1px solid #1e293b",
                   }}>
                     {r.emoji} {r.label}
-                    {r.isSignal && <span style={{ fontSize: 8, marginRight: 4, color: "#a78bfa" }}>▶ VALUE</span>}
+                    {r.isSignal && (
+                      <span style={{ fontSize: 8, marginRight: 4, color: "#a78bfa" }}>▶ VALUE</span>
+                    )}
                   </td>
+                  {/* הסתברות המודל */}
                   <td style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 13 }}>
                     {(r.prob * 100).toFixed(1)}%
                   </td>
-                  <td style={{ ...TD, color: "#64748b" }}>
-                    {fairOdds(r.prob)}
-                  </td>
-                  <td style={{ ...TD, fontWeight: 600 }}>
+                  {/* יחס עולמי */}
+                  <td style={{ ...TD, fontWeight: 600, color: "#94a3b8" }}>
                     {r.odds > 0 ? r.odds.toFixed(2) : "—"}
                   </td>
+                  {/* הסתברות משתמעת */}
+                  <td style={{ ...TD, color: "#64748b" }}>
+                    {impliedProb(r.odds)}
+                  </td>
+                  {/* ערך */}
                   <td style={{
                     ...TD, fontWeight: 700,
                     color: r.edge >= 15 ? "#4ade80" : r.edge >= 5 ? "#f59e0b" : r.edge < 0 ? "#ef4444" : "#475569",
                   }}>
                     {r.edge > 0 ? `+${r.edge.toFixed(1)}%` : `${r.edge.toFixed(1)}%`}
+                  </td>
+                  {/* המלצה סופית */}
+                  <td style={{ ...TD }}>
+                    {isValue ? (
+                      <span style={{
+                        display: "inline-block", fontSize: 10, fontWeight: 700,
+                        padding: "2px 7px", borderRadius: 99,
+                        background: "rgba(74,222,128,0.12)",
+                        border: "1px solid rgba(74,222,128,0.35)",
+                        color: "#4ade80",
+                        whiteSpace: "nowrap",
+                      }}>
+                        🟢 מומלץ
+                      </span>
+                    ) : (
+                      <span style={{
+                        display: "inline-block", fontSize: 10, fontWeight: 700,
+                        padding: "2px 7px", borderRadius: 99,
+                        background: "rgba(239,68,68,0.08)",
+                        border: "1px solid rgba(239,68,68,0.25)",
+                        color: "#ef4444",
+                        whiteSpace: "nowrap",
+                      }}>
+                        🔴 ללא ערך
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

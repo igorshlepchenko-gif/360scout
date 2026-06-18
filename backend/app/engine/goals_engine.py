@@ -9,21 +9,21 @@ Architecture:
   §4  calculate_goals_value() — main entry point
   §5  injury_flags_from_list() — API injury list → XgModifiers
 
-Why scipy.stats.poisson instead of manual PMF?
-  scipy.pmf handles edge cases (overflow at high lambda, numerical precision)
-  and reads exactly like the textbook formula: P(X=k | λ) — making audits easy.
-  Results are mathematically identical to the manual exp(-λ)λ^k/k! approach.
+Poisson PMF: P(X=k | λ) = exp(-λ)·λ^k/k!
+  Implemented manually (no scipy) using math.exp + math.factorial.
+  Results are equivalent to scipy.stats.poisson.pmf for typical football
+  xG values (λ ≈ 0.3–4.0). The joint matrix covers 0..10 goals per team.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import logging
+import math
 from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
-from scipy.stats import poisson
 
 logger = logging.getLogger(__name__)
 
@@ -240,22 +240,30 @@ def _ou_rating(edge_pct: float) -> str:
     return "NONE"
 
 
+def _poisson_pmf(lam: float, max_goals: int) -> np.ndarray:
+    """
+    P(X=k | λ) = exp(-λ) · λ^k / k!  for k = 0..max_goals.
+    Manual formula — identical to scipy.stats.poisson.pmf for λ in typical
+    football xG range (0.3–4.0), no external dependency required.
+    """
+    return np.array(
+        [math.exp(-lam) * (lam ** k) / math.factorial(k) for k in range(max_goals + 1)]
+    )
+
+
 def _poisson_matrix(lh: float, la: float, max_goals: int = 10) -> np.ndarray:
     """
     Build joint probability matrix P(home=h, away=a) for h,a in [0..max_goals].
 
-    Uses scipy.stats.poisson.pmf — equivalent to manual exp(-λ)λ^k/k! but
-    with numerical guards against overflow at high lambda values.
-
+    Uses the manual Poisson PMF: exp(-λ)·λ^k/k!
     The matrix is renormalized after construction to compensate for the
     probability mass truncated at max_goals (typically <0.1% for max_goals=10).
     """
-    ks       = np.arange(max_goals + 1)
-    home_pmf = poisson.pmf(ks, lh)          # P(home_goals = k) for k=0..max
-    away_pmf = poisson.pmf(ks, la)          # P(away_goals = k) for k=0..max
-    matrix   = np.outer(home_pmf, away_pmf) # (max+1) × (max+1) joint prob
+    home_pmf = _poisson_pmf(lh, max_goals)
+    away_pmf = _poisson_pmf(la, max_goals)
+    matrix   = np.outer(home_pmf, away_pmf)  # (max+1) × (max+1) joint prob
     total    = float(matrix.sum()) or 1.0
-    return matrix / total                   # renormalize: sum to exactly 1.0
+    return matrix / total                     # renormalize: sum to exactly 1.0
 
 
 def calculate_goals_value(
