@@ -1,9 +1,9 @@
 """
-360SCOUT — Goals Market Engine  v3.0
+360SCOUT — Goals Market Engine  v4.0  (Phenomenal xG Engine)
 Full Poisson-based Over/Under prediction with Ultra xG Calibration.
 
 Architecture:
-  §0  calculate_ultra_calibrated_xg() — 6-factor ultra calibration (The Winning Method)
+  §0  calculate_ultra_calibrated_xg() — 9-factor phenomenal calibration
   §1  XgModifiers   — all calibration inputs
   §2  adjust_xg()   — applies calibration + positional injury boosts
   §3  GoalsValueSignal — immutable result of a full O/U analysis
@@ -12,10 +12,14 @@ Architecture:
 
 xG Calibration pipeline — calculate_ultra_calibrated_xg():
   xG × home_advantage × motivation × injuries × rest_multiplier × weather_factor
+     × xt_modifier × lineup_value_ratio × lead_behavior
   + ref_factor × 0.05
 
-  rest_multiplier = 0.92 if rest_days < 3 else 1.0
-  weather_factor  = computed from precipitation_mm + temperature_c
+  rest_multiplier    = 0.92 if rest_days < 3 else 1.0
+  weather_factor     = computed from precipitation_mm + temperature_c
+  xt_modifier        = Expected Threat — dangerous-zone ball movement quality
+  lineup_value_ratio = market value of starting XI vs full squad (1.0 = full strength)
+  lead_behavior      = >1.0 keeps pressing when ahead; <1.0 sits back (defensive block)
 
 Positional layer (additive, separate):
   GK / key-defender absent → +0.15–0.25 to opponent's xG
@@ -42,32 +46,38 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def calculate_ultra_calibrated_xg(
-    base_xg:        float,
-    home_adv:       float = 1.0,
-    motivation:     float = 1.0,
-    injuries:       float = 1.0,
-    rest_days:      int   = 7,
-    ref_factor:     float = 0.0,
-    weather_factor: float = 1.0,
+    base_xg:             float,
+    home_adv:            float = 1.0,
+    motivation:          float = 1.0,
+    injuries:            float = 1.0,
+    rest_days:           int   = 7,
+    ref_factor:          float = 0.0,
+    weather_factor:      float = 1.0,
+    xt_modifier:         float = 1.0,
+    lineup_value_ratio:  float = 1.0,
+    lead_behavior:       float = 1.0,
 ) -> float:
     """
-    World-class xG calibration — The Winning Method ultra model.
+    Phenomenal xG calibration — The Winning Method ultra model v4.
 
     Multipliers (applied in order):
-      home_adv        : crowd + pitch boost (1.15 home, 1.0 away/neutral)
-      motivation      : match-importance scaling (1.10 must-win, 0.90 dead rubber)
-      injuries        : composite attacking-output factor (0.85 striker out)
-      rest_multiplier : fatigue penalty when rest_days < 3 (×0.92)
-      weather_factor  : derived from precipitation + temperature
+      home_adv           : crowd + pitch boost (1.15 home, 1.0 away/neutral)
+      motivation         : match-importance / tactical style edge
+      injuries           : composite attacking-output factor (0.85 per striker out)
+      rest_multiplier    : fatigue penalty when rest_days < 3 (×0.92)
+      weather_factor     : derived from precipitation + temperature
+      xt_modifier        : Expected Threat — dangerous-zone ball movement (xT proxy)
+      lineup_value_ratio : market value ratio of starting XI; <1.0 = rotation/injuries
+      lead_behavior      : >1.0 keeps pressing when ahead; <1.0 parks bus when leading
 
     Additive correction:
-      ref_factor × 0.05 : referee tendency added directly to xG
-                          (positive = lenient/many stoppages; negative = strict)
+      ref_factor × 0.05 : referee tendency (positive = lenient; negative = strict)
 
     Returns calibrated xG, floored at 0.10.
     """
     rest_multiplier = 0.92 if rest_days < 3 else 1.0
     calibrated_xg   = base_xg * home_adv * motivation * injuries * rest_multiplier * weather_factor
+    calibrated_xg  *= xt_modifier * lineup_value_ratio * lead_behavior
     calibrated_xg  += ref_factor * 0.05
     return max(0.10, round(calibrated_xg, 2))
 
@@ -82,16 +92,20 @@ class XgModifiers:
     All contextual inputs that calibrate raw xG before the Poisson matrix.
     All fields default to neutral (no effect).
 
-    Three calibration layers (applied in order by adjust_xg):
+    Four calibration layers (applied in order by adjust_xg):
       Layer 1 — Multipliers (The Winning Method):
         home_advantage_multiplier : crowd + pitch boost for home team
-        home_motivation / away_motivation : match-importance scaling
+        home_motivation / away_motivation : match-importance / tactical edge
         home_injuries_factor / away_injuries_factor : composite attacking factor
       Layer 2 — Weather (multiplicative, both teams equally):
         precipitation_mm, temperature_c
       Layer 3 — Positional absences (additive, boosts *opponent* xG):
         GK / key-defender absence creates a defensive hole the opponent exploits.
         Striker absence is captured by injuries_factor (Layer 1) — not duplicated.
+      Layer 4 — Phenomenal Engine (multiplicative per team):
+        xt_modifier        : Expected Threat — ball movement into dangerous zones
+        lineup_value_ratio : starting XI market value vs full squad (<1.0 = rotation)
+        lead_behavior      : attacking intent when ahead (>1.0 keeps pressing)
     """
     # ── Layer 1: The Winning Method ultra-calibration factors ────────────────
     home_advantage_multiplier: float = 1.0   # 1.15 home venue; 1.0 neutral/away
@@ -112,6 +126,14 @@ class XgModifiers:
     away_gk_injured:           bool = False
     home_key_defender_injured: bool = False
     away_key_defender_injured: bool = False
+
+    # ── Layer 4: Phenomenal Engine (v4 additions) ─────────────────────────────
+    home_xt_modifier:        float = 1.0  # Expected Threat — dangerous-zone ball movement
+    away_xt_modifier:        float = 1.0  # >1.0 efficient creation; <1.0 peripheral shots only
+    home_lineup_value_ratio: float = 1.0  # starting XI market value vs full squad
+    away_lineup_value_ratio: float = 1.0  # <1.0 = rotation (Cup rest, fixture congestion)
+    home_lead_behavior:      float = 1.0  # >1.0 keeps pressing when leading; <1.0 parks bus
+    away_lead_behavior:      float = 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -199,6 +221,9 @@ def adjust_xg(
         mods.home_rest_days,
         mods.ref_factor,
         weather_factor,
+        mods.home_xt_modifier,
+        mods.home_lineup_value_ratio,
+        mods.home_lead_behavior,
     )
     a = calculate_ultra_calibrated_xg(
         float(xg_away),
@@ -208,6 +233,9 @@ def adjust_xg(
         mods.away_rest_days,
         mods.ref_factor,
         weather_factor,
+        mods.away_xt_modifier,
+        mods.away_lineup_value_ratio,
+        mods.away_lead_behavior,
     )
 
     if mods.home_advantage_multiplier != 1.0:
@@ -226,6 +254,18 @@ def adjust_xg(
         applied.append(f"away_fatigue(rest={mods.away_rest_days}d,×0.92)")
     if mods.ref_factor != 0.0:
         applied.append(f"referee(+{mods.ref_factor * 0.05:.2f}xG)")
+    if mods.home_xt_modifier != 1.0:
+        applied.append(f"home_xT(×{mods.home_xt_modifier})")
+    if mods.away_xt_modifier != 1.0:
+        applied.append(f"away_xT(×{mods.away_xt_modifier})")
+    if mods.home_lineup_value_ratio != 1.0:
+        applied.append(f"home_lineup(×{mods.home_lineup_value_ratio})")
+    if mods.away_lineup_value_ratio != 1.0:
+        applied.append(f"away_lineup(×{mods.away_lineup_value_ratio})")
+    if mods.home_lead_behavior != 1.0:
+        applied.append(f"home_lead_behavior(×{mods.home_lead_behavior})")
+    if mods.away_lead_behavior != 1.0:
+        applied.append(f"away_lead_behavior(×{mods.away_lead_behavior})")
 
     # ── Step 2: Positional absences — additive boost to *opponent* ───────────
     # Home GK/defender absent → away team scores more easily

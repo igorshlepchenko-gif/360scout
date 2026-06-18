@@ -952,6 +952,26 @@ def build_match_analysis_sync(
                 f"[Matchup] {matchup['matchup_label']}  "
                 f"home_mot={xg_mods.home_motivation}  away_mot={xg_mods.away_motivation}"
             )
+
+        # ── Phenomenal Engine v4: xT + lead_behavior (from playstyle) ─────────
+        if home_playstyle:
+            xg_mods.home_xt_modifier  = home_playstyle.get("xt_modifier",          1.0)
+            xg_mods.home_lead_behavior = home_playstyle.get("lead_behavior_factor", 1.0)
+        if away_playstyle:
+            xg_mods.away_xt_modifier  = away_playstyle.get("xt_modifier",          1.0)
+            xg_mods.away_lead_behavior = away_playstyle.get("lead_behavior_factor", 1.0)
+
+        # ── lineup_value_ratio — confirmed starting XI quality signal ──────────
+        # Kicks in ~1 hour before kickoff when official lineups are published.
+        # Each missing outfield slot vs full XI reduces quality by 4%.
+        if home_lineup_data:
+            _n_home = len(home_lineup_data.get("startXI", []))
+            if 0 < _n_home < 11:
+                xg_mods.home_lineup_value_ratio = max(0.85, round(1.0 - (11 - _n_home) * 0.04, 2))
+        if away_lineup_data:
+            _n_away = len(away_lineup_data.get("startXI", []))
+            if 0 < _n_away < 11:
+                xg_mods.away_lineup_value_ratio = max(0.85, round(1.0 - (11 - _n_away) * 0.04, 2))
         goals_signal = calculate_goals_value(
             xg_home    = xg_home,
             xg_away    = xg_away,

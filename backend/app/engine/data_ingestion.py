@@ -232,14 +232,32 @@ def classify_team_playstyle(
         style             = "balanced"
         tactical_modifier = 1.00
 
+    # ── xT modifier — Expected Threat proxy from shot quality ────────────────
+    # Conversion rate = goals_for_avg / avg_shots_pg.  Global avg ≈ 10.8% (1.3/12).
+    # Teams that score from fewer shots are generating xT in higher-quality zones.
+    _shot_conv = goals_for_avg / max(avg_shots_pg, 6.0)
+    xt_modifier = round(min(1.20, max(0.85, 1.0 + (_shot_conv - 0.108) * 3.0)), 3)
+
+    # ── Lead behavior — tendency to keep attacking (or not) when leading ──────
+    # Derived from style: dominant teams keep pressing, defensive teams park bus.
+    _lead_map = {
+        "dominant_attacking": 1.05,
+        "counter_attack":     0.97,
+        "defensive":          0.92,
+        "balanced":           1.00,
+    }
+    lead_behavior_factor = _lead_map.get(style, 1.00)
+
     return {
-        "style":             style,
-        "attack_strength":   round(attack_strength,  3),
-        "defense_strength":  round(defense_strength, 3),
-        "avg_possession":    round(avg_possession,    1),
-        "avg_shots_pg":      round(avg_shots_pg,      1),
-        "clean_sheet_rate":  round(clean_sheet_rate,  3),
-        "tactical_modifier": tactical_modifier,
+        "style":               style,
+        "attack_strength":     round(attack_strength,  3),
+        "defense_strength":    round(defense_strength, 3),
+        "avg_possession":      round(avg_possession,   1),
+        "avg_shots_pg":        round(avg_shots_pg,     1),
+        "clean_sheet_rate":    round(clean_sheet_rate, 3),
+        "tactical_modifier":   tactical_modifier,
+        "xt_modifier":         xt_modifier,
+        "lead_behavior_factor": lead_behavior_factor,
     }
 
 
