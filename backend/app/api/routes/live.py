@@ -911,9 +911,10 @@ def build_match_analysis_sync(
         # Pre-game / full-match: Goals Engine with dynamic xG modifiers
         xg_mods = injury_flags_from_list(
             injuries,
-            home_team_id = home.get("id", 0),
-            away_team_id = away.get("id", 0),
-            weather      = weather,
+            home_team_id              = home.get("id", 0),
+            away_team_id              = away.get("id", 0),
+            weather                   = weather,
+            home_advantage_multiplier = 1.0 if _is_neutral else 1.15,
         )
         goals_signal = calculate_goals_value(
             xg_home    = xg_home,

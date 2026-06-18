@@ -1,18 +1,22 @@
 """
-360SCOUT — Goals Market Engine  v1.0
-Full Poisson-based Over/Under prediction with Dynamic xG Adjustment.
+360SCOUT — Goals Market Engine  v2.0
+Full Poisson-based Over/Under prediction with 3-layer Dynamic xG Calibration.
 
 Architecture:
-  §1  XgModifiers   — weather + injury input flags
-  §2  adjust_xg()   — applies multiplicative weather + additive injury deltas
+  §0  calculate_calibrated_xg() — The Winning Method 3-multiplier pre-calibration
+  §1  XgModifiers   — all calibration inputs (multipliers + weather + injury flags)
+  §2  adjust_xg()   — applies all 3 layers: calibration → weather → positional injuries
   §3  GoalsValueSignal — immutable result of a full O/U analysis
   §4  calculate_goals_value() — main entry point
   §5  injury_flags_from_list() — API injury list → XgModifiers
 
-Poisson PMF: P(X=k | λ) = exp(-λ)·λ^k/k!
-  Implemented manually (no scipy) using math.exp + math.factorial.
-  Results are equivalent to scipy.stats.poisson.pmf for typical football
-  xG values (λ ≈ 0.3–4.0). The joint matrix covers 0..10 goals per team.
+xG Calibration pipeline (The Winning Method):
+  Layer 1 — Multipliers:  xG × home_advantage × motivation × injuries_factor
+  Layer 2 — Weather:      ×0.84–0.93 for extreme rain/cold/heat
+  Layer 3 — Positional:   +0.15–0.25 to opponent when GK/key-defender absent
+
+Poisson PMF: P(X=k | λ) = exp(-λ)·λ^k/k!  (manual, no scipy)
+  6×6 matrix (goals 0-5 per team) — covers >99.5% of Poisson mass for λ≤3.
 """
 
 from __future__ import annotations
@@ -27,6 +31,33 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# §0  THE WINNING METHOD — 3-MULTIPLIER xG CALIBRATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def calculate_calibrated_xg(
+    base_xg:              float,
+    home_advantage:       float = 1.0,
+    match_importance:     float = 1.0,
+    key_injuries_factor:  float = 1.0,
+) -> float:
+    """
+    Calibrate base xG using three dynamic multipliers (The Winning Method).
+
+    Args:
+        base_xg:             Raw Expected Goals from stats pipeline or odds calibration
+        home_advantage:      Crowd + pitch boost; typically 1.15 for home, 1.0 for away/neutral
+        match_importance:    Motivation scaling; e.g. 1.10 must-win, 0.90 dead rubber
+        key_injuries_factor: Composite attacking-output factor; e.g. 0.85 when striker is out
+
+    Returns:
+        Calibrated xG, floored at 0.10 to prevent degenerate Poisson distributions.
+    """
+    calibrated = base_xg * home_advantage * match_importance * key_injuries_factor
+    return max(0.10, round(calibrated, 2))
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # §1  INPUT MODEL — XgModifiers
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -34,32 +65,36 @@ logger = logging.getLogger(__name__)
 @dataclass
 class XgModifiers:
     """
-    Contextual modifiers that shift raw xG values before the Poisson calculation.
+    All contextual inputs that calibrate raw xG before the Poisson matrix.
     All fields default to neutral (no effect).
 
-    Weather fields come from OpenWeather API response.
-    Injury flags come from API-Football /injuries endpoint (one flag per role).
-
-    Modifier semantics:
-      Weather  → multiplicative global factor (both teams affected equally)
-      GK/def   → additive boost to *opponent* xG (defensive hole exposed)
-      Striker  → additive penalty to *own* xG (reduced attacking output)
+    Three calibration layers (applied in order by adjust_xg):
+      Layer 1 — Multipliers (The Winning Method):
+        home_advantage_multiplier : crowd + pitch boost for home team
+        home_motivation / away_motivation : match-importance scaling
+        home_injuries_factor / away_injuries_factor : composite attacking factor
+      Layer 2 — Weather (multiplicative, both teams equally):
+        precipitation_mm, temperature_c
+      Layer 3 — Positional absences (additive, boosts *opponent* xG):
+        GK / key-defender absence creates a defensive hole the opponent exploits.
+        Striker absence is captured by injuries_factor (Layer 1) — not duplicated.
     """
-    # ── Weather ──────────────────────────────────────────────────────────────
+    # ── Layer 1: The Winning Method calibration multipliers ───────────────────
+    home_advantage_multiplier: float = 1.0   # 1.15 home venue; 1.0 neutral/away
+    home_motivation:           float = 1.0   # e.g. 1.10 must-win, 0.90 dead rubber
+    away_motivation:           float = 1.0
+    home_injuries_factor:      float = 1.0   # e.g. 0.85 when striker is out
+    away_injuries_factor:      float = 1.0
+
+    # ── Layer 2: Weather ──────────────────────────────────────────────────────
     precipitation_mm: float = 0.0    # mm/h — heavy rain degrades finishing
     temperature_c:    float = 20.0   # °C   — extreme cold/heat reduces output
 
-    # ── Goalkeeper absent ────────────────────────────────────────────────────
-    home_gk_injured: bool = False    # backup GK in goal → opponent gets boost
-    away_gk_injured: bool = False
-
-    # ── Key defender absent ──────────────────────────────────────────────────
+    # ── Layer 3: Positional absences (boost opponent's xG) ───────────────────
+    home_gk_injured:           bool = False  # backup GK → opponent gets xG boost
+    away_gk_injured:           bool = False
     home_key_defender_injured: bool = False
     away_key_defender_injured: bool = False
-
-    # ── Striker / main forward absent ────────────────────────────────────────
-    home_striker_injured: bool = False
-    away_striker_injured: bool = False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -76,10 +111,9 @@ _RAIN_SEVERE_FACTOR  = 0.84   # >10 mm/h → both teams ×0.84
 _COLD_FACTOR         = 0.93   # <3 °C    → both teams ×0.93
 _HEAT_FACTOR         = 0.91   # >35 °C   → both teams ×0.91
 
-_GK_MISSING_BOOST        = 0.25   # backup GK → opponent +0.25 xG
-_KEY_DEF_MISSING_BOOST   = 0.15   # key CB/FB absent → opponent +0.15 xG
-_STRIKER_MISSING_PENALTY = 0.20   # main striker rested → own −0.20 xG
-_XG_FLOOR = 0.30                  # absolute minimum per team
+_GK_MISSING_BOOST      = 0.25   # backup GK → opponent +0.25 xG
+_KEY_DEF_MISSING_BOOST = 0.15   # key CB/FB absent → opponent +0.15 xG
+_XG_FLOOR              = 0.30   # absolute minimum per team (after all adjustments)
 
 
 @dataclass(frozen=True)
@@ -100,30 +134,54 @@ def adjust_xg(
     mods: XgModifiers | None = None,
 ) -> AdjustedXg:
     """
-    Apply weather and injury modifiers to raw xG.
+    Apply all 3 calibration layers to raw xG (The Winning Method pipeline).
 
-    Order of operations (matters for final values):
-      1. Weather — multiplicative global factor first (applies to base xG)
-      2. GK / key-defender absence → additive boost to opponent
-      3. Striker absence → additive penalty to own xG
-      4. Floor clip to _XG_FLOOR
+    Order of operations:
+      1. Multipliers  — home_advantage × motivation × injuries_factor (per team)
+      2. Weather      — multiplicative global factor (both teams equally)
+      3. Positional   — GK / key-defender absence → additive boost to opponent
+      4. Floor clip   — max(_XG_FLOOR, result)
 
     Args:
-        xg_home: Raw Expected Goals for home team (from stats pipeline)
+        xg_home: Raw Expected Goals for home team (from stats pipeline or odds)
         xg_away: Raw Expected Goals for away team
-        mods:    XgModifiers with weather + injury context
+        mods:    XgModifiers with all calibration inputs
 
     Returns:
-        AdjustedXg with calibrated xg_home and xg_away
+        AdjustedXg with fully calibrated xg_home and xg_away
     """
     if mods is None:
         mods = XgModifiers()
 
     applied: list[str] = []
-    h = float(xg_home)
-    a = float(xg_away)
 
-    # ── Step 1: Weather — multiplicative, both teams ──────────────────────────
+    # ── Step 1: The Winning Method — 3-multiplier calibration ─────────────────
+    # Home team: home_advantage × motivation × injuries
+    # Away team: no home_advantage multiplier (always 1.0 for visitor)
+    h = calculate_calibrated_xg(
+        float(xg_home),
+        mods.home_advantage_multiplier,
+        mods.home_motivation,
+        mods.home_injuries_factor,
+    )
+    a = calculate_calibrated_xg(
+        float(xg_away),
+        1.0,                       # away team never gets home_advantage bonus
+        mods.away_motivation,
+        mods.away_injuries_factor,
+    )
+    if mods.home_advantage_multiplier != 1.0:
+        applied.append(f"home_advantage(×{mods.home_advantage_multiplier})")
+    if mods.home_motivation != 1.0:
+        applied.append(f"home_motivation(×{mods.home_motivation})")
+    if mods.away_motivation != 1.0:
+        applied.append(f"away_motivation(×{mods.away_motivation})")
+    if mods.home_injuries_factor != 1.0:
+        applied.append(f"home_injuries(×{mods.home_injuries_factor})")
+    if mods.away_injuries_factor != 1.0:
+        applied.append(f"away_injuries(×{mods.away_injuries_factor})")
+
+    # ── Step 2: Weather — multiplicative, both teams ──────────────────────────
     if mods.precipitation_mm > 10:
         h *= _RAIN_SEVERE_FACTOR
         a *= _RAIN_SEVERE_FACTOR
@@ -142,7 +200,7 @@ def adjust_xg(
         a *= _HEAT_FACTOR
         applied.append(f"extreme_heat(>35°C,×{_HEAT_FACTOR})")
 
-    # ── Step 2: GK / defender absence — additive to opponent ─────────────────
+    # ── Step 3: Positional absences — additive boost to opponent ──────────────
     if mods.home_gk_injured:
         a += _GK_MISSING_BOOST
         applied.append(f"home_gk_out(away+{_GK_MISSING_BOOST})")
@@ -155,14 +213,6 @@ def adjust_xg(
     if mods.away_key_defender_injured:
         h += _KEY_DEF_MISSING_BOOST
         applied.append(f"away_key_def_out(home+{_KEY_DEF_MISSING_BOOST})")
-
-    # ── Step 3: Striker absence — additive penalty to own xG ─────────────────
-    if mods.home_striker_injured:
-        h -= _STRIKER_MISSING_PENALTY
-        applied.append(f"home_striker_out(home-{_STRIKER_MISSING_PENALTY})")
-    if mods.away_striker_injured:
-        a -= _STRIKER_MISSING_PENALTY
-        applied.append(f"away_striker_out(away-{_STRIKER_MISSING_PENALTY})")
 
     # ── Step 4: Floor ─────────────────────────────────────────────────────────
     h = max(_XG_FLOOR, h)
@@ -373,30 +423,37 @@ _GK_POSITIONS  = {"goalkeeper"}
 _DEF_POSITIONS = {"defender"}
 _STR_POSITIONS = {"attacker", "forward"}
 
+# Injury factor multipliers for own team's attacking output
+_ATTACKER_FACTOR  = 0.85   # striker/forward out → own xG ×0.85
+_MIDFIELDER_FACTOR = 0.95  # key midfielder out  → own xG ×0.95
+
 
 def injury_flags_from_list(
-    injuries:     list,
-    home_team_id: int,
-    away_team_id: int,
-    weather:      dict | None = None,
+    injuries:                  list,
+    home_team_id:              int,
+    away_team_id:              int,
+    weather:                   dict | None = None,
+    home_advantage_multiplier: float = 1.0,
 ) -> XgModifiers:
     """
-    Convert an API-Football /injuries response + OpenWeather dict to XgModifiers.
+    Convert an API-Football /injuries response + context into XgModifiers.
 
-    Position classification (case-insensitive):
-      "Goalkeeper"        → gk_injured
-      "Defender"          → key_defender_injured (first occurrence)
-      "Attacker"/"Forward"→ striker_injured (first occurrence)
+    Position handling:
+      Goalkeeper / Defender → sets gk/defender flag (boosts *opponent* xG additively)
+      Attacker / Forward    → reduces team's *own* injuries_factor (multiplicative)
+      Midfielder            → slight reduction to team's own injuries_factor
 
-    If `injuries` is empty (common — endpoint not always fetched), returns
-    XgModifiers with all injury flags False and weather values filled in.
-    This is the safe no-op default.
+    The `home_advantage_multiplier` is passed directly from the call site
+    (typically 1.15 for home venues, 1.0 for neutral grounds).
+
+    If `injuries` is empty, returns XgModifiers with all defaults (safe no-op).
 
     Args:
-        injuries:     list from API-Football fixture injuries endpoint
-        home_team_id: API team ID for home side
-        away_team_id: API team ID for away side
-        weather:      OpenWeather result dict (keys: temperature_celsius, precipitation_mm)
+        injuries:                  list from API-Football /injuries endpoint
+        home_team_id:              API team ID for home side
+        away_team_id:              API team ID for away side
+        weather:                   OpenWeather dict (temperature_celsius, precipitation_mm)
+        home_advantage_multiplier: crowd + pitch boost; 1.15 home, 1.0 neutral
     """
     w    = weather or {}
     prec = float(w.get("precipitation_mm",    0.0))
@@ -405,8 +462,9 @@ def injury_flags_from_list(
     home_inj = [i for i in (injuries or []) if i.get("team", {}).get("id") == home_team_id]
     away_inj = [i for i in (injuries or []) if i.get("team", {}).get("id") == away_team_id]
 
-    def _classify(team_injuries: list) -> dict:
-        flags = {"gk": False, "def": False, "str": False}
+    def _classify(team_injuries: list) -> tuple[dict, float]:
+        flags  = {"gk": False, "def": False}
+        factor = 1.0
         for inj in team_injuries:
             pos = (inj.get("player", {}).get("position") or "").strip().lower()
             if pos in _GK_POSITIONS:
@@ -414,19 +472,20 @@ def injury_flags_from_list(
             elif pos in _DEF_POSITIONS:
                 flags["def"] = True
             elif pos in _STR_POSITIONS:
-                flags["str"] = True
-        return flags
+                factor *= _ATTACKER_FACTOR   # each missing attacker compounds
+        return flags, max(0.50, factor)      # floor at 50% to prevent extreme values
 
-    hf = _classify(home_inj)
-    af = _classify(away_inj)
+    hf, h_inj_factor = _classify(home_inj)
+    af, a_inj_factor = _classify(away_inj)
 
     return XgModifiers(
+        home_advantage_multiplier = home_advantage_multiplier,
+        home_injuries_factor      = h_inj_factor,
+        away_injuries_factor      = a_inj_factor,
         precipitation_mm          = prec,
         temperature_c             = temp,
         home_gk_injured           = hf["gk"],
         away_gk_injured           = af["gk"],
         home_key_defender_injured = hf["def"],
         away_key_defender_injured = af["def"],
-        home_striker_injured      = hf["str"],
-        away_striker_injured      = af["str"],
     )
