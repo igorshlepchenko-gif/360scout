@@ -230,7 +230,7 @@ async def fetch_odds(home_team: str, away_team: str) -> Optional[dict]:
                 f"{ODDS_API_BASE}/sports/soccer/odds",
                 params={
                     "apiKey":  ODDS_API_KEY,
-                    "regions": "eu",
+                    "regions": "eu,us,au,uk",
                     "markets": "h2h",
                     "oddsFormat": "decimal",
                 }

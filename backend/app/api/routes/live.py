@@ -282,8 +282,11 @@ def _default_weather() -> dict:
 
 
 async def fetch_all_odds() -> list:
-    """משוך יחסים (1X2 + Over/Under) — קריאה אחת, cache של 15 דקות"""
-    cache_key = "odds:soccer:eu:h2h_totals"   # bumped — now includes totals
+    """משוך יחסים (1X2 + Over/Under) — קריאה אחת, cache של 15 דקות.
+    regions=eu,us,au,uk מכסה ליגות אירופה + MLS/USL + אוסטרליה + ארגנטינה/ברזיל/סין
+    באותה קריאה יחידה (אותה מכסה בדיוק כמו eu בלבד).
+    """
+    cache_key = "odds:soccer:global:h2h_totals"
     cached = await cache_get(cache_key, "odds")
     if cached is not None:
         return cached
@@ -294,8 +297,8 @@ async def fetch_all_odds() -> list:
                 f"{ODDS_API_BASE}/sports/soccer/odds",
                 params={
                     "apiKey":     ODDS_API_KEY,
-                    "regions":    "eu",
-                    "markets":    "h2h,totals",   # שני השווקים באותה מכסה
+                    "regions":    "eu,us,au,uk",
+                    "markets":    "h2h,totals",
                     "oddsFormat": "decimal",
                 }
             )
