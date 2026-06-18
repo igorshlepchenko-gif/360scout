@@ -59,9 +59,26 @@ export default function LeagueFilteredMatches({
     matches.some(m => getGroupKey(m.league ?? "") === g.key)
   );
 
-  const filtered = active === "all"
+  // Priority sort for "all" tab: World Cup first → value bets → LOCK consensus → rest
+  const IS_WC = (m: any) => /world.?cup|fifa|מונדיאל/i.test(m.league ?? "");
+  const hasValueBet = (m: any) =>
+    m.value_bets && Object.values(m.value_bets as Record<string, any>).some((v: any) => v?.is_value_bet);
+
+  function matchPriority(m: any): number {
+    if (IS_WC(m) && hasValueBet(m)) return 0;  // World Cup + value bet — top
+    if (IS_WC(m))                   return 1;  // World Cup only
+    if (hasValueBet(m))             return 2;  // value bet in any league
+    if (m.consensus?.type === "LOCK") return 3; // consensus lock
+    return 4;                                   // everything else
+  }
+
+  const rawFiltered = active === "all"
     ? matches
-    : matches.filter(m => getGroupKey(m.league ?? "") === active);
+    : matches.filter((m: any) => getGroupKey(m.league ?? "") === active);
+
+  const filtered = active === "all"
+    ? [...rawFiltered].sort((a, b) => matchPriority(a) - matchPriority(b))
+    : rawFiltered;
 
   useEffect(() => {
     const el = tabsRef.current;

@@ -1,6 +1,7 @@
 import MatchCard from "@/components/MatchCard";
 import DashboardTabs from "@/components/DashboardTabs";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
+import WorldCupTicker from "@/components/WorldCupTicker";
 import { getEnhancedMatches } from "@/lib/enhancedMatches";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
@@ -95,7 +96,10 @@ export default async function Home() {
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
 
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px" }}>
+      {/* Dynamic ticker — World Cup picks first, then value bets */}
+      {hasLive && <WorldCupTicker matches={liveMatches} />}
+
+      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px", paddingTop: hasLive ? 80 : 40 }}>
 
         {/* Hero */}
         <div style={{ marginBottom: 40 }}>

@@ -4,23 +4,77 @@ export interface TickerItem {
   text: string;
 }
 
-const DEFAULT_ITEMS: TickerItem[] = [
-  { text: "🏆 מונדיאל 2026: מודל 'The Winning Method' מזהה ערך חיובי — עקבו אחר הסיגנלים החמים!" },
-  { text: "📊 נתוני xG משוקללים: המערכת מנתחת כל משחק בזמן אמת לזיהוי הזדמנויות ערך." },
-  { text: "⚽ ההרכבים הרשמיים יעודכנו אוטומטית שעה לפני שריקת הפתיחה — בדקו את הכרטיסיות." },
-  { text: "⚡ Value Bet שזוהה? קבלו התראה מיידית בערוץ הטלגרם שלנו — הצטרפו עכשיו!" },
-  { text: "🔬 ניתוח 360°: xG · מזג אוויר · שופט · פציעות · פסיכולוגיה · קונסנזוס מומחים — בכל משחק." },
-];
+export interface TickerMatch {
+  home_team:   string;
+  away_team:   string;
+  league?:     string;
+  value_bets?: Record<string, { is_value_bet: boolean; edge_percent: number; bookmaker_odds?: number }> | null;
+  odds?:       { odds_home?: number; odds_draw?: number; odds_away?: number } | null;
+  prediction?: { final: { home: number; draw: number; away: number }; confidence: number };
+}
+
+const OUTCOME_HE: Record<string, string> = { home: "בית", draw: "תיקו", away: "אורחים" };
+const IS_WC = (m: TickerMatch) => /world.?cup|fifa|מונדיאל/i.test(m.league ?? "");
+
+function buildTickerItems(matches: TickerMatch[]): TickerItem[] {
+  const items: TickerItem[] = [];
+
+  // ── 1. World Cup picks (always first) ─────────────────────────────────────
+  const wcMatches = matches.filter(IS_WC);
+  for (const m of wcMatches) {
+    const final    = m.prediction?.final;
+    const conf     = m.prediction?.confidence ?? 0;
+    if (!final) continue;
+    const top      = Object.entries(final).sort((a, b) => b[1] - a[1])[0];
+    const oddsStr  =
+      top[0] === "home" && m.odds?.odds_home ? ` · יחס ${m.odds.odds_home.toFixed(2)}` :
+      top[0] === "draw" && m.odds?.odds_draw ? ` · יחס ${m.odds.odds_draw.toFixed(2)}` :
+      top[0] === "away" && m.odds?.odds_away ? ` · יחס ${m.odds.odds_away.toFixed(2)}` : "";
+    items.push({
+      text: `🏆 מונדיאל | ${m.home_team} vs ${m.away_team} → ${OUTCOME_HE[top[0]]} ${Math.round(top[1] * 100)}%${oddsStr} · ביטחון ${conf}%`,
+    });
+  }
+
+  // ── 2. Value bets from all other leagues ──────────────────────────────────
+  const otherVB = matches.filter(m => !IS_WC(m) && m.value_bets &&
+    Object.values(m.value_bets).some(v => v?.is_value_bet));
+  for (const m of otherVB) {
+    const entry = Object.entries(m.value_bets ?? {}).find(([, v]) => v?.is_value_bet);
+    if (!entry) continue;
+    const [outcome, vb] = entry;
+    const oddsStr = vb.bookmaker_odds ? ` @ ${vb.bookmaker_odds.toFixed(2)}` : "";
+    items.push({
+      text: `⚡ Value Bet | ${m.home_team} vs ${m.away_team} → ${OUTCOME_HE[outcome]}${oddsStr} · Edge +${vb.edge_percent.toFixed(1)}%`,
+    });
+  }
+
+  // ── 3. Fallback if no real data ────────────────────────────────────────────
+  if (items.length === 0) {
+    return [
+      { text: "🏆 מונדיאל 2026 — בחירות המערכת: עדיפות לסיגנלים עם קונסנזוס + Value Bet" },
+      { text: "⚡ Value Bet שזוהה? קבלו התראה מיידית בערוץ הטלגרם שלנו!" },
+      { text: "🔬 ניתוח 360°: xG · מזג אוויר · שופט · פציעות · פסיכולוגיה · קונסנזוס" },
+    ];
+  }
+  return items;
+}
 
 export default function WorldCupTicker({
-  items = DEFAULT_ITEMS,
+  items,
+  matches,
 }: {
-  items?: TickerItem[];
+  items?:   TickerItem[];
+  matches?: TickerMatch[];
 }) {
-  if (!items.length) return null;
+  const resolvedItems = items ?? (matches ? buildTickerItems(matches) : [
+    { text: "🏆 מונדיאל 2026 — בחירות המערכת: עדיפות לסיגנלים עם קונסנזוס + Value Bet" },
+    { text: "⚡ Value Bet שזוהה? קבלו התראה מיידית בערוץ הטלגרם שלנו!" },
+    { text: "🔬 ניתוח 360°: xG · מזג אוויר · שופט · פציעות · פסיכולוגיה · קונסנזוס" },
+  ]);
+  if (!resolvedItems.length) return null;
 
-  // duplicate items so the scroll feels seamless
-  const allItems = [...items, ...items];
+  // duplicate so the scroll feels seamless
+  const allItems = [...resolvedItems, ...resolvedItems];
 
   return (
     <div

@@ -21,7 +21,7 @@ export default function NavBar() {
   return (
     <>
       <nav style={{
-        position: "sticky", top: 40, zIndex: 50,
+        position: "sticky", top: 0, zIndex: 50,
         borderBottom: "1px solid rgba(255,255,255,0.08)",
         background: "rgba(11,14,20,0.95)",
         backdropFilter: "blur(12px)",
