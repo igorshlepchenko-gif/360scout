@@ -390,11 +390,28 @@ async def fetch_odds_apisports(fixture_id: int) -> dict | None:
             if not home_odds or not away_odds:
                 return None
 
+            # ── Over/Under 2.5 from same bookmaker ──────────────────────────
+            _ou_names = ("Goals Over/Under", "Over/Under", "Goals Over/Under 2.5")
+            ou_market = next((m for m in bets if m.get("name") in _ou_names), None)
+            over_2_5  = None
+            under_2_5 = None
+            if ou_market:
+                ou_vals = {
+                    v["value"]: float(v["odd"])
+                    for v in ou_market.get("values", [])
+                    if v.get("value") and v.get("odd")
+                }
+                # Values: "Over 2.5" / "Under 2.5" (API-Football format)
+                over_2_5  = ou_vals.get("Over 2.5")  or ou_vals.get("Over")
+                under_2_5 = ou_vals.get("Under 2.5") or ou_vals.get("Under")
+
             result = {
                 "bookmaker":         bm.get("name", "API-Sports"),
                 "odds_home":         home_odds,
                 "odds_draw":         draw_odds,
                 "odds_away":         away_odds,
+                "over_2_5":          over_2_5,
+                "under_2_5":         under_2_5,
                 "implied_prob_home": round(1 / home_odds, 4),
                 "implied_prob_draw": round(1 / draw_odds, 4) if draw_odds else None,
                 "implied_prob_away": round(1 / away_odds, 4),
@@ -704,6 +721,14 @@ def build_match_analysis_sync(
 
     # Totals lookup — needed for Option-B xG calibration; fetch once, reuse below
     _totals = find_totals_for_match(all_odds, home.get("name", ""), away.get("name", ""))
+    # Fallback: use API-Football O/U odds when The Odds API has no totals
+    if _totals is None and odds and odds.get("over_2_5") and odds.get("under_2_5"):
+        _totals = {
+            "bookmaker": odds.get("bookmaker", ""),
+            "line":      2.5,
+            "over":      odds["over_2_5"],
+            "under":     odds["under_2_5"],
+        }
     _xg_from_market = False   # True when xG is market-derived (no real stats)
     _xg_method      = "real_stats"
 

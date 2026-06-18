@@ -28,6 +28,17 @@ interface Match {
   consensus: { type: string };
   weather: { temperature_celsius: number; weather_condition: string; source: string };
   odds?: { bookmaker?: string; odds_home?: number; odds_draw?: number; odds_away?: number } | null;
+  goals_signal?: {
+    line: number;
+    over_prob: number;
+    under_prob: number;
+    over_odds: number;
+    under_odds: number;
+    over_edge: number;
+    under_edge: number;
+    signal: string;
+    signal_edge: number;
+  } | null;
 }
 
 const hasMarketOdds = (m: Match): boolean => !!(m.odds && m.odds.odds_home && m.odds.odds_home > 1);
@@ -157,11 +168,11 @@ export default function MatchesPage() {
               }}>
                 {/* Header */}
                 <div style={{
-                  display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1.4fr 1fr 1fr",
+                  display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1.4fr 1.4fr 1fr 1fr",
                   padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)",
                   background: "rgba(255,255,255,0.02)",
                 }}>
-                  {["משחק", "ליגה", "ביטחון", "חיזוי", "יחסים 1·X·2", "Value Bet", "קונסנזוס"].map(h => (
+                  {["משחק", "ליגה", "ביטחון", "חיזוי", "יחסים 1·X·2", "O/U 2.5", "Value Bet", "קונסנזוס"].map(h => (
                     <span key={h} style={{ color: "#475569", fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>{h}</span>
                   ))}
                 </div>
@@ -173,7 +184,7 @@ export default function MatchesPage() {
 
                   return (
                     <div key={m.fixture_id} style={{
-                      display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1.4fr 1fr 1fr",
+                      display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr 1.4fr 1.4fr 1fr 1fr",
                       padding: "14px 20px",
                       borderBottom: i < sorted.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
                       background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
@@ -238,6 +249,34 @@ export default function MatchesPage() {
                           );
                         })}
                       </div>
+
+                      {/* O/U 2.5 */}
+                      {m.goals_signal ? (() => {
+                        const gs = m.goals_signal;
+                        const sig = gs.signal === "over" ? "Over" : gs.signal === "under" ? "Under" : null;
+                        const edge = gs.signal_edge;
+                        const edgeColor = edge >= 15 ? "#10b981" : edge >= 5 ? "#f59e0b" : "#ef4444";
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            {sig && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
+                                background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)",
+                                color: "#a78bfa", width: "fit-content",
+                              }}>
+                                {sig} {gs.line} ▶ {edge >= 0 ? "+" : ""}{edge?.toFixed(1)}%
+                              </span>
+                            )}
+                            <div style={{ display: "flex", gap: 3, direction: "ltr" }}>
+                              <span style={{ fontSize: 9, color: "#64748b" }}>O {Math.round(gs.over_prob * 100)}%</span>
+                              <span style={{ fontSize: 9, color: "#374151" }}>|</span>
+                              <span style={{ fontSize: 9, color: "#64748b" }}>U {Math.round(gs.under_prob * 100)}%</span>
+                            </div>
+                          </div>
+                        );
+                      })() : (
+                        <span style={{ color: "#374151", fontSize: 11 }}>—</span>
+                      )}
 
                       {/* Value Bet */}
                       {vbEntry ? (
@@ -347,7 +386,50 @@ export default function MatchesPage() {
                       </div>
                     )}
 
-                    {/* Row 5: Tags */}
+                    {/* Row 5: O/U 2.5 signal */}
+                    {m.goals_signal && (() => {
+                      const gs = m.goals_signal;
+                      const sig = gs.signal === "over" ? "Over" : gs.signal === "under" ? "Under" : null;
+                      const edge = gs.signal_edge;
+                      return (
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "6px 10px", borderRadius: 8, marginBottom: 8,
+                          background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.15)",
+                          direction: "ltr",
+                        }}>
+                          <span style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700 }}>O/U 2.5</span>
+                          <div style={{ display: "flex", gap: 4, flex: 1 }}>
+                            {[
+                              { label: `Over ${gs.line}`, prob: gs.over_prob, odds: gs.over_odds, isSignal: gs.signal === "over" },
+                              { label: `Under ${gs.line}`, prob: gs.under_prob, odds: gs.under_odds, isSignal: gs.signal === "under" },
+                            ].map(item => (
+                              <div key={item.label} style={{
+                                flex: 1, textAlign: "center", padding: "3px 6px", borderRadius: 6,
+                                background: item.isSignal ? "rgba(167,139,250,0.12)" : "rgba(255,255,255,0.03)",
+                                border: `1px solid ${item.isSignal ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.06)"}`,
+                              }}>
+                                <div style={{ fontSize: 9, color: item.isSignal ? "#a78bfa" : "#475569", fontWeight: 700 }}>{item.label}</div>
+                                <div style={{ fontSize: 12, fontWeight: 800, fontFamily: "monospace", color: item.isSignal ? "#a78bfa" : "#64748b" }}>
+                                  {item.odds ? item.odds.toFixed(2) : "—"}
+                                </div>
+                                <div style={{ fontSize: 9, color: "#475569" }}>{Math.round(item.prob * 100)}%</div>
+                              </div>
+                            ))}
+                          </div>
+                          {sig && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                              background: "rgba(167,139,250,0.18)", color: "#a78bfa",
+                            }}>
+                              {edge >= 0 ? "+" : ""}{edge?.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Row 6: Tags */}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {vbEntry && (
                         <span style={{

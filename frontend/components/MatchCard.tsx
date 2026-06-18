@@ -417,6 +417,112 @@ function WinningMethodTable({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// ===== Over/Under 2.5 Winning Method mini-table =====
+function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
+  const rows = [
+    {
+      label: `אובר ${gs.line}`,
+      emoji: "🔼",
+      prob:  gs.over_prob,
+      odds:  gs.over_odds,
+      edge:  gs.over_edge,
+      rating: gs.over_rating,
+      isSignal: gs.signal === "OVER",
+    },
+    {
+      label: `אנדר ${gs.line}`,
+      emoji: "🔽",
+      prob:  gs.under_prob,
+      odds:  gs.under_odds,
+      edge:  gs.under_edge,
+      rating: gs.under_rating,
+      isSignal: gs.signal === "UNDER",
+    },
+  ];
+
+  const fairOdds = (p: number) => p > 0 ? (1 / p).toFixed(2) : "—";
+
+  const TH: React.CSSProperties = {
+    padding: "7px 10px", fontSize: 9, fontWeight: 700,
+    color: "#475569", textAlign: "center",
+    background: "rgba(15,23,42,0.8)",
+    whiteSpace: "nowrap",
+  };
+  const TD: React.CSSProperties = {
+    padding: "7px 10px", fontSize: 11, textAlign: "center",
+    fontFamily: "monospace", color: "#cbd5e1",
+  };
+  const LABEL: React.CSSProperties = {
+    padding: "7px 10px", fontSize: 11, fontWeight: 700,
+    color: "#94a3b8", whiteSpace: "nowrap",
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <div style={{ height: 12, width: 3, background: "#a78bfa", borderRadius: 99 }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: "#94a3b8" }}>
+          Over/Under {gs.line} — The Winning Method
+        </span>
+        {gs.expected_total > 0 && (
+          <span style={{ fontSize: 9, color: "#475569" }}>
+            · xG {gs.expected_total.toFixed(2)}
+          </span>
+        )}
+      </div>
+      <div style={{ border: "1px solid #1e293b", borderRadius: 8, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }} dir="ltr">
+          <thead>
+            <tr style={{ borderBottom: "1px solid #a78bfa44" }}>
+              <th style={{ ...TH, textAlign: "right" }}>ליין</th>
+              <th style={TH}>הסתברות</th>
+              <th style={TH}>יחס הוגן</th>
+              <th style={TH}>יחס שוק</th>
+              <th style={TH}>Edge</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const isValue = r.edge >= 5;
+              return (
+                <tr key={r.label} style={{
+                  background: r.isSignal
+                    ? "rgba(167,139,250,0.07)"
+                    : isValue ? "rgba(74,222,128,0.04)" : undefined,
+                }}>
+                  <td style={{
+                    ...LABEL,
+                    color: r.isSignal ? "#a78bfa" : isValue ? "#4ade80" : "#94a3b8",
+                    borderRight: "1px solid #1e293b",
+                  }}>
+                    {r.emoji} {r.label}
+                    {r.isSignal && <span style={{ fontSize: 8, marginRight: 4, color: "#a78bfa" }}>▶ VALUE</span>}
+                  </td>
+                  <td style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 13 }}>
+                    {(r.prob * 100).toFixed(1)}%
+                  </td>
+                  <td style={{ ...TD, color: "#64748b" }}>
+                    {fairOdds(r.prob)}
+                  </td>
+                  <td style={{ ...TD, fontWeight: 600 }}>
+                    {r.odds > 0 ? r.odds.toFixed(2) : "—"}
+                  </td>
+                  <td style={{
+                    ...TD, fontWeight: 700,
+                    color: r.edge >= 15 ? "#4ade80" : r.edge >= 5 ? "#f59e0b" : r.edge < 0 ? "#ef4444" : "#475569",
+                  }}>
+                    {r.edge > 0 ? `+${r.edge.toFixed(1)}%` : `${r.edge.toFixed(1)}%`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ===== Decimal Odds Strip (always visible) =====
 function OddsStrip({ odds, valueBets }: { odds: MatchOdds; valueBets?: ValueBets }) {
   const items = [
@@ -968,6 +1074,11 @@ export default function MatchCard({
         {/* ── DECIMAL ODDS STRIP ── */}
         {odds?.odds_home && (
           <OddsStrip odds={odds} valueBets={value_bets ?? undefined} />
+        )}
+
+        {/* ── OVER/UNDER 2.5 WINNING METHOD TABLE ── */}
+        {goals_signal && (
+          <OUWinningMethodRow gs={goals_signal} />
         )}
 
         {/* ── CONSENSUS LOCK BANNER ── */}
