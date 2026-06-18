@@ -28,6 +28,8 @@ TTL_MAP = {
     "stats":    360 * 60,
     "injuries": 10  * 60,
     "lineups":  30  * 60,
+    "referee":  24  * 60 * 60,  # referee stats stable for 24h
+    "playstyle": 6  * 60 * 60,  # team playstyle changes slowly
 }
 
 # ─── helpers ────────────────────────────────────────────────────────────────

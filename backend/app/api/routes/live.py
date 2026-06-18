@@ -26,6 +26,9 @@ from app.engine.dynamic_adjuster import adjust_probabilities, AdjustmentParams
 from app.engine.goals_engine import (
     calculate_goals_value, injury_flags_from_list, GoalsValueSignal,
 )
+from app.engine.data_ingestion import (
+    fetch_referee_stats, classify_team_playstyle, calculate_tactical_matchup,
+)
 
 # store ידני של overrides לפי fixture_id — נמחק עם restart
 _manual_adjustments: dict[int, dict] = {}
@@ -693,6 +696,9 @@ def build_match_analysis_sync(
     h2h_advantage: float = 0.0,
     fixture_odds: dict | None = None,
     lineups: list | None = None,
+    ref_data: dict | None = None,
+    home_playstyle: dict | None = None,
+    away_playstyle: dict | None = None,
 ) -> dict:
     """
     ניתוח מהיר ללא קריאות API נוספות — משתמש בנתוני ה-fixture עצמו.
@@ -916,6 +922,20 @@ def build_match_analysis_sync(
             weather                   = weather,
             home_advantage_multiplier = 1.0 if _is_neutral else 1.15,
         )
+
+        # ── Referee factor (from data_ingestion) ──────────────────────────────
+        if ref_data:
+            xg_mods.ref_factor = ref_data.get("ref_factor", 0.0)
+
+        # ── Tactical matchup motivation (from data_ingestion) ─────────────────
+        if home_playstyle and away_playstyle:
+            matchup = calculate_tactical_matchup(home_playstyle, away_playstyle)
+            xg_mods.home_motivation = matchup.get("home_motivation_adj", 1.0)
+            xg_mods.away_motivation = matchup.get("away_motivation_adj", 1.0)
+            logger.debug(
+                f"[Matchup] {matchup['matchup_label']}  "
+                f"home_mot={xg_mods.home_motivation}  away_mot={xg_mods.away_motivation}"
+            )
         goals_signal = calculate_goals_value(
             xg_home    = xg_home,
             xg_away    = xg_away,
@@ -966,6 +986,9 @@ def build_match_analysis_sync(
         "city":          city,
         "venue":         fix.get("venue", {}).get("name", ""),
         "referee":       fix.get("referee") or "",
+        "ref_stats":     ref_data,
+        "home_playstyle": home_playstyle,
+        "away_playstyle": away_playstyle,
         "prediction":    prediction,
         "odds":          odds,
         "value_bets":    value_bets if value_bets else None,
@@ -1038,24 +1061,41 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
     league_id = league.get("id", 0)
     season    = league.get("season", 2024)
 
-    # משוך הכל במקביל: סטטיסטיקות + H2H + מזג אוויר + יחסים ישירים
-    home_stats, away_stats, h2h_matches, weather, fixture_odds, lineups = await asyncio.gather(
+    referee_name = fix.get("referee") or ""
+
+    # משוך הכל במקביל: סטטיסטיקות + H2H + מזג אוויר + יחסים + שופט
+    (
+        home_stats, away_stats, h2h_matches, weather,
+        fixture_odds, lineups, ref_data,
+    ) = await asyncio.gather(
         fetch_team_stats_cached(home_id, league_id, season),
         fetch_team_stats_cached(away_id, league_id, season),
         fetch_h2h_cached(home_id, away_id),
         fetch_weather_for_city(city if city else "London"),
         fetch_odds_apisports(fix.get("id", 0)),
         fetch_live_lineups(fix.get("id", 0)),
+        fetch_referee_stats(referee_name, API_FOOTBALL_KEY, API_FOOTBALL_BASE),
     )
 
-    home_stats  = home_stats  if isinstance(home_stats,  dict) else {}
-    away_stats  = away_stats  if isinstance(away_stats,  dict) else {}
-    h2h_matches = h2h_matches if isinstance(h2h_matches, list) else []
-    h2h_adv     = calculate_h2h_advantage(h2h_matches, home_id)
+    home_stats   = home_stats   if isinstance(home_stats,   dict) else {}
+    away_stats   = away_stats   if isinstance(away_stats,   dict) else {}
+    h2h_matches  = h2h_matches  if isinstance(h2h_matches,  list) else []
+    h2h_adv      = calculate_h2h_advantage(h2h_matches, home_id)
     fixture_odds = fixture_odds if isinstance(fixture_odds, dict) else None
-    lineups      = lineups if isinstance(lineups, list) else None
+    lineups      = lineups      if isinstance(lineups,      list) else None
+    ref_data     = ref_data     if isinstance(ref_data,     dict) else None
 
-    return build_match_analysis_sync(fixture, all_odds, weather, home_stats, away_stats, h2h_adv, fixture_odds=fixture_odds, lineups=lineups)
+    # Classify playstyle from already-fetched team stats (no extra API calls)
+    home_playstyle = classify_team_playstyle(home_stats)
+    away_playstyle = classify_team_playstyle(away_stats)
+
+    return build_match_analysis_sync(
+        fixture, all_odds, weather, home_stats, away_stats, h2h_adv,
+        fixture_odds=fixture_odds, lineups=lineups,
+        ref_data=ref_data,
+        home_playstyle=home_playstyle,
+        away_playstyle=away_playstyle,
+    )
 
 
 # ============================================================
