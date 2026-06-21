@@ -170,6 +170,7 @@ function AnimatedBar({ value, color, delay = 0 }: { value: number; color: string
   }, [value, delay]);
   return (
     <div
+      aria-hidden="true"
       className={`h-full ${color} rounded-full`}
       style={{ width: `${width}%`, transition: "width 0.8s cubic-bezier(0.4,0,0.2,1)" }}
     />
@@ -216,8 +217,12 @@ function ConfidenceRing({ value }: { value: number }) {
   const color = value > 75 ? "#10b981" : value > 55 ? "#f59e0b" : "#ef4444";
 
   return (
-    <div style={{ position: "relative", width: 64, height: 64 }}>
-      <svg width="64" height="64" style={{ transform: "rotate(-90deg)" }}>
+    <div
+      role="img"
+      aria-label={`רמת ביטחון: ${value}%`}
+      style={{ position: "relative", width: 64, height: 64 }}
+    >
+      <svg width="64" height="64" style={{ transform: "rotate(-90deg)" }} aria-hidden="true">
         <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
         <circle
           cx="32" cy="32" r={r}
@@ -229,11 +234,14 @@ function ConfidenceRing({ value }: { value: number }) {
           style={{ transition: "stroke-dasharray 1s ease", filter: `drop-shadow(0 0 4px ${color})` }}
         />
       </svg>
-      <div style={{
-        position: "absolute", inset: 0,
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-      }}>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+        }}
+      >
         <div style={{ fontSize: 14, fontWeight: 900, color }}>{value}%</div>
         <div style={{ fontSize: 8, color: "#64748b", marginTop: -2 }}>ביטחון</div>
       </div>
@@ -335,6 +343,7 @@ function WinningMethodTable({
 
       <div style={{ border: "1px solid #334155", borderRadius: 10, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 340 }} dir="ltr">
+          <caption className="sr-only">טבלת שיטת הניצחון — הסתברויות, יחסים הוגנים ויחסי שוק</caption>
           <thead>
             <tr style={{ borderBottom: "2px solid #38bdf8" }}>
               <th style={{ ...TH, textAlign: "right" }}>פרמטר</th>
@@ -469,6 +478,7 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
       </div>
       <div style={{ border: "1px solid rgba(0,255,204,0.2)", borderRadius: 8, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
+          <caption className="sr-only">טבלת Over/Under — הסתברויות, יחסי שוק וערך מתמטי</caption>
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(0,255,204,0.3)" }}>
               <th style={{ ...TH, textAlign: "right" }}>שוק הימורים</th>
@@ -765,6 +775,7 @@ function PhenomenalWinningMethodPanel({
       {/* ── Table ── */}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
+          <caption className="sr-only">The Winning Method — ניתוח Over/Under פנומנלי: הסתברויות, יחסים וערך מתמטי</caption>
           <thead>
             <tr>
               <th style={{ ...TH, textAlign: "right" }}>שוק הימורים</th>
@@ -994,9 +1005,13 @@ export default function MatchCard({
     >
       {/* ── LIVE INDICATOR ── */}
       {isLive && (
-        <div style={{ background: "rgba(239,68,68,0.12)", borderBottom: "1px solid rgba(239,68,68,0.2)", padding: "6px 20px", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block", animation: "pulse 1.5s infinite", boxShadow: "0 0 6px #ef4444" }} />
-          <span style={{ color: "#ef4444", fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>LIVE</span>
+        <div
+          role="status"
+          aria-label="משחק מתקיים כרגע בשידור חי"
+          style={{ background: "rgba(239,68,68,0.12)", borderBottom: "1px solid rgba(239,68,68,0.2)", padding: "6px 20px", display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block", animation: "pulse 1.5s infinite", boxShadow: "0 0 6px #ef4444" }} />
+          <span aria-hidden="true" style={{ color: "#ef4444", fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>LIVE</span>
         </div>
       )}
 
@@ -1191,6 +1206,8 @@ export default function MatchCard({
         {/* Expand toggle */}
         <button
           onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          aria-label={expanded ? "סגור ניתוח מפורט" : "פתח ניתוח מפורט"}
           style={{
             background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 99, padding: "4px 12px", cursor: "pointer",
@@ -1348,7 +1365,7 @@ export default function MatchCard({
                 </div>
               </div>
             ) : consensusLoading ? (
-              <div style={{ marginTop: 12, textAlign: "center", color: "#f59e0baa", fontSize: 10, fontWeight: 700 }}>
+              <div role="status" aria-live="polite" style={{ marginTop: 12, textAlign: "center", color: "#f59e0baa", fontSize: 10, fontWeight: 700 }}>
                 ⏳ בודק קונסנזוס אנליסטים...
               </div>
             ) : null}
@@ -1400,6 +1417,7 @@ export default function MatchCard({
               <button
                 onClick={runCrossCheck}
                 disabled={crossCheckLoading}
+                aria-label={crossCheckLoading ? "מצלב נתוני שטח, אנא המתן" : "הצלב ניבוי עם נתוני שטח"}
                 style={{
                   marginTop: 14,
                   width: "100%",
@@ -1488,6 +1506,7 @@ export default function MatchCard({
                   </span>
                   <button
                     onClick={() => setCrossCheck(null)}
+                    aria-label="נקה תוצאות הצלבה"
                     style={{ fontSize: 9, color: "#334155", background: "none", border: "none", cursor: "pointer" }}
                   >
                     × נקה
@@ -1501,6 +1520,7 @@ export default function MatchCard({
                 <button
                   onClick={runConsensusCheck}
                   disabled={consensusLoading}
+                  aria-label={consensusLoading ? "בודק קונסנזוס אנליסטים, אנא המתן" : "הצלב ניבוי עם אנליסטים חיצוניים"}
                   style={{
                     width: "100%",
                     padding: "9px 0",
@@ -1607,6 +1627,7 @@ export default function MatchCard({
                     </span>
                     <button
                       onClick={() => setConsensusData(null)}
+                      aria-label="נקה נתוני קונסנזוס"
                       style={{ fontSize: 9, color: "#334155", background: "none", border: "none", cursor: "pointer" }}
                     >
                       × נקה
