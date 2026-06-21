@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: "כל המשחקים",        href: "/matches" },
   { label: "ביצועים היסטוריים", href: "/track-record" },
   { label: "אנליסטים",          href: "/analysts" },
+  { label: "♿ נגישות",          href: "/accessibility" },
 ];
 
 export default function NavBar() {
@@ -20,12 +21,14 @@ export default function NavBar() {
 
   return (
     <>
-      <nav style={{
-        position: "sticky", top: 0, zIndex: 50,
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(11,14,20,0.95)",
-        backdropFilter: "blur(12px)",
-      }}>
+      <nav
+        aria-label="ניווט ראשי"
+        style={{
+          position: "sticky", top: 40, zIndex: 60,
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(11,14,20,0.95)",
+          backdropFilter: "blur(12px)",
+        }}>
         <div style={{
           padding: "14px 24px",
           display: "flex",
@@ -47,6 +50,7 @@ export default function NavBar() {
               <a
                 key={item.href}
                 href={item.href}
+                aria-current={isActive(item.href) ? "page" : undefined}
                 style={{
                   color: isActive(item.href) ? "white" : "#64748b",
                   fontSize: 14,
@@ -106,6 +110,7 @@ export default function NavBar() {
               <a
                 key={item.href}
                 href={item.href}
+                aria-current={isActive(item.href) ? "page" : undefined}
                 onClick={() => setOpen(false)}
                 style={{
                   color: isActive(item.href) ? "white" : "#94a3b8",

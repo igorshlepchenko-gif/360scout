@@ -1,9 +1,9 @@
 """
-360SCOUT — Goals Market Engine  v4.0  (Phenomenal xG Engine)
+360SCOUT — Goals Market Engine  v5.0  (Exclusive Liquidity Engine)
 Full Poisson-based Over/Under prediction with Ultra xG Calibration.
 
 Architecture:
-  §0  calculate_ultra_calibrated_xg() — 9-factor phenomenal calibration
+  §0  calculate_ultra_calibrated_xg() — 12-factor exclusive calibration
   §1  XgModifiers   — all calibration inputs
   §2  adjust_xg()   — applies calibration + positional injury boosts
   §3  GoalsValueSignal — immutable result of a full O/U analysis
@@ -13,6 +13,7 @@ Architecture:
 xG Calibration pipeline — calculate_ultra_calibrated_xg():
   xG × home_advantage × motivation × injuries × rest_multiplier × weather_factor
      × xt_modifier × lineup_value_ratio × lead_behavior
+     × pace_factor × set_piece_matchup × fatigue_multiplier
   + ref_factor × 0.05
 
   rest_multiplier    = 0.92 if rest_days < 3 else 1.0
@@ -20,6 +21,9 @@ xG Calibration pipeline — calculate_ultra_calibrated_xg():
   xt_modifier        = Expected Threat — dangerous-zone ball movement quality
   lineup_value_ratio = market value of starting XI vs full squad (1.0 = full strength)
   lead_behavior      = >1.0 keeps pressing when ahead; <1.0 sits back (defensive block)
+  pace_factor        = shots rate normalized to global avg (12 shots/game = 1.0)
+  set_piece_matchup  = 1.15 when high-efficiency attack meets high-vulnerability defense
+  fatigue_multiplier = 1.10 when both teams have high late-goals proportion (>25%)
 
 Positional layer (additive, separate):
   GK / key-defender absent → +0.15–0.25 to opponent's xG
@@ -56,9 +60,12 @@ def calculate_ultra_calibrated_xg(
     xt_modifier:         float = 1.0,
     lineup_value_ratio:  float = 1.0,
     lead_behavior:       float = 1.0,
+    pace_factor:         float = 1.0,
+    set_piece_matchup:   float = 1.0,
+    fatigue_multiplier:  float = 1.0,
 ) -> float:
     """
-    Phenomenal xG calibration — The Winning Method ultra model v4.
+    Exclusive Liquidity xG calibration — The Winning Method ultra model v5.
 
     Multipliers (applied in order):
       home_adv           : crowd + pitch boost (1.15 home, 1.0 away/neutral)
@@ -69,6 +76,9 @@ def calculate_ultra_calibrated_xg(
       xt_modifier        : Expected Threat — dangerous-zone ball movement (xT proxy)
       lineup_value_ratio : market value ratio of starting XI; <1.0 = rotation/injuries
       lead_behavior      : >1.0 keeps pressing when ahead; <1.0 parks bus when leading
+      pace_factor        : match intensity — shots rate vs global avg (12 shots/game)
+      set_piece_matchup  : 1.15 when high-efficiency attack meets high-vulnerability defense
+      fatigue_multiplier : 1.10 when late-goals avg > 0.25 (fatigue curve effect)
 
     Additive correction:
       ref_factor × 0.05 : referee tendency (positive = lenient; negative = strict)
@@ -78,6 +88,7 @@ def calculate_ultra_calibrated_xg(
     rest_multiplier = 0.92 if rest_days < 3 else 1.0
     calibrated_xg   = base_xg * home_adv * motivation * injuries * rest_multiplier * weather_factor
     calibrated_xg  *= xt_modifier * lineup_value_ratio * lead_behavior
+    calibrated_xg  *= pace_factor * set_piece_matchup * fatigue_multiplier
     calibrated_xg  += ref_factor * 0.05
     return max(0.10, round(calibrated_xg, 2))
 
@@ -134,6 +145,14 @@ class XgModifiers:
     away_lineup_value_ratio: float = 1.0  # <1.0 = rotation (Cup rest, fixture congestion)
     home_lead_behavior:      float = 1.0  # >1.0 keeps pressing when leading; <1.0 parks bus
     away_lead_behavior:      float = 1.0
+
+    # ── Layer 5: Exclusive Liquidity Engine (v5 additions) ────────────────────
+    home_pace_factor:          float = 1.0  # match tempo: shots/game normalized to avg 12
+    away_pace_factor:          float = 1.0
+    home_set_piece_matchup:    float = 1.0  # 1.15 when high set-piece efficiency vs high vulnerability
+    away_set_piece_matchup:    float = 1.0  # pre-computed cross-team factor
+    home_fatigue_multiplier:   float = 1.0  # 1.10 when both teams have high late-goals ratio
+    away_fatigue_multiplier:   float = 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -224,6 +243,9 @@ def adjust_xg(
         mods.home_xt_modifier,
         mods.home_lineup_value_ratio,
         mods.home_lead_behavior,
+        mods.home_pace_factor,
+        mods.home_set_piece_matchup,
+        mods.home_fatigue_multiplier,
     )
     a = calculate_ultra_calibrated_xg(
         float(xg_away),
@@ -236,6 +258,9 @@ def adjust_xg(
         mods.away_xt_modifier,
         mods.away_lineup_value_ratio,
         mods.away_lead_behavior,
+        mods.away_pace_factor,
+        mods.away_set_piece_matchup,
+        mods.away_fatigue_multiplier,
     )
 
     if mods.home_advantage_multiplier != 1.0:
@@ -266,6 +291,18 @@ def adjust_xg(
         applied.append(f"home_lead_behavior(×{mods.home_lead_behavior})")
     if mods.away_lead_behavior != 1.0:
         applied.append(f"away_lead_behavior(×{mods.away_lead_behavior})")
+    if mods.home_pace_factor != 1.0:
+        applied.append(f"home_pace(×{mods.home_pace_factor})")
+    if mods.away_pace_factor != 1.0:
+        applied.append(f"away_pace(×{mods.away_pace_factor})")
+    if mods.home_set_piece_matchup != 1.0:
+        applied.append(f"home_setpiece_matchup(×{mods.home_set_piece_matchup})")
+    if mods.away_set_piece_matchup != 1.0:
+        applied.append(f"away_setpiece_matchup(×{mods.away_set_piece_matchup})")
+    if mods.home_fatigue_multiplier != 1.0:
+        applied.append(f"home_fatigue_curve(×{mods.home_fatigue_multiplier})")
+    if mods.away_fatigue_multiplier != 1.0:
+        applied.append(f"away_fatigue_curve(×{mods.away_fatigue_multiplier})")
 
     # ── Step 2: Positional absences — additive boost to *opponent* ───────────
     # Home GK/defender absent → away team scores more easily

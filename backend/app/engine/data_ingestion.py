@@ -248,6 +248,24 @@ def classify_team_playstyle(
     }
     lead_behavior_factor = _lead_map.get(style, 1.00)
 
+    # ── Layer 5: Exclusive Liquidity fields ──────────────────────────────────
+
+    # pace_intensity_index — match tempo; normalized to global avg of 12 shots/game
+    pace_intensity_index = round(min(1.20, max(0.85, avg_shots_pg / 12.0)), 3)
+
+    # set_piece_efficiency — how well a team converts set-piece opportunities
+    # Proxy: goals_for_avg / 1.3 (global avg goals/game per team)
+    set_piece_efficiency = round(min(1.50, max(0.70, goals_for_avg / 1.30)), 3)
+
+    # set_piece_vulnerability — how exposed defensively at set pieces
+    # Proxy: goals_agt_avg / 1.3
+    set_piece_vulnerability = round(min(1.50, max(0.70, goals_agt_avg / 1.30)), 3)
+
+    # late_goals_ratio / late_conceded_ratio — proportion of goals in 76+ min
+    # Extracted from API-Football goals.for.minute / goals.against.minute breakdown.
+    late_goals_ratio    = _extract_late_goals_ratio(team_stats, "for")
+    late_conceded_ratio = _extract_late_goals_ratio(team_stats, "against")
+
     return {
         "style":               style,
         "attack_strength":     round(attack_strength,  3),
@@ -257,8 +275,50 @@ def classify_team_playstyle(
         "clean_sheet_rate":    round(clean_sheet_rate, 3),
         "tactical_modifier":   tactical_modifier,
         "xt_modifier":         xt_modifier,
-        "lead_behavior_factor": lead_behavior_factor,
+        "lead_behavior_factor":   lead_behavior_factor,
+        "pace_intensity_index":   pace_intensity_index,
+        "set_piece_efficiency":   set_piece_efficiency,
+        "set_piece_vulnerability": set_piece_vulnerability,
+        "late_goals_ratio":       late_goals_ratio,
+        "late_conceded_ratio":    late_conceded_ratio,
     }
+
+
+def _extract_late_goals_ratio(team_stats: dict, direction: str) -> float:
+    """
+    Compute proportion of goals scored/conceded in 76+ minutes.
+
+    Uses API-Football goals.for.minute / goals.against.minute breakdown.
+    Returns 0.2 (global avg) when data is unavailable.
+    """
+    try:
+        minute_data = (
+            (team_stats.get("goals") or {})
+            .get(direction, {})
+            .get("minute") or {}
+        )
+        if not minute_data:
+            return 0.2
+
+        # Sum all goals across all time buckets
+        total = 0
+        late  = 0
+        late_keys = {"76-90", "91-105"}
+        for bucket, stats in minute_data.items():
+            count = (stats or {}).get("total") or 0
+            try:
+                count = int(count)
+            except (TypeError, ValueError):
+                continue
+            total += count
+            if bucket in late_keys:
+                late += count
+
+        if total == 0:
+            return 0.2
+        return round(late / total, 3)
+    except Exception:
+        return 0.2
 
 
 def _extract_fixture_stat(stat_list: list, stat_name: str) -> float | None:

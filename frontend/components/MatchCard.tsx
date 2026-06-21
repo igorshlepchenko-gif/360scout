@@ -417,8 +417,8 @@ function WinningMethodTable({
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// ===== Over/Under 2.5 Winning Method comparative table =====
-// Columns: אופציה | הסתברות המודל | יחס עולמי | הסתברות משתמעת | ערך | המלצה סופית
+// ===== Over/Under 2.5 — compact always-visible row (card header) =====
+// Columns: אופציה | הסתברות המודל | יחס עולמי | ערך | המלצה סופית
 function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
   const rows = [
     {
@@ -439,113 +439,92 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
     },
   ];
 
-  // implied probability = (1 / market_odds) × 100
-  const impliedProb = (odds: number) => odds > 0 ? ((1 / odds) * 100).toFixed(1) + "%" : "—";
-
   const TH: React.CSSProperties = {
     padding: "6px 8px", fontSize: 9, fontWeight: 700,
-    color: "#475569", textAlign: "center",
-    background: "rgba(15,23,42,0.8)",
+    color: "#00ffcc", textAlign: "center",
+    background: "rgba(11,11,22,0.9)",
     whiteSpace: "nowrap",
   };
   const TD: React.CSSProperties = {
     padding: "6px 8px", fontSize: 11, textAlign: "center",
-    fontFamily: "monospace", color: "#cbd5e1",
+    fontFamily: "monospace", color: "#a0a0b8",
   };
   const LABEL: React.CSSProperties = {
     padding: "6px 8px", fontSize: 11, fontWeight: 700,
-    color: "#94a3b8", whiteSpace: "nowrap",
+    color: "#a0a0b8", whiteSpace: "nowrap",
   };
 
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <div style={{ height: 12, width: 3, background: "#a78bfa", borderRadius: 99 }} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: "#94a3b8" }}>
-          Over/Under {gs.line} — The Winning Method
+        <div style={{ height: 12, width: 3, background: "#00ffcc", borderRadius: 99 }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: "#a0a0b8" }}>
+          The Winning Method — Over/Under {gs.line}
         </span>
-        {gs.expected_total > 0 && (
+        {gs.xg_home > 0 && gs.xg_away > 0 && (
           <span style={{ fontSize: 9, color: "#475569" }}>
-            · xG {gs.expected_total.toFixed(2)}
+            · xG מכויל: {gs.xg_home.toFixed(2)} — {gs.xg_away.toFixed(2)}
           </span>
         )}
       </div>
-      <div style={{ border: "1px solid #1e293b", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{ border: "1px solid rgba(0,255,204,0.2)", borderRadius: 8, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
           <thead>
-            <tr style={{ borderBottom: "1px solid #a78bfa44" }}>
-              <th style={{ ...TH, textAlign: "right" }}>אופציה</th>
-              <th style={TH}>הסתברות המודל</th>
+            <tr style={{ borderBottom: "1px solid rgba(0,255,204,0.3)" }}>
+              <th style={{ ...TH, textAlign: "right" }}>שוק הימורים</th>
+              <th style={TH}>הסתברות המערכת</th>
               <th style={TH}>יחס עולמי</th>
-              <th style={TH}>הסתברות משתמעת</th>
-              <th style={TH}>ערך</th>
-              <th style={TH}>המלצה סופית</th>
+              <th style={TH}>ערך מתמטי</th>
+              <th style={TH}>סיכוי פגיעה</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => {
               const isValue = r.edge > 0;
-              const isStrong = r.edge >= 5;
+              const rawValue = r.edge / 100;
               return (
                 <tr key={r.label} style={{
-                  background: r.isSignal
-                    ? "rgba(167,139,250,0.07)"
-                    : isStrong ? "rgba(74,222,128,0.04)" : undefined,
-                  borderBottom: "1px solid #0f1318",
+                  background: isValue ? "rgba(0,255,204,0.06)" : undefined,
+                  borderBottom: "1px solid rgba(255,255,255,0.04)",
                 }}>
-                  {/* אופציה */}
+                  {/* שוק */}
                   <td style={{
                     ...LABEL,
-                    color: r.isSignal ? "#a78bfa" : isStrong ? "#4ade80" : "#94a3b8",
-                    borderLeft: "1px solid #1e293b",
+                    color: r.isSignal ? "#00ffcc" : isValue ? "#00ffcc" : "#a0a0b8",
                   }}>
                     {r.emoji} {r.label}
                     {r.isSignal && (
-                      <span style={{ fontSize: 8, marginRight: 4, color: "#a78bfa" }}>▶ VALUE</span>
+                      <span style={{
+                        fontSize: 8, marginRight: 6,
+                        background: "#00ffcc", color: "#0f0f1e",
+                        borderRadius: 4, padding: "1px 5px", fontWeight: 800,
+                      }}>VALUE מנצח</span>
                     )}
                   </td>
-                  {/* הסתברות המודל */}
-                  <td style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 13 }}>
+                  {/* הסתברות המערכת */}
+                  <td style={{ ...TD, color: "#00ffcc", fontWeight: 700, fontSize: 13 }}>
                     {(r.prob * 100).toFixed(1)}%
                   </td>
                   {/* יחס עולמי */}
-                  <td style={{ ...TD, fontWeight: 600, color: "#94a3b8" }}>
+                  <td style={{ ...TD, fontWeight: 600, color: "#a0a0b8" }}>
                     {r.odds > 0 ? r.odds.toFixed(2) : "—"}
                   </td>
-                  {/* הסתברות משתמעת */}
-                  <td style={{ ...TD, color: "#64748b" }}>
-                    {impliedProb(r.odds)}
-                  </td>
-                  {/* ערך */}
+                  {/* ערך מתמטי */}
                   <td style={{
                     ...TD, fontWeight: 700,
-                    color: r.edge >= 15 ? "#4ade80" : r.edge >= 5 ? "#f59e0b" : r.edge < 0 ? "#ef4444" : "#475569",
+                    color: isValue ? "#00ffcc" : "#ff4d4d",
                   }}>
-                    {r.edge > 0 ? `+${r.edge.toFixed(1)}%` : `${r.edge.toFixed(1)}%`}
+                    {rawValue >= 0 ? `+${rawValue.toFixed(2)}` : rawValue.toFixed(2)}
                   </td>
-                  {/* המלצה סופית */}
+                  {/* סיכוי פגיעה */}
                   <td style={{ ...TD }}>
                     {isValue ? (
-                      <span style={{
-                        display: "inline-block", fontSize: 10, fontWeight: 700,
-                        padding: "2px 7px", borderRadius: 99,
-                        background: "rgba(74,222,128,0.12)",
-                        border: "1px solid rgba(74,222,128,0.35)",
-                        color: "#4ade80",
-                        whiteSpace: "nowrap",
-                      }}>
-                        🟢 מומלץ
+                      <span style={{ color: "#00ffcc", fontWeight: 700, fontSize: 10 }}>
+                        🟢 פוטנציאל רווח גבוה
                       </span>
                     ) : (
-                      <span style={{
-                        display: "inline-block", fontSize: 10, fontWeight: 700,
-                        padding: "2px 7px", borderRadius: 99,
-                        background: "rgba(239,68,68,0.08)",
-                        border: "1px solid rgba(239,68,68,0.25)",
-                        color: "#ef4444",
-                        whiteSpace: "nowrap",
-                      }}>
-                        🔴 ללא ערך
+                      <span style={{ color: "#ff4d4d", opacity: 0.7, fontSize: 10 }}>
+                        ❌ אין ערך בשוק
                       </span>
                     )}
                   </td>
@@ -687,121 +666,167 @@ function LineupDisplay({ lineups, homeTeam, awayTeam }: { lineups: Lineups; home
   );
 }
 
-// ── Goals Market Block ────────────────────────────────────────────────────────
-function GoalsMarketBlock({ gs, ouEdge }: { gs: GoalsSignal | null; ouEdge: OuEdge | null }) {
-  // Prefer goals_signal (richer); fall back to ou_edge (live in-play)
+// ── Phenomenal Winning Method Panel — premium expanded O/U analysis ──────────
+// Implements the full "generate_phenomenal_ui" HTML/CSS spec in React.
+// Design: dark container #1a1a2e, teal #16a085 accent, 5-column table,
+//         full-row green glow when edge > 0, 🟢/🔴 recommendation chips.
+function PhenomenalWinningMethodPanel({
+  gs, ouEdge, homeTeam, awayTeam,
+}: {
+  gs:        GoalsSignal | null;
+  ouEdge:    OuEdge | null;
+  homeTeam:  string;
+  awayTeam:  string;
+}) {
   const hasGs = !!gs;
 
-  const line       = gs?.line       ?? 2.5;
-  const underProb  = hasGs ? (gs!.under_prob * 100) : (ouEdge?.true_under_prob ?? 0);
-  const overProb   = hasGs ? (gs!.over_prob  * 100) : (ouEdge?.true_over_prob  ?? 0);
-  const underOdds  = hasGs ? gs!.under_odds          : (ouEdge?.bookie_under_odds ?? 0);
-  const overOdds   = hasGs ? gs!.over_odds           : (ouEdge?.bookie_over_odds  ?? 0);
-  const underEdge  = hasGs ? gs!.under_edge          : (ouEdge?.under_edge ?? 0);
-  const overEdge   = hasGs ? gs!.over_edge           : (ouEdge?.over_edge  ?? 0);
-  const underRat   = hasGs ? gs!.under_rating        : (ouEdge?.under_rating ?? "NONE");
-  const overRat    = hasGs ? gs!.over_rating         : (ouEdge?.over_rating  ?? "NONE");
-  const xgHome     = gs?.xg_home       ?? null;
-  const xgAway     = gs?.xg_away       ?? null;
-  const xgTotal    = gs?.expected_total ?? (ouEdge?.expected_goals ?? null);
-  const bttsYes    = gs ? gs.btts_yes_prob * 100 : null;
-  const signal     = gs?.signal ?? "NO_SIGNAL";
-  const signalEdge = gs?.signal_edge ?? 0;
-  const signalRat  = gs?.signal_rating ?? "NONE";
-  const mods       = gs?.modifiers_applied ?? [];
-
-  const RATING_STYLE: Record<string, React.CSSProperties> = {
-    STRONG:   { background: "rgba(74,222,128,0.15)",  color: "#4ade80",  border: "1px solid rgba(74,222,128,0.3)"  },
-    MODERATE: { background: "rgba(56,189,248,0.12)",  color: "#38bdf8",  border: "1px solid rgba(56,189,248,0.25)" },
-    WEAK:     { background: "rgba(245,158,11,0.10)",  color: "#f59e0b",  border: "1px solid rgba(245,158,11,0.2)"  },
-    NONE:     { background: "rgba(100,116,139,0.08)", color: "#475569",  border: "1px solid rgba(100,116,139,0.15)"},
-  };
-
-  const TH: React.CSSProperties = {
-    padding: "9px 12px", fontSize: 10, fontWeight: 700,
-    color: "#64748b", textAlign: "center",
-    background: "rgba(15,23,42,0.6)",
-  };
-  const TD: React.CSSProperties = {
-    padding: "9px 12px", fontSize: 12, textAlign: "center",
-    fontFamily: "monospace", color: "#cbd5e1",
-  };
-  const LABEL_COL: React.CSSProperties = {
-    padding: "9px 12px", fontSize: 12, fontWeight: 700,
-    color: "#94a3b8", textAlign: "right", whiteSpace: "nowrap",
-  };
+  const line      = gs?.line ?? 2.5;
+  const xgHome    = gs?.xg_home       ?? null;
+  const xgAway    = gs?.xg_away       ?? null;
+  const xgTotal   = gs?.expected_total ?? ouEdge?.expected_goals ?? null;
+  const bttsYes   = gs ? gs.btts_yes_prob * 100 : null;
+  const mods      = gs?.modifiers_applied ?? [];
+  const signal    = gs?.signal      ?? "NO_SIGNAL";
+  const sigEdge   = gs?.signal_edge ?? 0;
+  const sigRat    = gs?.signal_rating ?? "NONE";
 
   const rows = [
     {
-      key: "under", label: `אנדר ${line}`, emoji: "🔽",
-      prob: underProb, odds: underOdds, edge: underEdge, rating: underRat,
+      key: "under", label: `Under ${line} שערים`, emoji: "🔽",
+      prob: hasGs ? gs!.under_prob * 100 : (ouEdge?.true_under_prob ?? 0),
+      odds: hasGs ? gs!.under_odds       : (ouEdge?.bookie_under_odds ?? 0),
+      edge: hasGs ? gs!.under_edge       : (ouEdge?.under_edge ?? 0),
+      isSignal: signal === "UNDER",
     },
     {
-      key: "over", label: `אובר ${line}`, emoji: "🔼",
-      prob: overProb, odds: overOdds, edge: overEdge, rating: overRat,
+      key: "over", label: `Over ${line} שערים`, emoji: "🔼",
+      prob: hasGs ? gs!.over_prob * 100 : (ouEdge?.true_over_prob ?? 0),
+      odds: hasGs ? gs!.over_odds       : (ouEdge?.bookie_over_odds ?? 0),
+      edge: hasGs ? gs!.over_edge       : (ouEdge?.over_edge ?? 0),
+      isSignal: signal === "OVER",
     },
   ];
 
-  const hasSignal = signal !== "NO_SIGNAL";
+  const TH: React.CSSProperties = {
+    padding: "18px 14px", fontSize: 13, fontWeight: 700,
+    color: "#00ffcc", textAlign: "center",
+    background: "#0b0b16", whiteSpace: "nowrap",
+  };
+  const TD: React.CSSProperties = {
+    padding: "18px 14px", fontSize: 14, textAlign: "center",
+    fontFamily: "monospace", color: "#a0a0b8",
+  };
+  const LABEL_COL: React.CSSProperties = {
+    padding: "18px 14px", fontSize: 14, fontWeight: 700,
+    color: "#a0a0b8", textAlign: "right", whiteSpace: "nowrap",
+  };
 
   return (
-    <div style={{ marginTop: 14 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <div style={{ height: 14, width: 3, background: "#a78bfa", borderRadius: 99 }} />
-        <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>
-          שוק השערים — Over/Under {line}
-        </span>
-        {hasGs && (
-          <span style={{ fontSize: 9, color: "#475569" }}>· Poisson (scipy)</span>
-        )}
+    <div style={{
+      background: "linear-gradient(145deg, #0f0f1e, #1a1a2e)",
+      border: "1px solid #23233e",
+      borderRadius: 16,
+      boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+      overflow: "hidden",
+      marginTop: 14,
+      direction: "rtl",
+    }}>
+
+      {/* ── Header ── */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        borderBottom: "1px solid #2a2a4a",
+        padding: "15px 20px",
+      }}>
+        <div>
+          <span style={{ fontSize: 22, fontWeight: 900, color: "#00ffcc", letterSpacing: 1 }}>
+            ANALYST365
+          </span>
+          {" "}
+          <span style={{
+            background: "#16a085", color: "white",
+            padding: "3px 10px", borderRadius: 20,
+            fontSize: 11, fontWeight: 700,
+          }}>
+            The Winning Method עולמי
+          </span>
+        </div>
+        <div style={{ textAlign: "left", fontSize: 13, color: "#a0a0b8", fontWeight: 700 }}>
+          {homeTeam} vs {awayTeam}
+          {xgHome != null && xgAway != null && (
+            <div style={{ fontSize: 10, color: "#475569", marginTop: 2, fontWeight: 400 }}>
+              xG מכויל: {xgHome.toFixed(2)} — {xgAway.toFixed(2)}
+              {mods.length > 0 && ` · ${mods.length} מגבירים`}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Table */}
-      <div style={{ border: "1px solid #334155", borderRadius: 10, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 340 }} dir="ltr">
+      {/* ── Table ── */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
           <thead>
-            <tr style={{ borderBottom: "2px solid #a78bfa" }}>
-              <th style={{ ...TH, textAlign: "right" }}>ליין</th>
-              <th style={TH}>הסתברות</th>
-              <th style={TH}>יחס שוק</th>
-              <th style={TH}>Edge %</th>
-              <th style={TH}>דירוג</th>
+            <tr>
+              <th style={{ ...TH, textAlign: "right" }}>שוק הימורים</th>
+              <th style={TH}>הסתברות המערכת הפנומנלית</th>
+              <th style={TH}>יחס עולמי ממוצע</th>
+              <th style={TH}>ערך מתמטי (Value)</th>
+              <th style={TH}>סיכוי פגיעה</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => {
-              const rat = r.rating as keyof typeof RATING_STYLE;
-              const isValue = r.edge >= 5;
+              const isValue  = r.edge > 0;
+              const rawValue = r.edge / 100;
               return (
-                <tr key={r.key} style={{
-                  borderBottom: "1px solid #1e293b",
-                  background: isValue ? "rgba(74,222,128,0.04)" : undefined,
-                }}>
-                  <td style={{ ...LABEL_COL, color: isValue ? "#4ade80" : "#94a3b8" }}>
+                <tr
+                  key={r.key}
+                  style={{
+                    background: isValue ? "rgba(0,255,204,0.06)" : undefined,
+                    borderBottom: "1px solid #22223b",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  {/* שוק */}
+                  <td style={{ ...LABEL_COL, color: isValue ? "#00ffcc" : "#a0a0b8" }}>
                     {r.emoji} {r.label}
+                    {r.isSignal && (
+                      <span style={{
+                        marginRight: 8, fontSize: 11, fontWeight: 800,
+                        background: "#00ffcc", color: "#0f0f1e",
+                        padding: "3px 8px", borderRadius: 4,
+                      }}>
+                        VALUE מנצח
+                      </span>
+                    )}
                   </td>
-                  <td style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 14 }}>
+                  {/* הסתברות */}
+                  <td style={{ ...TD, color: "#00ffcc", fontWeight: 700, fontSize: 18 }}>
                     {r.prob.toFixed(1)}%
                   </td>
-                  <td style={TD}>
+                  {/* יחס עולמי */}
+                  <td style={{ ...TD, color: "#a0a0b8" }}>
                     {r.odds > 0 ? r.odds.toFixed(2) : "—"}
                   </td>
+                  {/* ערך מתמטי */}
                   <td style={{
-                    ...TD,
-                    fontWeight: 700,
-                    color: r.edge >= 15 ? "#4ade80" : r.edge >= 5 ? "#f59e0b" : "#475569",
+                    ...TD, fontWeight: 800, fontSize: 18,
+                    color: isValue ? "#00ffcc" : "#ff4d4d",
+                    opacity: isValue ? 1 : 0.6,
                   }}>
-                    {r.edge > 0 ? `+${r.edge.toFixed(1)}%` : `${r.edge.toFixed(1)}%`}
+                    {rawValue >= 0 ? `+${rawValue.toFixed(2)}` : rawValue.toFixed(2)}
                   </td>
-                  <td style={{ ...TD, padding: "6px 12px" }}>
-                    <span style={{
-                      ...RATING_STYLE[rat] ?? RATING_STYLE.NONE,
-                      borderRadius: 6, padding: "2px 7px",
-                      fontSize: 9, fontWeight: 800,
-                    }}>
-                      {r.rating}
-                    </span>
+                  {/* סיכוי פגיעה */}
+                  <td style={{ ...TD }}>
+                    {isValue ? (
+                      <span style={{ color: "#00ffcc", fontWeight: 700, fontSize: 13 }}>
+                        🟢 פוטנציאל רווח גבוה
+                      </span>
+                    ) : (
+                      <span style={{ color: "#ff4d4d", opacity: 0.6, fontSize: 13 }}>
+                        ❌ אין ערך בשוק
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -810,68 +835,63 @@ function GoalsMarketBlock({ gs, ouEdge }: { gs: GoalsSignal | null; ouEdge: OuEd
         </table>
       </div>
 
-      {/* xG + BTTS footer */}
-      {(xgTotal != null || bttsYes != null) && (
+      {/* ── Footer: xG team split + BTTS ── */}
+      {(xgHome != null || bttsYes != null) && (
         <div style={{
+          padding: "8px 20px",
+          background: "rgba(0,0,0,0.3)",
+          borderTop: "1px solid rgba(0,255,204,0.1)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
-          marginTop: 6, padding: "5px 10px",
-          background: "rgba(255,255,255,0.02)", borderRadius: 7,
           fontSize: 10, color: "#64748b", direction: "ltr",
         }}>
           {xgHome != null && xgAway != null ? (
             <span>
-              ⚽ xG: <b style={{ color: "#94a3b8" }}>{xgHome.toFixed(2)}</b> — <b style={{ color: "#94a3b8" }}>{xgAway.toFixed(2)}</b>
-              {" "}· סה&quot;כ: <b style={{ color: "#cbd5e1" }}>{xgTotal?.toFixed(2)}</b>
+              ⚽ xG: <b style={{ color: "#a0a0b8" }}>{homeTeam}</b> {xgHome.toFixed(2)}
+              {" · "}<b style={{ color: "#a0a0b8" }}>{awayTeam}</b> {xgAway.toFixed(2)}
+              {" · "}סה&quot;כ: <b style={{ color: "#bdc3c7" }}>{xgTotal?.toFixed(2)}</b>
             </span>
-          ) : xgTotal != null ? (
-            <span>⚽ צפי שערים: <b style={{ color: "#cbd5e1" }}>{xgTotal.toFixed(2)}</b></span>
           ) : <span />}
           {bttsYes != null && (
-            <span>BTTS: <b style={{ color: "#94a3b8" }}>{bttsYes.toFixed(0)}%</b></span>
+            <span>BTTS: <b style={{ color: "#a0a0b8" }}>{bttsYes.toFixed(0)}%</b></span>
           )}
         </div>
       )}
 
-      {/* VALUE SIGNAL badge */}
-      {hasSignal && (
+      {/* ── Best signal bar ── */}
+      {signal !== "NO_SIGNAL" && (
         <div style={{
-          marginTop: 8,
-          background: signalRat === "STRONG"   ? "rgba(74,222,128,0.10)"
-                    : signalRat === "MODERATE" ? "rgba(56,189,248,0.08)"
-                    : "rgba(245,158,11,0.07)",
-          border: `1px solid ${
-            signalRat === "STRONG"   ? "rgba(74,222,128,0.3)"
-            : signalRat === "MODERATE" ? "rgba(56,189,248,0.25)"
-            : "rgba(245,158,11,0.2)"}`,
-          borderRadius: 8, padding: "6px 12px",
+          margin: "10px 14px 0",
+          background: "rgba(0,255,204,0.07)",
+          border: "1px solid rgba(0,255,204,0.25)",
+          borderRadius: 8, padding: "8px 16px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           direction: "ltr",
         }}>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>
-            🎯 {signal === "OVER" ? `אובר ${line}` : `אנדר ${line}`} — VALUE BET
+          <span style={{ fontSize: 12, color: "#a0a0b8" }}>
+            🎯 {signal === "OVER" ? `Over ${line}` : `Under ${line}`} — VALUE BET
           </span>
-          <span style={{
-            fontSize: 12, fontWeight: 900,
-            color: signalRat === "STRONG" ? "#4ade80" : signalRat === "MODERATE" ? "#38bdf8" : "#f59e0b",
-          }}>
-            +{signalEdge.toFixed(1)}% · {signalRat}
+          <span style={{ fontSize: 14, fontWeight: 900, color: "#00ffcc" }}>
+            +{(sigEdge / 100).toFixed(2)} · {sigRat}
           </span>
         </div>
       )}
 
-      {/* Active modifiers */}
+      {/* ── Active modifiers chips ── */}
       {mods.length > 0 && (
         <div style={{
-          marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap",
+          padding: "8px 14px 12px",
+          marginTop: signal !== "NO_SIGNAL" ? 8 : 0,
+          display: "flex", gap: 4, flexWrap: "wrap",
+          borderTop: "1px solid rgba(255,255,255,0.04)",
         }}>
           {mods.map((m, i) => (
             <span key={i} style={{
-              fontSize: 9, color: "#f59e0b",
-              background: "rgba(245,158,11,0.08)",
-              border: "1px solid rgba(245,158,11,0.18)",
+              fontSize: 9, color: "#00ffcc",
+              background: "rgba(0,255,204,0.06)",
+              border: "1px solid rgba(0,255,204,0.18)",
               borderRadius: 99, padding: "2px 7px",
             }}>
-              ⚠️ {m}
+              ⚡ {m}
             </span>
           ))}
         </div>
@@ -1248,11 +1268,13 @@ export default function MatchCard({
               />
             )}
 
-            {/* ── GOALS MARKET (Over/Under 2.5) ── */}
+            {/* ── GOALS MARKET (Over/Under 2.5) — Phenomenal Winning Method Panel ── */}
             {(goals_signal || ou_edge) && (
-              <GoalsMarketBlock
+              <PhenomenalWinningMethodPanel
                 gs={goals_signal ?? null}
                 ouEdge={ou_edge ?? null}
+                homeTeam={homeTeam}
+                awayTeam={awayTeam}
               />
             )}
 

@@ -830,27 +830,51 @@ def build_match_analysis_sync(
         xg_home    = max(0.30, xg_home * _frac + home_score)
         xg_away    = max(0.30, xg_away * _frac + away_score)
 
+    # ── Derive dynamic context values from fixture/referee data ──────────────
+    _round_str = str(league.get("round", "")).lower()
+    if "final" in _round_str and "semi" not in _round_str and "quarter" not in _round_str:
+        _tournament_stage = "final"
+    elif any(k in _round_str for k in ("knockout", "round of", "quarter", "semi", "last 16", "last 8", "last 4")):
+        _tournament_stage = "knockout"
+    else:
+        _tournament_stage = "group"
+
+    if _tournament_stage == "final":
+        _pressure_index = 0.95
+    elif _tournament_stage == "knockout":
+        _pressure_index = 0.88
+    elif venue_type == "neutral":   # WC / Euro / Copa group stage
+        _pressure_index = 0.78
+    else:
+        _pressure_index = 0.60
+
+    _ref_bias  = (ref_data or {}).get("ref_factor", 0.0)
+    _avg_goals = (ref_data or {}).get("avg_goals_per_game", 2.6)
+    _ref_cards = 4.5 if _avg_goals < 2.4 else 3.5  # strict ref → more cards → activates human module
+
     # בנה MatchContext
     ctx = MatchContext(
-        match_id              = str(fix.get("id", "")),
-        home_team             = home.get("name", "Home"),
-        away_team             = away.get("name", "Away"),
-        xg_home               = xg_home,
-        xg_away               = xg_away,
-        form_home             = form_home,
-        form_away             = form_away,
-        h2h_advantage         = h2h_advantage,
-        temperature           = weather["temperature_celsius"],
-        humidity              = weather["humidity_percent"],
-        precipitation_mm      = weather["precipitation_mm"],
-        home_injury_impact    = home_injury,
-        away_injury_impact    = away_injury,
-        crowd_size            = fix.get("venue", {}).get("capacity", 40000) or 40000,
-        venue_type            = venue_type,
-        tournament_stage      = "group",
-        pressure_index        = 0.6,
-        rest_days_home        = 7,
-        rest_days_away        = 7,
+        match_id               = str(fix.get("id", "")),
+        home_team              = home.get("name", "Home"),
+        away_team              = away.get("name", "Away"),
+        xg_home                = xg_home,
+        xg_away                = xg_away,
+        form_home              = form_home,
+        form_away              = form_away,
+        h2h_advantage          = h2h_advantage,
+        temperature            = weather["temperature_celsius"],
+        humidity               = weather["humidity_percent"],
+        precipitation_mm       = weather["precipitation_mm"],
+        home_injury_impact     = home_injury,
+        away_injury_impact     = away_injury,
+        crowd_size             = fix.get("venue", {}).get("capacity", 40000) or 40000,
+        venue_type             = venue_type,
+        tournament_stage       = _tournament_stage,
+        pressure_index         = _pressure_index,
+        rest_days_home         = 7,
+        rest_days_away         = 7,
+        referee_home_bias      = _ref_bias,
+        referee_cards_per_game = _ref_cards,
     )
 
     # הרץ את מנוע החיזוי
@@ -955,11 +979,36 @@ def build_match_analysis_sync(
 
         # ── Phenomenal Engine v4: xT + lead_behavior (from playstyle) ─────────
         if home_playstyle:
-            xg_mods.home_xt_modifier  = home_playstyle.get("xt_modifier",          1.0)
+            xg_mods.home_xt_modifier   = home_playstyle.get("xt_modifier",          1.0)
             xg_mods.home_lead_behavior = home_playstyle.get("lead_behavior_factor", 1.0)
         if away_playstyle:
-            xg_mods.away_xt_modifier  = away_playstyle.get("xt_modifier",          1.0)
+            xg_mods.away_xt_modifier   = away_playstyle.get("xt_modifier",          1.0)
             xg_mods.away_lead_behavior = away_playstyle.get("lead_behavior_factor", 1.0)
+
+        # ── Exclusive Liquidity Engine v5: pace + set-piece matchup + fatigue ──
+        if home_playstyle:
+            xg_mods.home_pace_factor = home_playstyle.get("pace_intensity_index", 1.0)
+        if away_playstyle:
+            xg_mods.away_pace_factor = away_playstyle.get("pace_intensity_index", 1.0)
+
+        # Set-piece matchup: cross-team calculation (attack vs opponent defense)
+        if home_playstyle and away_playstyle:
+            home_spe = home_playstyle.get("set_piece_efficiency",    1.0)
+            away_spv = away_playstyle.get("set_piece_vulnerability", 1.0)
+            away_spe = away_playstyle.get("set_piece_efficiency",    1.0)
+            home_spv = home_playstyle.get("set_piece_vulnerability", 1.0)
+            xg_mods.home_set_piece_matchup = 1.15 if home_spe > 1.2 and away_spv > 1.2 else 1.0
+            xg_mods.away_set_piece_matchup = 1.15 if away_spe > 1.2 and home_spv > 1.2 else 1.0
+
+        # Fatigue curve: 1.10 if avg late-goals ratio from both teams > 0.25
+        if home_playstyle and away_playstyle:
+            _h_late = home_playstyle.get("late_goals_ratio",     0.2)
+            _a_late_conceded = away_playstyle.get("late_conceded_ratio", 0.2)
+            xg_mods.home_fatigue_multiplier = 1.10 if (_h_late + _a_late_conceded) / 2 > 0.25 else 1.0
+
+            _a_late = away_playstyle.get("late_goals_ratio",     0.2)
+            _h_late_conceded = home_playstyle.get("late_conceded_ratio", 0.2)
+            xg_mods.away_fatigue_multiplier = 1.10 if (_a_late + _h_late_conceded) / 2 > 0.25 else 1.0
 
         # ── lineup_value_ratio — confirmed starting XI quality signal ──────────
         # Kicks in ~1 hour before kickoff when official lineups are published.
