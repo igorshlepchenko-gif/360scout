@@ -98,9 +98,8 @@ export default function MatchesPage() {
 
   // filter
   const filtered = matches.filter(m => {
-    // Mandatory: hide any match without bookmaker odds — not actionable for users
-    if (!hasMarketOdds(m)) return false;
-    const { searchQuery, onlyValue, onlyConsensus, leagueGroup } = activeFilters;
+    const { searchQuery, onlyValue, onlyConsensus, onlyWithOdds, leagueGroup } = activeFilters;
+    if (onlyWithOdds && !hasMarketOdds(m)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const hit = m.home_team?.toLowerCase().includes(q)
