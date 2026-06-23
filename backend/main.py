@@ -7,6 +7,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
+import asyncio
 from contextlib import asynccontextmanager
 import fastapi
 from fastapi import FastAPI
@@ -24,7 +25,7 @@ from app.telegram_commands import start_command_bot, stop_command_bot
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """אתחול ב-startup וניקוי ב-shutdown"""
-    await init_db()
+    asyncio.create_task(init_db())  # non-blocking so healthcheck passes immediately
     start_scheduler()
     start_command_bot()
     yield
