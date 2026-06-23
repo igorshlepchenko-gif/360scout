@@ -254,9 +254,15 @@ async def init_db() -> None:
             command_timeout=60,
         )
         logger.info("DB pool initialized")
-        # Run migration on every startup — all statements use IF NOT EXISTS so it's safe
         async with _pool.acquire() as conn:
-            await conn.execute(MIGRATION_SQL)
+            # Extension may already exist — ignore duplicate-key error
+            try:
+                await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+            except Exception:
+                pass
+            # Tables all use IF NOT EXISTS — safe to run on every startup
+            tables_sql = MIGRATION_SQL.replace('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";', '')
+            await conn.execute(tables_sql)
             logger.info("DB migration complete")
         _last_error = None
     except Exception as e:
