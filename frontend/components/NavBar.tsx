@@ -9,7 +9,6 @@ const NAV_ITEMS = [
   { label: "כל המשחקים",        href: "/matches" },
   { label: "ביצועים היסטוריים", href: "/track-record" },
   { label: "אנליסטים",          href: "/analysts" },
-  { label: "♿ נגישות",          href: "/accessibility" },
 ];
 
 export default function NavBar() {
