@@ -181,8 +181,9 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
             all_fixtures.extend(scheduled)
             logger.info(f"Scheduled today: {len(scheduled)} fixtures worldwide")
 
-        # 3. אחרונים — cache 60 דקות
-        if len(all_fixtures) < 5:
+        # 3. אחרונים — fallback רק כשאין כלל משחקים פעילים/מתוכננים
+        has_active = any(f.get("_status") in ("live", "scheduled") for f in all_fixtures)
+        if not has_active and len(all_fixtures) < 5:
             from_date  = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
             recent_key = f"fixtures:recent:{from_date}:{today}"
             finished = await cache_get(recent_key, "fixtures")
