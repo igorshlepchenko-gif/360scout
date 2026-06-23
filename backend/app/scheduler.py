@@ -31,12 +31,12 @@ def _build_jobstores() -> dict:
     redis_url = os.getenv("REDIS_URL", "")
     if redis_url:
         try:
-            # parse Redis URL
             import redis
             r = redis.from_url(redis_url, socket_timeout=3)
             r.ping()
+            pool = redis.ConnectionPool.from_url(redis_url, socket_timeout=3)
             logger.info("Scheduler: using Redis jobstore")
-            return {"default": RedisJobStore(url=redis_url)}
+            return {"default": RedisJobStore(connection_pool=pool)}
         except Exception as e:
             logger.warning(f"Redis unavailable, using memory jobstore: {e}")
     return {}
