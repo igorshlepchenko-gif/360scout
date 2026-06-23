@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   X, BarChart3, CloudRain, HeartPulse, Brain,
   Target, Dice5, Sparkles, TrendingUp, Info, Activity,
@@ -121,17 +121,43 @@ function deriveFactors(p: Prediction, homeTeam: string, awayTeam: string) {
 export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayTeam, prediction }: Props) {
   const { by_module, confidence, monte_carlo, key_factors, final } = prediction;
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
   // ── Expert cross-check (fetched when the modal opens) ──────────────────────
   const [cross, setCross] = useState<CrossCheckResult | null>(null);
   const [crossLoading, setCrossLoading] = useState(false);
 
-  // close on Escape + lock scroll
+  // close on Escape + lock scroll + focus management + focus trap
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+
+    // Focus close button when modal opens
+    const frame = requestAnimationFrame(() => closeRef.current?.focus());
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+
+      // Tab trap
+      if (e.key === "Tab") {
+        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last  = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+          if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+        }
+      }
+    };
+
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
+      cancelAnimationFrame(frame);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
@@ -167,20 +193,30 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
     <div
       dir="rtl"
       onClick={onClose}
+      aria-hidden="true"
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-[fadeIn_.15s_ease]"
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-algo-title"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0F1318] shadow-2xl"
       >
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-[#0F1318]/95 px-5 py-4 backdrop-blur">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
-            <h2 className="text-sm font-extrabold text-white">איך חושב האלגוריתם?</h2>
+            <Sparkles className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+            <h2 id="modal-algo-title" className="text-sm font-extrabold text-white">איך חושב האלגוריתם?</h2>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-500 transition hover:bg-white/5 hover:text-white">
-            <X className="h-5 w-5" />
+          <button
+            ref={closeRef}
+            onClick={onClose}
+            aria-label="סגור חלון"
+            className="rounded-lg p-1 text-slate-500 transition hover:bg-white/5 hover:text-white"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 

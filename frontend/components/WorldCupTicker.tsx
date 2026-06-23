@@ -1,8 +1,8 @@
 "use client";
 
-export interface TickerItem {
-  text: string;
-}
+import { useState } from "react";
+
+export interface TickerItem { text: string }
 
 export interface TickerMatch {
   home_team:   string;
@@ -19,14 +19,13 @@ const IS_WC = (m: TickerMatch) => /world.?cup|fifa|מונדיאל/i.test(m.leagu
 function buildTickerItems(matches: TickerMatch[]): TickerItem[] {
   const items: TickerItem[] = [];
 
-  // ── 1. World Cup picks (always first) ─────────────────────────────────────
   const wcMatches = matches.filter(IS_WC);
   for (const m of wcMatches) {
-    const final    = m.prediction?.final;
-    const conf     = m.prediction?.confidence ?? 0;
+    const final = m.prediction?.final;
+    const conf  = m.prediction?.confidence ?? 0;
     if (!final) continue;
-    const top      = Object.entries(final).sort((a, b) => b[1] - a[1])[0];
-    const oddsStr  =
+    const top     = Object.entries(final).sort((a, b) => b[1] - a[1])[0];
+    const oddsStr =
       top[0] === "home" && m.odds?.odds_home ? ` · יחס ${m.odds.odds_home.toFixed(2)}` :
       top[0] === "draw" && m.odds?.odds_draw ? ` · יחס ${m.odds.odds_draw.toFixed(2)}` :
       top[0] === "away" && m.odds?.odds_away ? ` · יחס ${m.odds.odds_away.toFixed(2)}` : "";
@@ -35,7 +34,6 @@ function buildTickerItems(matches: TickerMatch[]): TickerItem[] {
     });
   }
 
-  // ── 2. Value bets from all other leagues ──────────────────────────────────
   const otherVB = matches.filter(m => !IS_WC(m) && m.value_bets &&
     Object.values(m.value_bets).some(v => v?.is_value_bet));
   for (const m of otherVB) {
@@ -48,7 +46,6 @@ function buildTickerItems(matches: TickerMatch[]): TickerItem[] {
     });
   }
 
-  // ── 3. Fallback if no real data ────────────────────────────────────────────
   if (items.length === 0) {
     return [
       { text: "🏆 מונדיאל 2026 — בחירות המערכת: עדיפות לסיגנלים עם קונסנזוס + Value Bet" },
@@ -66,6 +63,8 @@ export default function WorldCupTicker({
   items?:   TickerItem[];
   matches?: TickerMatch[];
 }) {
+  const [paused, setPaused] = useState(false);
+
   const resolvedItems = items ?? (matches ? buildTickerItems(matches) : [
     { text: "🏆 מונדיאל 2026 — בחירות המערכת: עדיפות לסיגנלים עם קונסנזוס + Value Bet" },
     { text: "⚡ Value Bet שזוהה? קבלו התראה מיידית בערוץ הטלגרם שלנו!" },
@@ -73,11 +72,12 @@ export default function WorldCupTicker({
   ]);
   if (!resolvedItems.length) return null;
 
-  // duplicate so the scroll feels seamless
   const allItems = [...resolvedItems, ...resolvedItems];
 
   return (
     <div
+      role="region"
+      aria-label="מבזקי מונדיאל ועסקאות ערך"
       style={{
         display: "flex",
         background: "linear-gradient(90deg, #1e293b, #0f172a)",
@@ -88,14 +88,14 @@ export default function WorldCupTicker({
         borderBottom: "2px solid #38bdf8",
         overflow: "hidden",
         position: "fixed",
-        top: 0,
-        left: 0,
+        top: 0, left: 0,
         width: "100%",
         zIndex: 9999,
       }}
     >
       {/* Fixed label */}
       <div
+        aria-hidden="true"
         style={{
           background: "#e11d48",
           color: "white",
@@ -114,6 +114,27 @@ export default function WorldCupTicker({
         🔥 המלצות מונדיאל לייב:
       </div>
 
+      {/* Pause / play button — keyboard accessible */}
+      <button
+        onClick={() => setPaused(p => !p)}
+        aria-label={paused ? "המשך גלילת המבזקים" : "עצור גלילת המבזקים"}
+        style={{
+          background: "none",
+          border: "1px solid rgba(255,255,255,0.25)",
+          color: "rgba(255,255,255,0.7)",
+          padding: "0 8px",
+          height: "65%",
+          borderRadius: 4,
+          cursor: "pointer",
+          fontSize: 11,
+          flexShrink: 0,
+          marginRight: 8,
+          lineHeight: 1,
+        }}
+      >
+        {paused ? "▶" : "⏸"}
+      </button>
+
       {/* Scrolling area */}
       <div
         className="ticker-wrap"
@@ -131,6 +152,7 @@ export default function WorldCupTicker({
             display: "flex",
             whiteSpace: "nowrap",
             paddingRight: "100%",
+            animationPlayState: paused ? "paused" : "running",
           }}
         >
           {allItems.map((item, i) => (
@@ -147,6 +169,11 @@ export default function WorldCupTicker({
             </span>
           ))}
         </div>
+      </div>
+
+      {/* Screen-reader live region — announces first item once */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {resolvedItems[0]?.text}
       </div>
     </div>
   );
