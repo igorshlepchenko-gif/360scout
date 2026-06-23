@@ -11,7 +11,7 @@ async function getLiveMatches() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 28000);
     const res = await fetch(`${API_URL}/api/live/matches?limit=8`, {
-      next: { revalidate: 120 },
+      cache: "no-store",
       signal: controller.signal,
     });
     clearTimeout(timeout);
