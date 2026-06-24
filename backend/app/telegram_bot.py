@@ -177,10 +177,19 @@ def format_world_cup_alert(match: dict, outcome: str, vb: dict, is_live: bool) -
 
 
 async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
-    """הודעת Value Bet מעוצבת"""
+    """הודעת Value Bet מעוצבת — עם dedup: לא ישלח אותה התראה פעמיים"""
+    fixture_id = match.get("fixture_id") or match.get("home_team", "?")
+    signal_key = f"{fixture_id}:{outcome}"
+    if signal_key in _sent_signals:
+        logger.debug(f"Telegram dedup — pre-match signal already sent: {signal_key}")
+        return False
+
     # 🏆 מונדיאל → פורמט פרימיום ייעודי
     if _is_world_cup(match.get("league", "")):
-        return await send_message(format_world_cup_alert(match, outcome, vb, is_live=False))
+        sent = await send_message(format_world_cup_alert(match, outcome, vb, is_live=False))
+        if sent:
+            _sent_signals.add(signal_key)
+        return sent
     stars   = "⭐⭐⭐" if vb.get("rating") == "STRONG" else "⭐⭐" if vb.get("rating") == "MODERATE" else "⭐"
     emoji   = {"home": "🏠", "away": "✈️", "draw": "🤝"}.get(outcome, "⚽")
     he_name = {"home": "בית", "away": "אורחים", "draw": "תיקו"}.get(outcome, outcome)
@@ -211,7 +220,10 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
 
 _360SCOUT · ניתוח 360 מעלות_
 """
-    return await send_message(text.strip())
+    sent = await send_message(text.strip())
+    if sent:
+        _sent_signals.add(signal_key)
+    return sent
 
 
 async def send_live_value_alert(
