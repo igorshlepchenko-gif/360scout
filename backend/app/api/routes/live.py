@@ -96,21 +96,22 @@ def is_premium_league(fixture: dict) -> bool:
 
 def passes_odds_threshold(match: dict, min_odds: float = MIN_MARKET_ODDS) -> bool:
     """
-    True only when all three 1X2 odds are present AND the favourite clears the floor.
+    True when there are no odds data (quota exhausted → show anyway), OR when
+    odds are present and the favourite clears the floor (not a near-certainty).
 
     Logic:
+    - If no odds data → allow through (quota may be exhausted).
     - Take the three decimal odds (home / draw / away).
     - Discard any that are missing or ≤ 1.0 (invalid).
-    - If none remain → no odds data → EXCLUDE the match (not actionable for users).
     - If the smallest valid odd is below min_odds → near-certainty → block.
 
-    Example: odds=None                        → False  (no odds — hide match)
+    Example: odds=None                        → True   (no odds — show match)
     Example: home=1.10, draw=5.00, away=12.0 → False  (favourite below floor)
     Example: home=1.55, draw=3.80, away=5.20 → True   (all clear)
     """
     odds = match.get("odds")
     if not odds:
-        return False
+        return True  # no odds data (quota exhausted) — show the match anyway
     candidates = [
         float(odds.get("odds_home") or 0),
         float(odds.get("odds_draw") or 0),
@@ -303,33 +304,35 @@ def _default_weather() -> dict:
 
 
 async def fetch_all_odds() -> list:
-    """משוך יחסים (1X2 + Over/Under) — קריאה אחת, cache של 15 דקות.
-    regions=eu,us,au,uk מכסה ליגות אירופה + MLS/USL + אוסטרליה + ארגנטינה/ברזיל/סין
-    באותה קריאה יחידה (אותה מכסה בדיוק כמו eu בלבד).
+    """משוך יחסים (1X2 + Over/Under) — שני endpoints: soccer + World Cup.
+    cache של 15 דקות. מחזיר רשימה מאוחדת.
     """
     cache_key = "odds:soccer:global:h2h_totals"
     cached = await cache_get(cache_key, "odds")
     if cached is not None:
         return cached
 
+    combined: list = []
     async with httpx.AsyncClient(timeout=20) as client:
-        try:
-            r = await client.get(
-                f"{ODDS_API_BASE}/sports/soccer/odds",
-                params={
-                    "apiKey":     ODDS_API_KEY,
-                    "regions":    "eu,us,au,uk",
-                    "markets":    "h2h,totals",
-                    "oddsFormat": "decimal",
-                }
-            )
-            if r.status_code != 200:
-                return []
-            data = r.json()
-            await cache_set(cache_key, data, "odds")
-            return data
-        except Exception:
-            return []
+        for sport in ("soccer", "soccer_fifa_world_cup"):
+            try:
+                r = await client.get(
+                    f"{ODDS_API_BASE}/sports/{sport}/odds",
+                    params={
+                        "apiKey":     ODDS_API_KEY,
+                        "regions":    "eu,us,au,uk",
+                        "markets":    "h2h,totals",
+                        "oddsFormat": "decimal",
+                    }
+                )
+                if r.status_code == 200:
+                    combined.extend(r.json() if isinstance(r.json(), list) else [])
+            except Exception:
+                pass
+
+    if combined:
+        await cache_set(cache_key, combined, "odds")
+    return combined
 
 
 def find_totals_for_match(all_odds: list, home_team: str, away_team: str, line: float = 2.5) -> dict | None:
