@@ -54,7 +54,7 @@ async def job_fetch_live_matches():
         from app.api.routes.live import (
             fetch_todays_fixtures, fetch_all_odds, fetch_odds_apisports,
             fetch_weather_for_city, build_match_analysis_sync,
-            _default_weather,
+            fetch_fixture_live_xg, _default_weather,
         )
 
         fixtures = await fetch_todays_fixtures()
@@ -70,21 +70,40 @@ async def job_fetch_live_matches():
         ))
         fixture_ids = [f.get("fixture", {}).get("id") for f in fixtures]
 
-        # משוך במקביל: The Odds API (bulk) + מזג אוויר + API-Sports odds (per fixture)
+        # Live fixture IDs for real xG (only active matches)
+        live_fixtures = [
+            f for f in fixtures
+            if f.get("fixture", {}).get("status", {}).get("short") in
+               ("1H", "2H", "ET", "HT", "BT")
+        ]
+
+        # משוך במקביל: The Odds API (bulk) + מזג אוויר + API-Sports odds + real xG (live only)
         all_results = await asyncio.gather(
             fetch_all_odds(),
             *[fetch_weather_for_city(c) for c in cities],
             *[fetch_odds_apisports(fid) for fid in fixture_ids if fid],
+            *[fetch_fixture_live_xg(
+                f["fixture"]["id"],
+                f["teams"]["home"]["id"],
+                f["teams"]["away"]["id"],
+              ) for f in live_fixtures],
             return_exceptions=True,
         )
         all_odds        = all_results[0] if isinstance(all_results[0], list) else []
         weather_results = all_results[1: 1 + len(cities)]
-        apisports_raw   = all_results[1 + len(cities):]
+        n_odds          = len([fid for fid in fixture_ids if fid])
+        apisports_raw   = all_results[1 + len(cities): 1 + len(cities) + n_odds]
+        live_xg_raw     = all_results[1 + len(cities) + n_odds:]
         valid_ids     = [fid for fid in fixture_ids if fid]
         apisports_map = {
             fid: raw
             for fid, raw in zip(valid_ids, apisports_raw)
             if isinstance(raw, dict)
+        }
+        live_xg_map = {
+            f["fixture"]["id"]: xg
+            for f, xg in zip(live_fixtures, live_xg_raw)
+            if isinstance(xg, dict)
         }
 
         city_weather = {
@@ -101,6 +120,12 @@ async def job_fetch_live_matches():
                 fid          = f.get("fixture", {}).get("id")
                 fixture_odds = apisports_map.get(fid)
                 result       = build_match_analysis_sync(f, all_odds, weather, fixture_odds=fixture_odds)
+                # Inject real in-match xG when available (live fixtures only)
+                live_xg = live_xg_map.get(fid)
+                if result is not None and live_xg:
+                    result["xg_home"] = live_xg["xg_home"]
+                    result["xg_away"] = live_xg["xg_away"]
+                    result["xg_source"] = "api_football_live"
                 if result is not None:
                     # OLBG consensus enrichment — אם הסלוג נמצא, מחליף ALGORITHM_ONLY
                     try:

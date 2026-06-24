@@ -479,6 +479,59 @@ async def fetch_live_lineups(fixture_id: int) -> list | None:
             return None
 
 
+async def fetch_fixture_live_xg(fixture_id: int, home_team_id: int, away_team_id: int) -> dict | None:
+    """
+    Real in-match xG from /fixtures/statistics — only meaningful for live/FT fixtures.
+    Returns {"xg_home": float, "xg_away": float} or None if unavailable.
+    Cached 2 minutes (refreshes during live play).
+    """
+    if not fixture_id or not API_FOOTBALL_KEY:
+        return None
+
+    cache_key = f"fixture_xg:{fixture_id}"
+    cached = await cache_get(cache_key, "stats")
+    if cached is not None:
+        return cached
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            r = await client.get(
+                f"{API_FOOTBALL_BASE}/fixtures/statistics",
+                headers={"x-apisports-key": API_FOOTBALL_KEY},
+                params={"fixture": fixture_id},
+            )
+            teams_data = r.json().get("response", [])
+            if not teams_data:
+                return None
+
+            xg_by_team: dict[int, float] = {}
+            for team_entry in teams_data:
+                tid = team_entry.get("team", {}).get("id")
+                if not tid:
+                    continue
+                for stat in team_entry.get("statistics", []):
+                    if stat.get("type") in ("Expected Goals", "expected_goals", "xG"):
+                        try:
+                            val = float(stat.get("value") or 0)
+                            if val > 0:
+                                xg_by_team[tid] = val
+                        except (TypeError, ValueError):
+                            pass
+
+            if home_team_id not in xg_by_team or away_team_id not in xg_by_team:
+                return None
+
+            result = {
+                "xg_home": round(xg_by_team[home_team_id], 2),
+                "xg_away": round(xg_by_team[away_team_id], 2),
+            }
+            await cache_set(cache_key, result, "stats")
+            return result
+        except Exception as e:
+            logger.debug(f"Fixture xG {fixture_id}: {e}")
+            return None
+
+
 def find_odds_for_match(all_odds: list, home_team: str, away_team: str) -> dict | None:
     """חפש יחסים למשחק ספציפי — גמיש עם שמות שונים"""
     home_lower = home_team.lower()
