@@ -17,17 +17,18 @@ const PANELS: Record<TabId, string> = {
 
 export default function DashboardTabs({
   matches,
+  wcMatches = [],
   leagueAccuracy = [],
   globalAccuracy = null,
 }: {
   matches: any[];
+  wcMatches?: any[];
   leagueAccuracy?: LeagueAccuracyRow[];
   globalAccuracy?: number | null;
 }) {
   const [tab, setTab] = useState<TabId>("all");
 
   const liveMatches = matches.filter((m: any) => m._status === "live");
-  const wcMatches   = matches.filter(IS_WORLD_CUP);
   const liveCount   = liveMatches.length;
   const wcCount     = wcMatches.length;
 
@@ -117,10 +118,10 @@ export default function DashboardTabs({
             }}>
               <div style={{ fontSize: 32, marginBottom: 12 }} aria-hidden="true">🏆</div>
               <div style={{ color: "#94a3b8", fontSize: 14, fontWeight: 600 }}>
-                אין משחקי מונדיאל היום
+                אין משחקי מונדיאל בטווח הקרוב
               </div>
               <div style={{ color: "#64748b", fontSize: 12, marginTop: 6 }}>
-                מונדיאל 2026 מתחיל ב-11/6/2026 — המשחקים יופיעו כאן אוטומטית
+                המשחקים הבאים יופיעו כאן אוטומטית ברגע שיתפרסם לוח הזמנים
               </div>
             </div>
           )

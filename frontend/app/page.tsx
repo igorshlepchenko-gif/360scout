@@ -27,6 +27,25 @@ async function getLiveMatches() {
   }
 }
 
+async function getWorldCupMatches() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 28000);
+    const res = await fetch(`${API_URL}/api/live/world-cup?days=7&limit=30`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = await res.json();
+    if (data.status !== "success") return [];
+    // hide matches without bookmaker odds — not actionable (same rule as /world-cup page)
+    return (data.matches ?? []).filter((m: any) => m.odds?.odds_home > 1);
+  } catch (e) {
+    console.error("getWorldCupMatches error:", e);
+    return [];
+  }
+}
+
 async function getDemoData() {
   try {
     const res = await fetch(`${API_URL}/api/matches/demo`, { cache: "no-store" });
@@ -48,8 +67,8 @@ async function getTrackStats() {
 }
 
 export default async function Home() {
-  const [liveResult, demo, trackStats] = await Promise.all([
-    getLiveMatches(), getDemoData(), getTrackStats()
+  const [liveResult, demo, trackStats, wcMatches] = await Promise.all([
+    getLiveMatches(), getDemoData(), getTrackStats(), getWorldCupMatches()
   ]);
   const liveMatches = liveResult.matches;
   const displayMode = liveResult.mode;
@@ -140,6 +159,7 @@ export default async function Home() {
             // ✅ משחקים אמיתיים מה-API — top-level tabs: All / Live / World Cup
             <DashboardTabs
               matches={liveMatches}
+              wcMatches={wcMatches}
               leagueAccuracy={leagueAccuracy}
               globalAccuracy={summary?.accuracy ?? null}
             />
