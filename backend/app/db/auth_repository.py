@@ -249,7 +249,10 @@ async def delete_session(token: str) -> None:
 async def seed_admin_user() -> None:
     """
     יוצר את חשבון האדמין הראשון מ-ADMIN_EMAIL/ADMIN_PASSWORD (env).
-    Idempotent — אם כבר קיים משתמש עם אותו אימייל, לא נוגע בו (לא דורס סיסמה שהוחלפה).
+    Idempotent — אם כבר קיים משתמש עם אותו אימייל שהוא כבר admin+approved, לא נוגע בו
+    (לא דורס סיסמה שהוחלפה). אבל אם קיימת שורה תחת האימייל הזה שנוצרה דרך הרשמה רגילה
+    (למשל מישהו ניסה להירשם עם כתובת האדמין לפני שהזריעה רצה) — מקדם אותה ל-admin/approved
+    במקום להישאר תקוע ב-pending לנצח, מבלי לגעת ב-password_hash הקיים.
     לעולם לא מדפיס את הסיסמה בטקסט גלוי.
     """
     email = os.getenv("ADMIN_EMAIL", "").strip()
@@ -258,13 +261,29 @@ async def seed_admin_user() -> None:
         logger.warning("ADMIN_EMAIL / ADMIN_PASSWORD not set — skipping admin seed")
         return
 
-    if await get_user_by_email(email):
-        logger.info(f"Admin already seeded, skipping: {_normalize_email(email)}")
-        return
-
+    email_norm = _normalize_email(email)
+    existing = await get_user_by_email(email)
     pool = await get_db()
     if pool is None:
         logger.warning("DB unavailable — cannot seed admin user")
+        return
+
+    if existing:
+        if existing["role"] == "admin" and existing["status"] == "approved":
+            logger.info(f"Admin already seeded, skipping: {email_norm}")
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE users SET role = 'admin', status = 'approved', approved_at = NOW()
+                    WHERE email = $1
+                    """,
+                    email_norm,
+                )
+            logger.info(f"Promoted pre-existing account to admin: {email_norm}")
+        except Exception as e:
+            logger.error(f"seed_admin_user promote failed: {e}")
         return
 
     try:
@@ -273,7 +292,6 @@ async def seed_admin_user() -> None:
         logger.error("ADMIN_PASSWORD exceeds bcrypt's 72-byte limit — skipping admin seed")
         return
 
-    email_norm = _normalize_email(email)
     try:
         async with pool.acquire() as conn:
             await conn.execute(
