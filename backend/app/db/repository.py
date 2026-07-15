@@ -8,10 +8,13 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from .database import get_db
 
 logger = logging.getLogger(__name__)
+
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -38,12 +41,14 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
         value_bets  = match_data.get("value_bets") or {}
         consensus   = match_data.get("consensus") or {}
 
-        # parse תאריך
+        # parse תאריך — match_date מגיע כמחרוזת שכבר מומרת לשעון ישראל (live.py),
+        # לכן חייבים לתייג אותה עם ISRAEL_TZ לפני האחסון. אחרת asyncpg מכניס אותה
+        # ל-TIMESTAMPTZ כאילו הייתה UTC — הפרש של 2-3 שעות שיכול לגלוש ליום הלועזי הבא.
         match_date = None
         date_str = match_data.get("match_date", "")
         if date_str:
             try:
-                match_date = datetime.strptime(date_str, "%d/%m/%Y %H:%M")
+                match_date = datetime.strptime(date_str, "%d/%m/%Y %H:%M").replace(tzinfo=ISRAEL_TZ)
             except Exception:
                 pass
 
