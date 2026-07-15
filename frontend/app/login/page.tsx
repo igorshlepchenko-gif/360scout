@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const card: React.CSSProperties = {
@@ -28,6 +28,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Real validity check (not just cookie presence) — if a stale-but-still-valid
+  // session already exists, skip straight past the form. Failure just leaves
+  // the form showing; it never redirects anywhere else, so this can't loop.
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(res => { if (res.ok) router.replace("/"); })
+      .catch(() => {});
+  }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
