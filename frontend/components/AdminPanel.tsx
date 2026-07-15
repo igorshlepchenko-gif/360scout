@@ -22,7 +22,10 @@ const th: React.CSSProperties = {
   background: "#f8fafc", color: "#0f172a", padding: "10px 12px",
   fontWeight: 600, borderBottom: "2px solid #cbd5e1", fontSize: 13,
 };
-const td: React.CSSProperties = { padding: "10px 12px", borderBottom: "1px solid #e2e8f0", fontSize: 13 };
+const td: React.CSSProperties = {
+  padding: "10px 12px", borderBottom: "1px solid #e2e8f0", fontSize: 13,
+  color: "#334155",
+};
 const actionBtn: React.CSSProperties = {
   padding: "6px 12px", borderRadius: 6, border: "none", color: "#fff",
   fontWeight: 600, fontSize: 12, cursor: "pointer",
