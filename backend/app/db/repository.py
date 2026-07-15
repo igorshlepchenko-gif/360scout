@@ -895,7 +895,12 @@ async def get_match_analyst_predictions_by_uuid(pool, match_uuid: str) -> list:
 
 
 async def get_todays_fixtures(pool) -> list:
-    """Fetch today's active fixtures for OLBG enrichment job."""
+    """
+    Fetch today's active fixtures for OLBG enrichment job.
+    "Today" means Israel's calendar day, not the DB session's default (UTC) —
+    otherwise a late-evening Israel match could fall on the wrong side of the
+    cutoff near midnight.
+    """
     try:
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -906,7 +911,8 @@ async def get_todays_fixtures(pool) -> list:
                     league_name,
                     status
                 FROM matches
-                WHERE match_date::date = CURRENT_DATE
+                WHERE (match_date AT TIME ZONE 'Asia/Jerusalem')::date
+                    = (NOW() AT TIME ZONE 'Asia/Jerusalem')::date
                   AND status IN ('scheduled', 'live', '1H', '2H', 'HT', 'ET')
                 ORDER BY match_date
             """)
