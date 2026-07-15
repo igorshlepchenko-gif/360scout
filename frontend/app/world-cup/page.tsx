@@ -26,6 +26,7 @@ interface WCMatch {
   xg?: any;
   goals_signal?: any;
   ou_edge?: any;
+  handicap_signal?: any;
   lineups?: any;
 }
 
@@ -91,6 +92,7 @@ export default function WorldCupPage() {
               xg={m.xg}
               goals_signal={m.goals_signal}
               ou_edge={m.ou_edge}
+              handicap_signal={m.handicap_signal}
               lineups={m.lineups}
             />
           ))}

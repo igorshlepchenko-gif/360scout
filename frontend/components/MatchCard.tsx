@@ -116,6 +116,28 @@ interface OuEdge {
   bookmaker?:        string;
 }
 
+interface HandicapSignal {
+  triggered:      boolean;
+  favorite:       "home" | "away";
+  favorite_team:  string;
+  underdog_team:  string;
+  line:           number;   // -1.5
+  xg_home:        number;
+  xg_away:        number;
+  cover_prob:     number;   // 0–1 — P(favourite wins by 2+)
+  straight_win_prob: number; // 0–1 — P(favourite wins straight, any margin)
+  straight_odds:  number;
+  straight_edge:  number;   // EV% on the straight win
+  ah_odds:        number | null;
+  ah_fair_odds:   number;
+  ah_edge:        number | null;
+  ah_rating:      string;
+  bookmaker:      string | null;
+  is_safe_match:  boolean;
+  is_high_margin: boolean;
+  reasoning:      string;
+}
+
 interface MatchCardProps {
   homeTeam:     string;
   awayTeam:     string;
@@ -135,6 +157,7 @@ interface MatchCardProps {
   xg?:          { home: number; away: number } | null;
   goals_signal?: GoalsSignal | null;
   ou_edge?:     OuEdge | null;
+  handicap_signal?: HandicapSignal | null;
   lineups?:     Lineups | null;
 }
 
@@ -548,6 +571,118 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
   );
 }
 
+// ===== Asian Handicap — "Safe Match" shift (The Winning Method) =====
+function AsianHandicapRow({ hs }: { hs: HandicapSignal }) {
+  const favLabel = hs.favorite === "home" ? "בית" : "אורחים";
+  const rows = [
+    {
+      label: `1X2 ישיר (${favLabel})`,
+      emoji: "🔒",
+      prob:  hs.straight_win_prob,
+      odds:  hs.straight_odds,
+      edge:  hs.straight_edge,
+      note:  "ערך נמוך — כבר מתומחר",
+    },
+    {
+      label: `אסיאן הנדיקאפ ${hs.line}`,
+      emoji: "🎯",
+      prob:  hs.cover_prob,
+      odds:  hs.ah_odds ?? hs.ah_fair_odds,
+      edge:  hs.ah_edge,
+      note:  hs.ah_odds ? undefined : "יחס משוער — לא נמצא קו בשוק",
+    },
+  ];
+
+  const TH: React.CSSProperties = {
+    padding: "6px 8px", fontSize: 9, fontWeight: 700,
+    color: "#fb923c", textAlign: "center",
+    background: "rgba(11,11,22,0.9)",
+    whiteSpace: "nowrap",
+  };
+  const TD: React.CSSProperties = {
+    padding: "6px 8px", fontSize: 11, textAlign: "center",
+    fontFamily: "monospace", color: "#a0a0b8",
+  };
+  const LABEL: React.CSSProperties = {
+    padding: "6px 8px", fontSize: 11, fontWeight: 700,
+    color: "#a0a0b8", whiteSpace: "nowrap",
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 6,
+        flexWrap: "wrap",
+      }}>
+        <div style={{ height: 12, width: 3, background: "#fb923c", borderRadius: 99 }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: "#a0a0b8" }}>
+          The Winning Method — Asian Handicap {hs.line}
+        </span>
+        <span style={{
+          fontSize: 9, fontWeight: 800, color: "#fb923c",
+          background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)",
+          borderRadius: 99, padding: "1px 8px",
+        }}>
+          המלצה הוסטה: {hs.favorite_team} {hs.line}
+        </span>
+      </div>
+
+      <div style={{ border: "1px solid rgba(251,146,60,0.25)", borderRadius: 8, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
+          <caption className="sr-only">
+            טבלת השוואה — ניצחון ישיר מול אסיאן הנדיקאפ: הסתברויות, יחסים וערך מתמטי
+          </caption>
+          <thead>
+            <tr style={{ borderBottom: "1px solid rgba(251,146,60,0.3)" }}>
+              <th style={{ ...TH, textAlign: "right" }}>שוק</th>
+              <th style={TH}>הסתברות המערכת</th>
+              <th style={TH}>יחס</th>
+              <th style={TH}>ערך מתמטי</th>
+              <th style={TH}>הערה</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const hasEdge  = r.edge !== null && r.edge !== undefined;
+              const isValue  = hasEdge && (r.edge as number) > 0;
+              const rawValue = hasEdge ? (r.edge as number) / 100 : null;
+              return (
+                <tr key={r.label} style={{
+                  background: isValue ? "rgba(251,146,60,0.06)" : undefined,
+                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                }}>
+                  <td style={{ ...LABEL, color: isValue ? "#fb923c" : "#a0a0b8" }}>
+                    {r.emoji} {r.label}
+                  </td>
+                  <td style={{ ...TD, color: "#fb923c", fontWeight: 700, fontSize: 13 }}>
+                    {(r.prob * 100).toFixed(1)}%
+                  </td>
+                  <td style={{ ...TD, fontWeight: 600, color: "#a0a0b8" }}>
+                    {r.odds > 0 ? r.odds.toFixed(2) : "—"}
+                  </td>
+                  <td style={{
+                    ...TD, fontWeight: 700,
+                    color: !hasEdge ? "#64748b" : isValue ? "#fb923c" : "#ff4d4d",
+                  }}>
+                    {rawValue === null ? "—" : rawValue >= 0 ? `+${rawValue.toFixed(2)}` : rawValue.toFixed(2)}
+                  </td>
+                  <td style={{ ...TD, fontSize: 9, color: "#64748b" }}>
+                    {r.note ?? "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p style={{ fontSize: 10.5, color: "#94a3b8", lineHeight: 1.5, marginTop: 6, marginBottom: 0 }}>
+        {hs.reasoning}
+      </p>
+    </div>
+  );
+}
+
 // ===== Decimal Odds Strip (always visible) =====
 function OddsStrip({ odds, valueBets }: { odds: MatchOdds; valueBets?: ValueBets }) {
   const items = [
@@ -916,7 +1051,7 @@ export default function MatchCard({
   matchDate, isLive = false,
   prediction, value_bets, consensus,
   fixtureId, matchId, odds, weather, xg,
-  goals_signal, ou_edge, lineups,
+  goals_signal, ou_edge, handicap_signal, lineups,
 }: MatchCardProps) {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -1152,6 +1287,11 @@ export default function MatchCard({
           <OUWinningMethodRow gs={goals_signal} />
         )}
 
+        {/* ── ASIAN HANDICAP — Safe Match shift (only when the trigger actually fires) ── */}
+        {handicap_signal?.triggered && (
+          <AsianHandicapRow hs={handicap_signal} />
+        )}
+
         {/* ── CONSENSUS LOCK BANNER ── */}
         {consensusData?.is_consensus_lock && (
           <div style={{
@@ -1252,6 +1392,25 @@ export default function MatchCard({
             <span style={{ fontSize: 11, color: "rgba(167,139,250,0.8)" }}>
               +{goals_signal.signal_edge.toFixed(1)}%
             </span>
+          </div>
+        )}
+
+        {/* Asian Handicap shift badge */}
+        {handicap_signal?.triggered && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5, direction: "ltr",
+            background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)",
+            borderRadius: 99, padding: "4px 10px",
+          }}>
+            <span style={{ fontSize: 12 }}>🎯</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#fb923c" }}>
+              {handicap_signal.favorite_team} {handicap_signal.line}
+            </span>
+            {handicap_signal.ah_edge !== null && (
+              <span style={{ fontSize: 11, color: "rgba(251,146,60,0.8)" }}>
+                +{handicap_signal.ah_edge.toFixed(1)}%
+              </span>
+            )}
           </div>
         )}
 

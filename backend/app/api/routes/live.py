@@ -26,6 +26,10 @@ from app.engine.dynamic_adjuster import adjust_probabilities, AdjustmentParams
 from app.engine.goals_engine import (
     calculate_goals_value, injury_flags_from_list, GoalsValueSignal,
 )
+from app.engine.handicap_engine import (
+    calculate_handicap_value, HandicapValueSignal,
+    SAFE_MATCH_ODDS_MIN, SAFE_MATCH_ODDS_MAX,
+)
 from app.engine.data_ingestion import (
     fetch_referee_stats, classify_team_playstyle, calculate_tactical_matchup,
 )
@@ -304,10 +308,10 @@ def _default_weather() -> dict:
 
 
 async def fetch_all_odds() -> list:
-    """משוך יחסים (1X2 + Over/Under) — שני endpoints: soccer + World Cup.
+    """משוך יחסים (1X2 + Over/Under + Asian Handicap) — שני endpoints: soccer + World Cup.
     cache של 15 דקות. מחזיר רשימה מאוחדת.
     """
-    cache_key = "odds:soccer:global:h2h_totals"
+    cache_key = "odds:soccer:global:h2h_totals_spreads"
     cached = await cache_get(cache_key, "odds")
     if cached is not None:
         return cached
@@ -321,7 +325,7 @@ async def fetch_all_odds() -> list:
                     params={
                         "apiKey":     ODDS_API_KEY,
                         "regions":    "eu,us,au,uk",
-                        "markets":    "h2h,totals",
+                        "markets":    "h2h,totals,spreads",
                         "oddsFormat": "decimal",
                     }
                 )
@@ -359,6 +363,39 @@ def find_totals_for_match(all_odds: list, home_team: str, away_team: str, line: 
                     "line":      line,
                     "over":      over["price"],
                     "under":     under["price"],
+                }
+    return None
+
+
+def find_spreads_for_match(
+    all_odds: list, home_team: str, away_team: str,
+    favorite_name: str, line: float = -1.5,
+) -> dict | None:
+    """חפש יחס Asian Handicap אמיתי לקו נתון (ברירת מחדל -1.5) עבור הפייבוריט — מטריצת The Odds API.
+    מחזיר None כשהבוקי לא מציע בדיוק את הקו הזה (fallback ל-fair price בלבד ב-handicap_engine).
+    """
+    home_lower = home_team.lower()
+    away_lower = away_team.lower()
+    fav_lower  = favorite_name.lower()
+    for event in all_odds:
+        ev_home = event.get("home_team", "").lower()
+        ev_away = event.get("away_team", "").lower()
+        if not ((home_lower[:6] in ev_home or ev_home[:6] in home_lower) and
+                (away_lower[:6] in ev_away or ev_away[:6] in away_lower)):
+            continue
+        for bm in event.get("bookmakers", []):
+            spreads = next((m for m in bm.get("markets", []) if m["key"] == "spreads"), None)
+            if not spreads:
+                continue
+            outcome = next((
+                o for o in spreads.get("outcomes", [])
+                if fav_lower[:6] in o.get("name", "").lower() and abs(o.get("point", 0) - line) < 0.01
+            ), None)
+            if outcome:
+                return {
+                    "bookmaker": bm.get("title", ""),
+                    "line":      line,
+                    "price":     outcome["price"],
                 }
     return None
 
@@ -1009,6 +1046,7 @@ def build_match_analysis_sync(
     #   ou_edge      : live in-play Poisson PMF on *remaining* expected goals (backward compat)
     goals_signal: GoalsValueSignal | None = None
     ou_edge = None
+    handicap_signal: HandicapValueSignal | None = None
     totals  = _totals  # already looked up above for xG calibration
     if totals and totals.get("over") and totals.get("under"):
         # Pre-game / full-match: Goals Engine with dynamic xG modifiers
@@ -1103,6 +1141,31 @@ def build_match_analysis_sync(
             # attach bookmaker name to the signal dict for Telegram formatting
             goals_signal = goals_signal  # frozen dataclass — pass bookmaker via ou_edge
 
+        # ── Asian Handicap — "Safe Match + High Margin" shift ─────────────────
+        # Only worth checking when the straight 1X2 favourite is already in the
+        # 1.15-1.45 "safe match" window (calculate_handicap_value returns None
+        # otherwise) — reuses the same xg_mods calibration as the O/U signal.
+        if odds and odds.get("odds_home") and odds.get("odds_away"):
+            _fav_side = "home" if odds["odds_home"] <= odds["odds_away"] else "away"
+            _fav_odds = odds["odds_home"] if _fav_side == "home" else odds["odds_away"]
+            if SAFE_MATCH_ODDS_MIN <= _fav_odds <= SAFE_MATCH_ODDS_MAX:
+                _fav_name = home.get("name", "Home") if _fav_side == "home" else away.get("name", "Away")
+                _dog_name = away.get("name", "Away") if _fav_side == "home" else home.get("name", "Home")
+                _ah_market = find_spreads_for_match(
+                    all_odds, home.get("name", ""), away.get("name", ""), _fav_name,
+                )
+                handicap_signal = calculate_handicap_value(
+                    xg_home       = xg_home,
+                    xg_away       = xg_away,
+                    favorite      = _fav_side,
+                    favorite_team = _fav_name,
+                    underdog_team = _dog_name,
+                    straight_odds = _fav_odds,
+                    ah_odds       = _ah_market["price"] if _ah_market else None,
+                    bookmaker     = _ah_market["bookmaker"] if _ah_market else None,
+                    mods          = xg_mods,
+                )
+
     # קונסנזוס (ללא אנליסטים אנושיים כרגע)
     consensus = calculate_consensus(prediction["final"], [])
 
@@ -1136,6 +1199,7 @@ def build_match_analysis_sync(
         "value_bets":    value_bets if value_bets else None,
         "ou_edge":       ou_edge,
         "goals_signal":  goals_signal.to_dict() if goals_signal else None,
+        "handicap_signal": handicap_signal.to_dict() if handicap_signal else None,
         "consensus":     consensus,
         "weather":       weather,
         "xg": {
