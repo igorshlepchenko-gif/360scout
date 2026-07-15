@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const NAV_ITEMS = [
   { label: "סיגנלים חמים",      href: "/" },
@@ -14,9 +15,16 @@ const NAV_ITEMS = [
 export default function NavBar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const { user, loading: authLoading } = useCurrentUser();
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    // Hard redirect — drops any stale in-memory state from data fetched while logged in.
+    window.location.href = "/login";
+  }
 
   return (
     <>
@@ -44,7 +52,7 @@ export default function NavBar() {
           </a>
 
           {/* Desktop links — hidden on mobile via CSS */}
-          <div className="nav-desktop-links" style={{ display: "flex", gap: 24 }}>
+          <div className="nav-desktop-links" style={{ display: "flex", alignItems: "center", gap: 24 }}>
             {NAV_ITEMS.map(item => (
               <a
                 key={item.href}
@@ -62,6 +70,43 @@ export default function NavBar() {
                 {item.label}
               </a>
             ))}
+
+            {!authLoading && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 14,
+                borderRight: "1px solid rgba(255,255,255,0.12)", paddingRight: 20,
+              }}>
+                {user ? (
+                  <>
+                    {user.role === "admin" && (
+                      <a href="/admin" style={{ color: "#64748b", fontSize: 14, textDecoration: "none", whiteSpace: "nowrap" }}>
+                        ניהול
+                      </a>
+                    )}
+                    <span style={{ color: "#64748b", fontSize: 13, whiteSpace: "nowrap" }}>{user.email}</span>
+                    <button
+                      onClick={handleLogout}
+                      style={{
+                        background: "transparent", border: "1px solid rgba(255,255,255,0.15)",
+                        color: "#94a3b8", fontSize: 13, padding: "5px 12px", borderRadius: 6,
+                        cursor: "pointer", whiteSpace: "nowrap",
+                      }}
+                    >
+                      התנתקות
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <a href="/login" style={{ color: "#64748b", fontSize: 14, textDecoration: "none", whiteSpace: "nowrap" }}>
+                      התחברות
+                    </a>
+                    <a href="/register" style={{ color: "#10b981", fontSize: 14, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+                      הרשמה
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Hamburger — last in RTL = visually LEFT — shown on mobile only */}
@@ -129,6 +174,69 @@ export default function NavBar() {
                 {item.label}
               </a>
             ))}
+
+            {!authLoading && (
+              user ? (
+                <>
+                  {user.role === "admin" && (
+                    <a
+                      href="/admin"
+                      onClick={() => setOpen(false)}
+                      style={{
+                        color: isActive("/admin") ? "white" : "#94a3b8",
+                        fontSize: 16, fontWeight: isActive("/admin") ? 700 : 400,
+                        textDecoration: "none", padding: "13px 0",
+                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      ניהול
+                    </a>
+                  )}
+                  <div style={{
+                    color: "#64748b", fontSize: 14, padding: "13px 0",
+                    borderTop: user.role === "admin" ? "none" : "1px solid rgba(255,255,255,0.06)",
+                  }}>
+                    {user.email}
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      color: "#94a3b8", fontSize: 16, textDecoration: "none",
+                      padding: "13px 0", background: "none", border: "none",
+                      borderTop: "1px solid rgba(255,255,255,0.06)",
+                      textAlign: "right", cursor: "pointer", width: "100%",
+                    }}
+                  >
+                    התנתקות
+                  </button>
+                </>
+              ) : (
+                <>
+                  <a
+                    href="/login"
+                    onClick={() => setOpen(false)}
+                    style={{
+                      color: isActive("/login") ? "white" : "#94a3b8",
+                      fontSize: 16, fontWeight: isActive("/login") ? 700 : 400,
+                      textDecoration: "none", padding: "13px 0",
+                      borderTop: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    התחברות
+                  </a>
+                  <a
+                    href="/register"
+                    onClick={() => setOpen(false)}
+                    style={{
+                      color: "#10b981", fontSize: 16, fontWeight: 700,
+                      textDecoration: "none", padding: "13px 0",
+                    }}
+                  >
+                    הרשמה
+                  </a>
+                </>
+              )
+            )}
           </div>
         )}
       </nav>

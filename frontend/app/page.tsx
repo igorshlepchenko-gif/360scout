@@ -3,6 +3,7 @@ import DashboardTabs from "@/components/DashboardTabs";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
 import WorldCupTicker from "@/components/WorldCupTicker";
 import { getEnhancedMatches } from "@/lib/enhancedMatches";
+import { requireApprovedUser, backendAuthHeaders } from "@/lib/session";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
@@ -13,6 +14,7 @@ async function getLiveMatches() {
     const res = await fetch(`${API_URL}/api/live/matches?limit=8`, {
       cache: "no-store",
       signal: controller.signal,
+      headers: await backendAuthHeaders(),
     });
     clearTimeout(timeout);
     const data = await res.json();
@@ -34,6 +36,7 @@ async function getWorldCupMatches() {
     const res = await fetch(`${API_URL}/api/live/world-cup?days=7&limit=30`, {
       cache: "no-store",
       signal: controller.signal,
+      headers: await backendAuthHeaders(),
     });
     clearTimeout(timeout);
     const data = await res.json();
@@ -48,7 +51,10 @@ async function getWorldCupMatches() {
 
 async function getDemoData() {
   try {
-    const res = await fetch(`${API_URL}/api/matches/demo`, { cache: "no-store" });
+    const res = await fetch(`${API_URL}/api/matches/demo`, {
+      cache: "no-store",
+      headers: await backendAuthHeaders(),
+    });
     return await res.json();
   } catch { return null; }
 }
@@ -56,7 +62,8 @@ async function getDemoData() {
 async function getTrackStats() {
   try {
     const res = await fetch(`${API_URL}/api/live/track-record?limit=100`, {
-      next: { revalidate: 300 },
+      cache: "no-store",
+      headers: await backendAuthHeaders(),
     });
     const data = await res.json();
     return {
@@ -67,6 +74,8 @@ async function getTrackStats() {
 }
 
 export default async function Home() {
+  await requireApprovedUser();
+
   const [liveResult, demo, trackStats, wcMatches] = await Promise.all([
     getLiveMatches(), getDemoData(), getTrackStats(), getWorldCupMatches()
   ]);

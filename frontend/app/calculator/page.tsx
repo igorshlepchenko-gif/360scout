@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 // ── Pure Poisson probability ──────────────────────────────────────────────────
 function poisson(k: number, lambda: number): number {
@@ -59,6 +60,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function CalculatorPage() {
+  useRequireAuth();
   const [baseXgHome, setBaseXgHome] = useState("1.6");
   const [baseXgAway, setBaseXgAway] = useState("1.2");
   const [decayHome, setDecayHome] = useState("1.0");

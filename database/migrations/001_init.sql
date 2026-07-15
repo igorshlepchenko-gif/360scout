@@ -214,6 +214,26 @@ CREATE TABLE IF NOT EXISTS prediction_results (
     archived_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ===== AUTH =====
+CREATE TABLE IF NOT EXISTS users (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email         VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role          VARCHAR(20)  NOT NULL DEFAULT 'user'    CHECK (role IN ('user', 'admin')),
+    status        VARCHAR(20)  NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    approved_by   UUID REFERENCES users(id),
+    approved_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token        VARCHAR(64) PRIMARY KEY,
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at   TIMESTAMPTZ NOT NULL
+);
+
 -- ===== INDEXES =====
 CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(match_date);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
@@ -221,6 +241,8 @@ CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match ON match_predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_odds_match ON bookmaker_odds(match_id);
 CREATE INDEX IF NOT EXISTS idx_odds_value ON bookmaker_odds(is_value_bet) WHERE is_value_bet = TRUE;
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
 -- Done!
 SELECT 'Schema created successfully' AS status;

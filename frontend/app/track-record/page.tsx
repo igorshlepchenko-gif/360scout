@@ -8,8 +8,9 @@ import {
   ArrowUpRight, ArrowDownRight, CheckCircle2, MinusCircle, Clock3,
   Filter, Calendar, Zap, EyeOff,
 } from "lucide-react";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "/api/backend";
 
 const OUTCOME_HE:  Record<string, string> = { home: "ניצחון בית", draw: "תיקו", away: "ניצחון חוץ" };
 const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2" };
@@ -138,6 +139,7 @@ type ResultFilter = "ALL" | "WON" | "LOST" | "PENDING" | "VALUE";
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function TrackRecordPage() {
+  useRequireAuth();
   const [rows, setRows]         = useState<TrackRow[]>([]);
   const [summary, setSummary]   = useState<Summary | null>(null);
   const [loading, setLoading]   = useState(true);

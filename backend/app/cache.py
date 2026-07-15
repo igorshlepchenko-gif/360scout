@@ -30,6 +30,7 @@ TTL_MAP = {
     "lineups":  30  * 60,
     "referee":  24  * 60 * 60,  # referee stats stable for 24h
     "playstyle": 6  * 60 * 60,  # team playstyle changes slowly
+    "auth":     15  * 60,       # login rate-limit counters
 }
 
 # ─── helpers ────────────────────────────────────────────────────────────────

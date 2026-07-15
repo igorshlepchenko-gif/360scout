@@ -3,7 +3,7 @@
 ניהול אנליסטים + הזנת ניבויים ידניים + לוח תוצאות
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -15,8 +15,9 @@ from app.db.repository import (
     get_analyst_predictions_history,
     get_consensus_locks,
 )
+from app.api.deps import get_current_user
 
-router = APIRouter(prefix="/api/analysts", tags=["analysts"])
+router = APIRouter(prefix="/api/analysts", tags=["analysts"], dependencies=[Depends(get_current_user)])
 
 
 class CreateAnalystRequest(BaseModel):

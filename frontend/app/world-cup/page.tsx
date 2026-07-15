@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Trophy, RefreshCw, Radio, CalendarDays, CheckCircle2 } from "lucide-react";
 import MatchCard from "@/components/MatchCard";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "/api/backend";
 
 interface WCMatch {
   fixture_id: number;
@@ -31,6 +32,7 @@ interface WCMatch {
 }
 
 export default function WorldCupPage() {
+  useRequireAuth();
   const [matches, setMatches]   = useState<WCMatch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [liveCount, setLiveCount] = useState(0);

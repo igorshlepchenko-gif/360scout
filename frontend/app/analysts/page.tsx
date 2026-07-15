@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import MatchConsensus from "@/components/MatchConsensus";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import {
   Users, ShieldCheck, Flame, Award, ArrowLeftRight, PenSquare, Plus,
 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "/api/backend";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 interface Analyst {
@@ -69,6 +70,7 @@ function fmtDate(iso: string | null) {
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function AnalystsPage() {
+  useRequireAuth();
   const [analysts, setAnalysts]   = useState<Analyst[]>([]);
   const [forms, setForms]         = useState<Record<string, FormResult[]>>({});
   const [locks, setLocks]         = useState<ConsensusLock[]>([]);

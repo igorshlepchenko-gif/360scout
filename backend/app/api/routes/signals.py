@@ -16,9 +16,11 @@ Analytics fields (mapped from existing engine output):
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-router = APIRouter(prefix="/api/signals", tags=["signals"])
+from app.api.deps import get_current_user
+
+router = APIRouter(prefix="/api/signals", tags=["signals"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
 
 # ── פילטרים ברירת מחדל (ניתן לעקוף ב-query params) ─────────────────────────

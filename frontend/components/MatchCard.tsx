@@ -447,7 +447,7 @@ function WinningMethodTable({
   );
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = "/api/backend";
 
 // ===== Over/Under 2.5 — compact always-visible row (card header) =====
 // Columns: אופציה | הסתברות המודל | יחס עולמי | ערך | המלצה סופית

@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { backendAuthHeaders } from "@/lib/session";
 
 const BACKEND = process.env.API_URL ?? "http://localhost:8000";
 
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   try {
     const upstream = await fetch(
       `${BACKEND}/api/live/matches?limit=${limit}`,
-      { cache: "no-store", signal: controller.signal }
+      { cache: "no-store", signal: controller.signal, headers: await backendAuthHeaders() }
     );
     clearTimeout(timeout);
 

@@ -2,7 +2,7 @@
 360SCOUT — Match API Routes
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 import sys, os, logging
@@ -14,8 +14,9 @@ from app.engine.prediction_model import (
     PredictionEngine, MatchContext, calculate_value, calculate_consensus,
     poisson_match_probabilities, poisson_goal_markets,
 )
+from app.api.deps import get_current_user
 
-router = APIRouter(prefix="/api/matches", tags=["matches"])
+router = APIRouter(prefix="/api/matches", tags=["matches"], dependencies=[Depends(get_current_user)])
 engine = PredictionEngine()
 
 OUTCOME_SIGN = {"home": "1", "draw": "X", "away": "2"}

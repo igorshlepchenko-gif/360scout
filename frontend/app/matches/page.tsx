@@ -6,8 +6,9 @@ import FilterSortBar, { FilterState } from "@/components/FilterSortBar";
 import { bestValueBet } from "@/lib/valueBets";
 import AlgorithmBreakdownModal, { Prediction } from "@/components/AlgorithmBreakdownModal";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "/api/backend";
 
 // Tier 1 & Tier 2 whitelist — API-Football IDs (mirrors backend WHITELISTED_LEAGUE_IDS)
 const MAJOR_LEAGUE_IDS = [1, 2, 3, 4, 9, 39, 40, 61, 78, 88, 94, 135, 140, 253, 271, 307, 848];
@@ -62,6 +63,7 @@ const CONSENSUS_COLOR: Record<string, string> = { LOCK: "#10b981", ALGORITHM_EDG
 const CONSENSUS_HE: Record<string, string> = { LOCK: "נעילה 🔒", ALGORITHM_EDGE: "יתרון אלגו", DIVERGENCE: "פער", ALGORITHM_ONLY: "אלגו בלבד" };
 
 export default function MatchesPage() {
+  useRequireAuth();
   const [matches, setMatches]     = useState<Match[]>([]);
   const [loading, setLoading]     = useState(true);
   const [activeFilters, setActiveFilters] = useState<FilterState>({

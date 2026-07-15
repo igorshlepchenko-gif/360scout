@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireApprovedUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "The Winning Method — Analyst365",
@@ -85,7 +86,8 @@ function cellColor(style: "default" | "prob" | "value", isValue: boolean) {
   return "#cbd5e1";
 }
 
-export default function WinningMethodPage() {
+export default async function WinningMethodPage() {
+  await requireApprovedUser();
   return (
     <div style={{ minHeight: "100vh", background: "#121824", color: "white" }}>
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "48px 24px 80px" }}>

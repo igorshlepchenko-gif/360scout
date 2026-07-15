@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 import httpx
 from dotenv import load_dotenv
 
@@ -38,8 +38,9 @@ from app.engine.data_ingestion import (
 _manual_adjustments: dict[int, dict] = {}
 from app.cache import get as cache_get, set as cache_set, stats as cache_stats, clear_all as cache_clear_all
 from app.db.repository import save_match_prediction, get_track_record, update_match_result
+from app.api.deps import get_current_user
 
-router = APIRouter(prefix="/api/live", tags=["live"])
+router = APIRouter(prefix="/api/live", tags=["live"], dependencies=[Depends(get_current_user)])
 engine = PredictionEngine()
 logger = logging.getLogger(__name__)
 
