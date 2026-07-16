@@ -993,6 +993,17 @@ def build_match_analysis_sync(
             _s  = sum(_bl.values())
             prediction["final"] = {k: round(v / _s, 4) for k, v in _bl.items()}
 
+            # confidence was computed by engine.predict() from the pre-blend
+            # probabilities above — recompute it (same locked formula, same
+            # by_module/monte_carlo/ctx inputs) so it matches what's actually
+            # displayed instead of describing a final that no longer exists.
+            by_module = prediction["by_module"]
+            prediction["confidence"] = round(engine._confidence(
+                by_module["stats"], by_module["environment"],
+                by_module["human"], by_module["psychology"],
+                prediction["final"], prediction["monte_carlo"], ctx,
+            ), 1)
+
     # ── Dynamic Adjustment ───────────────────────────────────────────────────
     # auto: injury_impact > 0.45 → squad_rotation
     # manual: override ידני דרך POST /api/live/adjust/{fixture_id}
