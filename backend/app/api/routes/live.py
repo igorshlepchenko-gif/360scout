@@ -132,8 +132,12 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     """
     משוך fixtures לפי עדיפות:
     1. חיים עכשיו  — כל ליגה בעולם (API מסנן ל-Tier1/2 אחר כך)
-    2. מתוכננים היום
-    3. 7 ימים אחורה (fallback כשאין אחרים)
+    2. מתוכננים — יום אחר יום, מהיום ועד days_ahead ימים קדימה (נטען תמיד — לא מותנה
+       בכמות המשחקים החיים, ששייכים לרוב לליגות שלא ב-whitelist ולכן לא אינדיקציה
+       טובה לכך שיש כבר מספיק תוכן להציג).
+       שאילתה גלובלית חוצת-ליגות ב-API-Football דורשת פרמטר 'date' יחיד — טווח
+       from/to מוחזר שגוי (דורש league/season נוסף), ולכן לולאה יום-יום ולא טווח.
+    3. 7 ימים אחורה (fallback רק כשאין שום דבר חי/מתוכנן)
 
     לאחר ה-fetch מתבצע Whitelist filter: נשארים רק fixtures מ-WHITELISTED_LEAGUE_IDS
     (Tier 1 & Tier 2 — 17 ליגות בסה"כ).
@@ -164,32 +168,33 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
         all_fixtures.extend(live)
         logger.info(f"Live: {len(live)} fixtures worldwide")
 
-        # 2. מתוכננים היום — cache 60 דקות
-        if len(all_fixtures) < 5:
-            sched_key = f"fixtures:scheduled:{today}"
+        # 2. מתוכננים — יום-יום, today עד today+days_ahead (כולל) — cache 60 דקות/יום
+        for _delta in range(0, max(0, days_ahead) + 1):
+            day = (datetime.now() + timedelta(days=_delta)).strftime("%Y-%m-%d")
+            sched_key = f"fixtures:scheduled:{day}"
             scheduled = await cache_get(sched_key, "fixtures")
             if scheduled is None:
                 try:
                     r = await client.get(
                         f"{API_FOOTBALL_BASE}/fixtures",
                         headers={"x-apisports-key": API_FOOTBALL_KEY},
-                        params={"date": today, "status": "NS"}
+                        params={"date": day, "status": "NS"}
                     )
                     scheduled = r.json().get("response", [])
                     await cache_set(sched_key, scheduled, "fixtures")
                 except Exception as e:
-                    logger.warning(f"Today scheduled failed: {e}")
+                    logger.warning(f"Scheduled fetch failed for {day}: {e}")
                     scheduled = []
 
             for f in scheduled:
                 f["_league_name"] = f.get("league", {}).get("name", "")
                 f["_status"] = "scheduled"
             all_fixtures.extend(scheduled)
-            logger.info(f"Scheduled today: {len(scheduled)} fixtures worldwide")
+            logger.info(f"Scheduled {day}: {len(scheduled)} fixtures worldwide")
 
         # 3. אחרונים — fallback רק כשאין כלל משחקים פעילים/מתוכננים
         has_active = any(f.get("_status") in ("live", "scheduled") for f in all_fixtures)
-        if not has_active and len(all_fixtures) < 5:
+        if not has_active:
             from_date  = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
             recent_key = f"fixtures:recent:{from_date}:{today}"
             finished = await cache_get(recent_key, "fixtures")
