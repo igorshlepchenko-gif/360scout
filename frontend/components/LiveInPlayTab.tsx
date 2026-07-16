@@ -64,7 +64,7 @@ export default function LiveInPlayTab({ matches: initialMatches = [] }: { matche
             </MatchLiveRowBoundary>
           ))}
           <p className="text-center text-[10px] text-slate-600">
-            היחס ההוגן מבוסס על מודל טרום-משחק — אינו מתעדכן לפי מהלך המשחק. למטרות מחקר בלבד.
+            ההמלצה מתעדכנת אוטומטית לפי מהלך המשחק (כל 20 שניות בזמן משחק חי) — שינוי מסומן ומתועד בשורה. למטרות מחקר בלבד.
           </p>
         </div>
       )}

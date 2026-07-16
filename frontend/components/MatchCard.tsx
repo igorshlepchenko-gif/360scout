@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { bestValueBet } from "@/lib/valueBets";
+import { describeRecommendation, type RecommendationData } from "@/lib/recommendation";
 
 interface Prediction {
   final: { home: number; draw: number; away: number };
@@ -15,6 +16,7 @@ interface Prediction {
   monte_carlo: { home: number; draw: number; away: number; simulations: number };
   confidence:  number;
   key_factors: Array<{ factor: string; impact: string; detail: string }>;
+  recommendation?: RecommendationData | null;
 }
 
 interface ValueBets {
@@ -566,6 +568,45 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ===== The single, clear recommendation banner =====
+function RecommendationBanner({
+  rec, homeTeam, awayTeam,
+}: {
+  rec: RecommendationData | null | undefined;
+  homeTeam: string;
+  awayTeam: string;
+}) {
+  const d = describeRecommendation(rec, homeTeam, awayTeam);
+  const toneColor  = d.tone === "pick" ? "#10b981" : d.tone === "caution" ? "#f59e0b" : "#64748b";
+  const toneBg     = d.tone === "pick" ? "rgba(16,185,129,0.08)" : d.tone === "caution" ? "rgba(245,158,11,0.08)" : "rgba(100,116,139,0.06)";
+  const toneBorder = d.tone === "pick" ? "rgba(16,185,129,0.3)"  : d.tone === "caution" ? "rgba(245,158,11,0.28)" : "rgba(100,116,139,0.2)";
+
+  return (
+    <div style={{
+      marginTop: 12, marginBottom: 4,
+      background: toneBg, border: `1px solid ${toneBorder}`, borderRadius: 10,
+      padding: "10px 14px",
+      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+    }}>
+      <span style={{
+        fontSize: 11, fontWeight: 900, color: toneColor,
+        background: "rgba(255,255,255,0.06)", borderRadius: 6, padding: "3px 9px",
+        fontFamily: "monospace", flexShrink: 0,
+      }}>
+        {d.sign}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: toneColor }}>
+          🎯 ההמלצה שלנו: {d.label}
+        </div>
+        {d.detail && (
+          <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 2 }}>{d.detail}</div>
+        )}
       </div>
     </div>
   );
@@ -1276,6 +1317,9 @@ export default function MatchCard({
             <div style={{ flexGrow: displayProbs.away, background: "#ef4444" }} />
           </div>
         </div>
+
+        {/* ── THE SINGLE CLEAR RECOMMENDATION ── */}
+        <RecommendationBanner rec={prediction.recommendation} homeTeam={homeTeam} awayTeam={awayTeam} />
 
         {/* ── DECIMAL ODDS STRIP ── */}
         {odds?.odds_home && (

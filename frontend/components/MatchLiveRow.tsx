@@ -1,8 +1,10 @@
 "use client";
-import { Clock, TrendingUp, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Clock, TrendingUp, Zap, RefreshCcw } from "lucide-react";
 import { calculateValueBets, marketOddsFromValueBets, type OutcomeEdge } from "@/utils/analytics";
 import { bestValueBet } from "@/lib/valueBets";
 import { useLiveClock } from "@/hooks/useLiveClock";
+import { describeRecommendation, type RecommendationData } from "@/lib/recommendation";
 
 export interface LiveMatch {
   fixture_id: number;
@@ -16,6 +18,7 @@ export interface LiveMatch {
   prediction?: {
     final: { home: number; draw: number; away: number };
     confidence: number;
+    recommendation?: RecommendationData | null;
   };
   value_bets?: Record<
     string,
@@ -98,11 +101,6 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
   // authoritative best value bet from backend flag
   const authoritative = bestValueBet(m.value_bets);
 
-  const topKey = final
-    ? (Object.entries(final).sort((a, b) => b[1] - a[1])[0][0] as "home" | "draw" | "away")
-    : null;
-  const topPct = topKey && final ? Math.round(final[topKey] * 100) : null;
-
   const scoreTxt =
     m.score && m.score.home !== null
       ? `${m.score.home} - ${m.score.away}`
@@ -112,11 +110,26 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
   // Snaps to server elapsed when a new value arrives (goal / card / HT event).
   const timeTxt = useLiveClock(m.elapsed, m.status_short) || "LIVE";
 
-  const OUTCOME_HE: Record<string, string> = {
-    home: "ניצחון בית (1)",
-    draw: "תיקו (X)",
-    away: "ניצחון חוץ (2)",
-  };
+  // ── The single recommendation — same source of truth as the dashboard cards ──
+  const rec = describeRecommendation(m.prediction?.recommendation, m.home_team, m.away_team);
+
+  // ── Change tracking: this view polls every 20s during play, so the pick can
+  // genuinely shift mid-match. Instead of silently swapping the text, remember
+  // what it changed FROM and when, so a shift reads as "informed update" rather
+  // than an unexplained flip. First render never counts as a "change".
+  const prevKeyRef   = useRef<string | null>(null);
+  const prevLabelRef = useRef<string | null>(null);
+  const [lastChange, setLastChange] = useState<{ from: string; at: string } | null>(null);
+
+  useEffect(() => {
+    if (rec.key === "none") return;
+    if (prevKeyRef.current !== null && prevKeyRef.current !== rec.key) {
+      setLastChange({ from: prevLabelRef.current ?? "המלצה קודמת", at: timeTxt });
+    }
+    prevKeyRef.current   = rec.key;
+    prevLabelRef.current = rec.label;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec.key]);
 
   return (
     <div
@@ -189,28 +202,37 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
 
       <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {/* ── Row 1: model selection + confidence ── */}
+        {/* ── Row 1: THE recommendation + confidence ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <div style={{ color: "#475569", fontSize: 10, marginBottom: 3 }}>בחירת המודל</div>
+            <div style={{ color: "#475569", fontSize: 10, marginBottom: 3 }}>🎯 ההמלצה שלנו</div>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                color: "white",
+                color: rec.tone === "pick" ? "#10b981" : rec.tone === "caution" ? "#f59e0b" : "white",
                 fontWeight: 700,
                 fontSize: 13,
               }}
             >
               <Zap size={13} style={{ color: "#f59e0b", fill: "#f59e0b" }} />
-              {topKey ? OUTCOME_HE[topKey] : "—"}
-              {topPct !== null && (
+              {rec.label}
+              {rec.detail && (
                 <span style={{ color: "#475569", fontWeight: 400, fontSize: 11, fontFamily: "monospace" }}>
-                  ({topPct}%)
+                  ({rec.detail})
                 </span>
               )}
             </div>
+            {lastChange && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 4, marginTop: 4,
+                color: "#f59e0b", fontSize: 10,
+              }}>
+                <RefreshCcw size={10} />
+                <span>עודכן בדקה {lastChange.at} — היה: {lastChange.from}</span>
+              </div>
+            )}
           </div>
 
           {m.prediction?.confidence !== undefined && (
