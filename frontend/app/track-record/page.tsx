@@ -43,22 +43,9 @@ function leagueTier(name: string | null): 1 | 2 | 3 {
   return 3;
 }
 
-function isWorldCup(name: string | null): boolean {
-  return /world.?cup|fifa|מונדיאל/i.test(name ?? "");
-}
-
 function LeagueBadge({ name }: { name: string | null }) {
   const tier = leagueTier(name);
-  const wc   = isWorldCup(name);
 
-  if (wc) return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-      background: "rgba(245,158,11,.15)", color: "#f59e0b",
-    }}>
-      🏆 WC
-    </span>
-  );
   if (tier === 1) return (
     <span style={{
       fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
@@ -397,13 +384,11 @@ export default function TrackRecordPage() {
                   const pick    = pickOf(r);
                   const odds    = oddsOf(r);
                   const pending = r.status === "pending";
-                  const wc      = isWorldCup(r.league_name);
 
                   return (
                     <tr
                       key={`${r.fixture_id}-${i}`}
                       className="transition-colors hover:bg-white/[0.02]"
-                      style={wc ? { borderRight: "2px solid rgba(245,158,11,.3)" } : undefined}
                     >
                       {/* Date */}
                       <td className="p-3.5 font-mono text-slate-400">{fmtDate(r.match_date)}</td>

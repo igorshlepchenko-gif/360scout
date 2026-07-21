@@ -125,7 +125,7 @@ export default function AccessibilityPage() {
             </Li>
             <Li>
               <strong style={{ color: "white" }}>תוכן המתעדכן בזמן אמת:</strong>{" "}
-              טיקר המבזקים (World Cup) פועל כאנימציה נגלגלת. עצירתו מתאפשרת ב-hover;
+              טיקר המבזקים פועל כאנימציה נגלגלת. עצירתו מתאפשרת ב-hover;
               משתמשי מקלדת יכולים לעצור אנימציות דרך הגדרות מערכת ההפעלה (prefers-reduced-motion).
             </Li>
           </ul>

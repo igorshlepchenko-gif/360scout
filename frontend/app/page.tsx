@@ -1,7 +1,7 @@
 import MatchCard from "@/components/MatchCard";
 import DashboardTabs from "@/components/DashboardTabs";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
-import WorldCupTicker from "@/components/WorldCupTicker";
+import SignalsTicker from "@/components/SignalsTicker";
 import { getEnhancedMatches } from "@/lib/enhancedMatches";
 import { requireApprovedUser, backendAuthHeaders } from "@/lib/session";
 
@@ -26,26 +26,6 @@ async function getLiveMatches() {
   } catch (e) {
     console.error("getLiveMatches error:", e);
     return { matches: [], mode: "none", isReal: false };
-  }
-}
-
-async function getWorldCupMatches() {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 28000);
-    const res = await fetch(`${API_URL}/api/live/world-cup?days=7&limit=30`, {
-      cache: "no-store",
-      signal: controller.signal,
-      headers: await backendAuthHeaders(),
-    });
-    clearTimeout(timeout);
-    const data = await res.json();
-    if (data.status !== "success") return [];
-    // hide matches without bookmaker odds — not actionable (same rule as /world-cup page)
-    return (data.matches ?? []).filter((m: any) => m.odds?.odds_home > 1);
-  } catch (e) {
-    console.error("getWorldCupMatches error:", e);
-    return [];
   }
 }
 
@@ -76,8 +56,8 @@ async function getTrackStats() {
 export default async function Home() {
   await requireApprovedUser();
 
-  const [liveResult, demo, trackStats, wcMatches] = await Promise.all([
-    getLiveMatches(), getDemoData(), getTrackStats(), getWorldCupMatches()
+  const [liveResult, demo, trackStats] = await Promise.all([
+    getLiveMatches(), getDemoData(), getTrackStats()
   ]);
   const liveMatches = liveResult.matches;
   const displayMode = liveResult.mode;
@@ -124,8 +104,8 @@ export default async function Home() {
   return (
     <div style={{ minHeight: "100vh", background: "#0B0E14" }}>
 
-      {/* Dynamic ticker — World Cup picks first, then value bets */}
-      {hasLive && <WorldCupTicker matches={liveMatches} />}
+      {/* Dynamic ticker — value bet picks */}
+      {hasLive && <SignalsTicker matches={liveMatches} />}
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px", paddingTop: hasLive ? 80 : 40 }}>
 
@@ -165,10 +145,9 @@ export default async function Home() {
         {/* Match Cards Grid — league filter */}
         <div>
           {hasLive ? (
-            // ✅ משחקים אמיתיים מה-API — top-level tabs: All / Live / World Cup
+            // ✅ משחקים אמיתיים מה-API — top-level tabs: All / Live
             <DashboardTabs
               matches={liveMatches}
-              wcMatches={wcMatches}
               leagueAccuracy={leagueAccuracy}
               globalAccuracy={summary?.accuracy ?? null}
             />
@@ -189,7 +168,7 @@ export default async function Home() {
                       אין משחקים זמינים כרגע
                     </div>
                     <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
-                      הדף מתרענן אוטומטית · מוצג Demo · המונדיאל 2026 מתחיל 11/6
+                      הדף מתרענן אוטומטית · מוצג Demo
                     </div>
                   </div>
                 </div>
@@ -198,11 +177,11 @@ export default async function Home() {
                 <MatchCard
                   homeTeam={demo.prediction.home_team}
                   awayTeam={demo.prediction.away_team}
-                  league="גביע העולם FIFA 2026 — Demo"
+                  league="Demo"
                   prediction={demo.prediction}
                   value_bets={demo.value_bets}
                   consensus={demo.consensus}
-                  matchId="WC2026-demo"
+                  matchId="demo-match"
                 />
               )}
             </div>

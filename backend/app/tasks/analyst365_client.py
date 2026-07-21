@@ -89,24 +89,6 @@ async def fetch_live_matches(
     return snapshots
 
 
-async def fetch_world_cup_matches(
-    base_url: str = "https://analyst365.net",
-    limit: int = 5,
-    days: int = 2,
-) -> list[MatchSnapshot]:
-    """שואב רק משחקי מונדיאל."""
-    endpoint = f"{base_url}/api/live/world-cup"
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(endpoint, params={"limit": limit, "days": days})
-            r.raise_for_status()
-            raw = r.json().get("matches", [])
-        return [s for s in (_parse_match(m) for m in raw) if s]
-    except Exception as e:
-        logger.error(f"[Analyst365Client] world-cup fetch failed: {e}")
-        return []
-
-
 # ─── Secondary: Playwright HTML monitor (ויזואלי בלבד) ───────────────────────
 
 
