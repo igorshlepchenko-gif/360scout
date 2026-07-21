@@ -334,7 +334,30 @@ async def get_track_record(limit: int = 50) -> dict:
             ]
 
             # מיין: ניבויים שנגמרו קודם, אחר כך pending
-            recent = [dict(r) for r in resolved] + [dict(r) for r in pending]
+            from app.engine.prediction_model import get_recommendation
+
+            pending_out = []
+            for r in pending:
+                row = dict(r)
+                if row["final_prob_home"] is not None:
+                    row["recommendation"] = get_recommendation(
+                        {
+                            "home": row["final_prob_home"] or 0,
+                            "draw": row["final_prob_draw"] or 0,
+                            "away": row["final_prob_away"] or 0,
+                        },
+                        row["home_team_name"], row["away_team_name"],
+                        bookmaker_odds={
+                            "home": row["odds_home"],
+                            "draw": row["odds_draw"],
+                            "away": row["odds_away"],
+                        },
+                    )
+                else:
+                    row["recommendation"] = None
+                pending_out.append(row)
+
+            recent = [dict(r) for r in resolved] + pending_out
 
             return {
                 "summary": {

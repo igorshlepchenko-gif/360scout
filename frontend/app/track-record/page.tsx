@@ -9,6 +9,7 @@ import {
   Filter, Calendar, Zap, EyeOff,
 } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { describeRecommendation, type RecommendationData } from "@/lib/recommendation";
 
 const API = "/api/backend";
 
@@ -91,6 +92,7 @@ interface TrackRow {
   final_prob_away: number | null;
   confidence_score: number | null;
   status: "finished" | "pending";
+  recommendation?: RecommendationData | null;
 }
 
 interface Summary {
@@ -384,6 +386,14 @@ export default function TrackRecordPage() {
                   const pick    = pickOf(r);
                   const odds    = oddsOf(r);
                   const pending = r.status === "pending";
+                  // Pending matches: prefer the same value-aware pick the home page shows,
+                  // instead of pickOf()'s raw-probability guess — see recommendation.ts.
+                  const rec     = pending && r.recommendation
+                    ? describeRecommendation(r.recommendation, r.home_team_name, r.away_team_name)
+                    : null;
+                  const recOdds = rec
+                    ? (rec.sign === "1" ? r.odds_home : rec.sign === "X" ? r.odds_draw : rec.sign === "2" ? r.odds_away : null)
+                    : null;
 
                   return (
                     <tr
@@ -410,15 +420,21 @@ export default function TrackRecordPage() {
 
                       {/* Prediction */}
                       <td className="p-3.5 font-medium text-sky-400">
-                        {pick
-                          ? <>{OUTCOME_12X[pick]} <span className="text-[10px] text-slate-500">({OUTCOME_HE[pick]})</span></>
-                          : "—"}
+                        {rec ? (
+                          <span style={{ color: rec.tone === "pick" ? "#10b981" : rec.tone === "caution" ? "#f59e0b" : undefined }}>
+                            {rec.sign} <span className="text-[10px] text-slate-500">({rec.label})</span>
+                          </span>
+                        ) : pick ? (
+                          <>{OUTCOME_12X[pick]} <span className="text-[10px] text-slate-500">({OUTCOME_HE[pick]})</span></>
+                        ) : "—"}
                         {r.value_bet_hit && <Zap size={11} className="mr-1 inline text-cyan-400" />}
                       </td>
 
                       {/* Odds */}
                       <td className="p-3.5 font-mono font-bold text-slate-300" style={{ direction: "ltr" }}>
-                        {odds ? odds.toFixed(2) : "—"}
+                        {rec
+                          ? (recOdds && recOdds > 1 ? recOdds.toFixed(2) : "—")
+                          : (odds ? odds.toFixed(2) : "—")}
                       </td>
 
                       {/* Confidence */}
