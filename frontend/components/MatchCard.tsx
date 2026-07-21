@@ -1163,6 +1163,7 @@ export default function MatchCard({
 
   const homeWin    = displayProbs.home > displayProbs.away && displayProbs.home > displayProbs.draw;
   const awayWin    = displayProbs.away > displayProbs.home && displayProbs.away > displayProbs.draw;
+  const isWorldCup = /world.?cup|fifa|מונדיאל/i.test(league ?? "");
 
   // Monte Carlo leader — show whichever outcome has higher MC probability
   const mcHome      = prediction.monte_carlo.home;
@@ -1196,14 +1197,23 @@ export default function MatchCard({
         {/* ── Meta row: league (left) + date (right) ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           {league && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              {leagueLogo && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={leagueLogo} alt={league} width={12} height={12}
-                  style={{ objectFit: "contain", opacity: 0.6 }} />
-              )}
-              <span style={{ fontSize: 10, color: "#475569" }}>{league}</span>
-            </div>
+            isWorldCup ? (
+              <span style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
+                background: "linear-gradient(90deg, rgba(234,179,8,0.15), rgba(251,191,36,0.08))",
+                border: "1px solid rgba(234,179,8,0.35)",
+                borderRadius: 99, padding: "3px 10px", color: "#fbbf24",
+              }}>🏆 גביע העולם 2026</span>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {leagueLogo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={leagueLogo} alt={league} width={12} height={12}
+                    style={{ objectFit: "contain", opacity: 0.6 }} />
+                )}
+                <span style={{ fontSize: 10, color: "#475569" }}>{league}</span>
+              </div>
+            )
           )}
           {matchDate && (
             <span style={{ fontSize: 10, color: "#334155", direction: "ltr" }}>
@@ -1330,17 +1340,21 @@ export default function MatchCard({
         {consensusData?.is_consensus_lock && (
           <div style={{
             marginTop: 8,
-            background: "rgba(245,158,11,0.08)",
-            border: "1px solid rgba(245,158,11,0.22)",
+            background: isWorldCup
+              ? "linear-gradient(90deg, rgba(234,179,8,0.12), rgba(245,158,11,0.08), rgba(234,179,8,0.12))"
+              : "rgba(245,158,11,0.08)",
+            border: `1px solid ${isWorldCup ? "rgba(234,179,8,0.4)" : "rgba(245,158,11,0.22)"}`,
             borderRadius: 8,
-            padding: "5px 12px",
+            padding: isWorldCup ? "7px 12px" : "5px 12px",
             textAlign: "center",
           }}>
             <span style={{
-              fontSize: 11,
+              fontSize: isWorldCup ? 12 : 11,
               fontWeight: 800, color: "#f59e0b", letterSpacing: 0.4,
             }}>
-              🔥 נעילת קונסנזוס ({consensusData.agreeing_count} אנליסטים)
+              {isWorldCup
+                ? `🔥 נעילת קונסנזוס מונדיאל (${prediction.confidence}% ביטחון אלגוריתם + הסכמת מומחים)`
+                : `🔥 נעילת קונסנזוס (${consensusData.agreeing_count} אנליסטים)`}
             </span>
           </div>
         )}

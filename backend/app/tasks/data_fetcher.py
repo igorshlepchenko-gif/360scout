@@ -24,6 +24,7 @@ TELEGRAM_CHANNEL = os.getenv("TELEGRAM_CHANNEL_ID", "")
 
 # Leagues to track (API-Football IDs)
 LEAGUES_TO_TRACK = [
+    {"id": 1,   "name": "FIFA World Cup 2026",     "season": 2026},
     {"id": 2,   "name": "UEFA Champions League",   "season": 2025},
     {"id": 3,   "name": "UEFA Europa League",      "season": 2025},
     {"id": 39,  "name": "Premier League",          "season": 2025},

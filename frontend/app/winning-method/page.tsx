@@ -132,7 +132,7 @@ export default async function WinningMethodPage() {
               📊 דוגמה: ניתוח משחק בזמן אמת
             </h2>
             <span style={{ color: "#94a3b8", fontSize: 12, display: "block", marginTop: 6 }}>
-              ברזיל (בית) · צרפת (אורחים) · יחסי Pinnacle
+              ברזיל (בית) · צרפת (אורחים) · יחסי Pinnacle · מונדיאל 2026
             </span>
           </div>
 

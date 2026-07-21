@@ -364,11 +364,11 @@ def _simulated_feed(home_team: str) -> str:
 async def demo_prediction():
     """
     Demo prediction with realistic data — no API keys needed.
-    Champions League Final conditions.
+    Argentina vs France, World Cup Final conditions.
     """
     ctx = MatchContext(
-        home_team              = "Real Madrid",
-        away_team              = "Manchester City",
+        home_team              = "Argentina",
+        away_team              = "France",
         xg_home                = 1.45,
         xg_away                = 1.30,
         form_home              = 0.6,
@@ -416,7 +416,7 @@ async def demo_prediction():
 
     return {
         "status":     "demo",
-        "match":      "Real Madrid vs Manchester City — Champions League Final",
+        "match":      "Argentina vs France — World Cup Final",
         "prediction": prediction,
         "value_bets": value_bets,
         "consensus":  consensus,

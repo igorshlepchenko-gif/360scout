@@ -134,6 +134,48 @@ def format_goals_row(home_team: str, away_team: str, gs: dict | None) -> str:
     )
 
 
+def _is_world_cup(league: str) -> bool:
+    """זיהוי משחק מונדיאל לפי שם הליגה"""
+    return bool(re.search(r"world.?cup|fifa|מונדיאל", league or "", re.IGNORECASE))
+
+
+def format_world_cup_alert(match: dict, outcome: str, vb: dict, is_live: bool) -> str:
+    """פורמט פרימיום להתראות מונדיאל — The Winning Method"""
+    stars     = "⭐⭐⭐" if vb.get("rating") == "STRONG" else "⭐⭐" if vb.get("rating") == "MODERATE" else "⭐"
+    he_name   = {"home": "ניצחון בית", "away": "ניצחון חוץ", "draw": "תיקו"}.get(outcome, outcome)
+    sign_12x  = {"home": "1", "away": "2", "draw": "X"}.get(outcome, "?")
+    home_team = match.get("home_team", "?")
+    away_team = match.get("away_team", "?")
+    pick_team = home_team if outcome == "home" else (away_team if outcome == "away" else "תיקו")
+
+    if is_live:
+        score    = match.get("score", {}) or {}
+        elapsed  = match.get("elapsed")
+        when_row = f"⏱ *דקה:* `{elapsed or '?'}'` | *תוצאה באצטדיון:* `{score.get('home', 0)} - {score.get('away', 0)}`"
+        validity = "_היחסים תקפים ל-90 הדקות המקוריות של המשחק בלבד._"
+    else:
+        when_row = f"📅 *שעת המשחק:* {match.get('match_date', '?')} (שעון ישראל)"
+        validity = "_היחסים נכונים לרגע הסריקה ועשויים להשתנות._"
+
+    return f"""
+🏆 *סיגנל מונדיאל חם — VALUE BET* 🏆
+📊 *Analyst365 · The Winning Method*
+
+⚽ *{home_team}* 🆚 *{away_team}*
+{when_row}
+
+━━━━━━━━━━━━━━━━━━━━
+🎯 *ההמלצה:* {pick_team} — {he_name} [ {sign_12x} ]
+💰 *יחס שוק נוכחי:* `{vb.get('bookmaker_odds', '?')}`
+🔥 *Edge (יתרון):* *+{vb.get('edge_percent', 0):.1f}%* {stars}
+📊 *הסתברות מודל ({he_name}):* `{vb.get('our_prob', 0)*100:.1f}%` _(שוק: {vb.get('implied_prob', 0)*100:.1f}%)_
+━━━━━━━━━━━━━━━━━━━━
+{validity}
+
+🔗 [למעקב חי בלשונית המונדיאל](https://analyst365.net/world-cup)
+""".strip()
+
+
 async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
     """הודעת Value Bet מעוצבת — עם dedup: לא ישלח אותה התראה פעמיים"""
     fixture_id = match.get("fixture_id") or match.get("home_team", "?")
@@ -142,6 +184,12 @@ async def send_value_bet_alert(match: dict, outcome: str, vb: dict) -> bool:
         logger.debug(f"Telegram dedup — pre-match signal already sent: {signal_key}")
         return False
 
+    # 🏆 מונדיאל → פורמט פרימיום ייעודי
+    if _is_world_cup(match.get("league", "")):
+        sent = await send_message(format_world_cup_alert(match, outcome, vb, is_live=False))
+        if sent:
+            _sent_signals.add(signal_key)
+        return sent
     stars   = "⭐⭐⭐" if vb.get("rating") == "STRONG" else "⭐⭐" if vb.get("rating") == "MODERATE" else "⭐"
     emoji   = {"home": "🏠", "away": "✈️", "draw": "🤝"}.get(outcome, "⚽")
     he_name = {"home": "בית", "away": "אורחים", "draw": "תיקו"}.get(outcome, outcome)
@@ -195,6 +243,13 @@ async def send_live_value_alert(
     if signal_key in _sent_signals:
         logger.debug(f"Telegram dedup — signal already sent: {signal_key}")
         return False
+
+    # 🏆 מונדיאל → פורמט פרימיום ייעודי (עם אותו dedup)
+    if _is_world_cup(match.get("league", "")):
+        sent = await send_message(format_world_cup_alert(match, outcome, vb, is_live=True))
+        if sent:
+            _sent_signals.add(signal_key)
+        return sent
 
     stars    = "⭐⭐⭐" if vb.get("rating") == "STRONG" else "⭐⭐" if vb.get("rating") == "MODERATE" else "⭐"
     emoji    = {"home": "🏠", "away": "✈️", "draw": "🤝"}.get(outcome, "⚽")
