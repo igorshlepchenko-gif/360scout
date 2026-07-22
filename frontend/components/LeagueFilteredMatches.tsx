@@ -5,7 +5,6 @@ import MatchCard from "./MatchCard";
 /* ── League grouping config — Tier 1 & Tier 2 whitelist ── */
 const LEAGUE_GROUPS = [
   // International first — most prominent
-  { key: "world-cup",        label: "🏆 מונדיאל 2026",      match: (s: string) => /world.?cup|fifa|מונדיאל/i.test(s) },
   { key: "euros-copa",       label: "🌍 יורו / קופה",        match: (s: string) => /\beuro\b|copa.?america|nations.?cup/i.test(s) },
   { key: "champions-league", label: "⭐ צ'מפיונס",           match: (s: string) => /champions.?league/i.test(s) },
   { key: "europa",           label: "🟠 אירופה / קונפרנס",   match: (s: string) => /europa.?league|conference.?league/i.test(s) },
@@ -69,17 +68,14 @@ export default function LeagueFilteredMatches({
     matches.some(m => getGroupKey(m.league ?? "") === g.key)
   );
 
-  // Priority sort for "all" tab: World Cup first → value bets → LOCK consensus → rest
-  const IS_WC = (m: any) => /world.?cup|fifa|מונדיאל/i.test(m.league ?? "");
+  // Priority sort for "all" tab: value bets → LOCK consensus → rest
   const hasValueBet = (m: any) =>
     m.value_bets && Object.values(m.value_bets as Record<string, any>).some((v: any) => v?.is_value_bet);
 
   function matchPriority(m: any): number {
-    if (IS_WC(m) && hasValueBet(m)) return 0;  // World Cup + value bet — top
-    if (IS_WC(m))                   return 1;  // World Cup only
-    if (hasValueBet(m))             return 2;  // value bet in any league
-    if (m.consensus?.type === "LOCK") return 3; // consensus lock
-    return 4;                                   // everything else
+    if (hasValueBet(m))             return 0;  // value bet in any league
+    if (m.consensus?.type === "LOCK") return 1; // consensus lock
+    return 2;                                   // everything else
   }
 
   const rawFiltered = active === "all"
@@ -167,15 +163,13 @@ export default function LeagueFilteredMatches({
             {availableGroups.map(g => {
               const count = matches.filter(m => getGroupKey(m.league ?? "") === g.key).length;
               const acc   = getGroupAccuracy(g.key, leagueAccuracy);
-              const badgeBg = g.key === "world-cup" ? "#2ecc71" : "#3498db";
               return (
                 <TabBtn
                   key={g.key}
                   label={`${g.label} (${count})`}
                   active={active === g.key}
                   onClick={() => setActive(g.key)}
-                  highlight={g.key === "world-cup"}
-                  badge={acc ? { text: `${acc.rate}% פגיעה`, bg: badgeBg } : undefined}
+                  badge={acc ? { text: `${acc.rate}% פגיעה`, bg: "#3498db" } : undefined}
                 />
               );
             })}
@@ -228,12 +222,11 @@ export default function LeagueFilteredMatches({
 }
 
 function TabBtn({
-  label, active, onClick, highlight = false, badge,
+  label, active, onClick, badge,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
-  highlight?: boolean;
   badge?: { text: string; bg: string };
 }) {
   return (
@@ -250,15 +243,9 @@ function TabBtn({
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        border: active
-          ? highlight ? "1px solid rgba(234,179,8,0.6)" : "1px solid rgba(16,185,129,0.5)"
-          : "1px solid rgba(255,255,255,0.1)",
-        background: active
-          ? highlight ? "rgba(234,179,8,0.15)" : "rgba(16,185,129,0.12)"
-          : "rgba(255,255,255,0.04)",
-        color: active
-          ? highlight ? "#fbbf24" : "#10b981"
-          : "#64748b",
+        border: active ? "1px solid rgba(16,185,129,0.5)" : "1px solid rgba(255,255,255,0.1)",
+        background: active ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)",
+        color: active ? "#10b981" : "#64748b",
       }}
     >
       {label}

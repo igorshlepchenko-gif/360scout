@@ -116,7 +116,7 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════
-   WORLD CUP TICKER — שורת מבזקים גלובלית
+   LIVE TICKER — שורת מבזקים גלובלית
 ══════════════════════════════════════════════════════════ */
 @keyframes ticker-scroll {
   0%   { transform: translate3d(0,   0, 0); }
@@ -167,29 +167,6 @@ body {
   border-color: rgba(16,185,129,0.4);
   color: var(--green);
   font-weight: 700;
-}
-
-/* ── לשונית מונדיאל — בורדו + זהב ── */
-.tab-btn.worldcup-tab {
-  background: linear-gradient(135deg, #4A0E17 0%, #721c24 100%);
-  color: #ffd700;
-  border: 1px solid rgba(255,215,0,0.25);
-  box-shadow: 0 0 10px rgba(114,28,36,0.5);
-  font-weight: 700;
-}
-
-.tab-btn.worldcup-tab:hover {
-  background: linear-gradient(135deg, #5c131d 0%, #85232c 100%);
-  box-shadow: 0 0 15px rgba(114,28,36,0.8);
-  transform: translateY(-1px);
-  color: #ffd700;
-}
-
-.tab-btn.worldcup-tab.active {
-  background: #721c24;
-  border: 2px solid #ffd700;
-  color: #ffffff;
-  box-shadow: 0 0 14px rgba(255,215,0,0.25);
 }
 
 /* ══════════════════════════════════════════════════════════

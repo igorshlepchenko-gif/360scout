@@ -364,33 +364,33 @@ def _simulated_feed(home_team: str) -> str:
 async def demo_prediction():
     """
     Demo prediction with realistic data — no API keys needed.
-    Argentina vs France, World Cup Final conditions.
+    Manchester City vs Liverpool, Premier League conditions.
     """
     ctx = MatchContext(
-        home_team              = "Argentina",
-        away_team              = "France",
-        xg_home                = 1.45,
-        xg_away                = 1.30,
+        home_team              = "Manchester City",
+        away_team              = "Liverpool",
+        xg_home                = 1.65,
+        xg_away                = 1.35,
         form_home              = 0.6,
         form_away              = 0.4,
         h2h_advantage          = 0.2,
-        temperature            = 30,
-        humidity               = 75,
-        precipitation_mm       = 0,
+        temperature            = 14,
+        humidity               = 70,
+        precipitation_mm       = 2,
         altitude_meters        = 0,
-        home_heat_adaptation   = 0.7,
-        away_heat_adaptation   = 0.4,
+        home_heat_adaptation   = 0.5,
+        away_heat_adaptation   = 0.5,
         referee_cards_per_game = 4.2,
         referee_home_bias      = 0.1,
         home_injury_impact     = 0.0,
         away_injury_impact     = 0.3,   # key defender out
-        crowd_size             = 88000,
+        crowd_size             = 53400,
         venue_type             = "home",
-        tournament_stage       = "final",
-        pressure_index         = 1.0,
-        rest_days_home         = 7,
-        rest_days_away         = 5,
-        travel_km_away         = 12000,
+        tournament_stage       = "group",
+        pressure_index         = 0.6,
+        rest_days_home         = 4,
+        rest_days_away         = 3,
+        travel_km_away         = 50,
     )
 
     prediction = engine.predict(ctx)
@@ -416,7 +416,7 @@ async def demo_prediction():
 
     return {
         "status":     "demo",
-        "match":      "Argentina vs France — World Cup Final",
+        "match":      "Manchester City vs Liverpool — Premier League",
         "prediction": prediction,
         "value_bets": value_bets,
         "consensus":  consensus,

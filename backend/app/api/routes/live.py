@@ -57,7 +57,6 @@ OPENWEATHER_BASE  = "https://api.openweathermap.org/data/2.5"
 # neutral=True → home_advantage_multiplier = 1.0 (tournament on a single host)
 WHITELISTED_LEAGUES: dict[int, dict] = {
     # ── International Competitions ────────────────────────────────────────────
-    1:   {"name": "FIFA World Cup",              "tier": 1, "neutral": True},
     4:   {"name": "UEFA Euro",                   "tier": 1, "neutral": True},
     9:   {"name": "Copa America",                "tier": 1, "neutral": True},
     2:   {"name": "UEFA Champions League",       "tier": 1, "neutral": False},
@@ -314,7 +313,7 @@ def _default_weather() -> dict:
 
 
 async def fetch_all_odds() -> list:
-    """משוך יחסים (1X2 + Over/Under + Asian Handicap) — שני endpoints: soccer + World Cup.
+    """משוך יחסים (1X2 + Over/Under + Asian Handicap) — soccer endpoint.
     cache של 15 דקות. מחזיר רשימה מאוחדת.
     """
     cache_key = "odds:soccer:global:h2h_totals_spreads"
@@ -324,21 +323,20 @@ async def fetch_all_odds() -> list:
 
     combined: list = []
     async with httpx.AsyncClient(timeout=20) as client:
-        for sport in ("soccer", "soccer_fifa_world_cup"):
-            try:
-                r = await client.get(
-                    f"{ODDS_API_BASE}/sports/{sport}/odds",
-                    params={
-                        "apiKey":     ODDS_API_KEY,
-                        "regions":    "eu,us,au,uk",
-                        "markets":    "h2h,totals,spreads",
-                        "oddsFormat": "decimal",
-                    }
-                )
-                if r.status_code == 200:
-                    combined.extend(r.json() if isinstance(r.json(), list) else [])
-            except Exception:
-                pass
+        try:
+            r = await client.get(
+                f"{ODDS_API_BASE}/sports/soccer/odds",
+                params={
+                    "apiKey":     ODDS_API_KEY,
+                    "regions":    "eu,us,au,uk",
+                    "markets":    "h2h,totals,spreads",
+                    "oddsFormat": "decimal",
+                }
+            )
+            if r.status_code == 200:
+                combined.extend(r.json() if isinstance(r.json(), list) else [])
+        except Exception:
+            pass
 
     if combined:
         await cache_set(cache_key, combined, "odds")
@@ -839,7 +837,7 @@ def build_match_analysis_sync(
     # Exact ID match cannot hit the wrong game; fuzzy name can.
     odds = fixture_odds if fixture_odds else find_odds_for_match(all_odds, home.get("name", ""), away.get("name", ""))
 
-    # Neutral venue: World Cup, UEFA Euro, Copa America — no home advantage
+    # Neutral venue: UEFA Euro, Copa America — no home advantage
     _is_neutral = WHITELISTED_LEAGUES.get(league.get("id", 0), {}).get("neutral", False)
 
     # Totals lookup — needed for Option-B xG calibration; fetch once, reuse below
@@ -1405,102 +1403,6 @@ async def _save_predictions_bg(matches: list) -> None:
             await save_match_prediction(m)
         except Exception as e:
             logger.debug(f"BG save failed for {m.get('home_team')}: {e}")
-
-
-@router.get("/world-cup")
-async def get_world_cup_matches(background_tasks: BackgroundTasks, days: int = 7, limit: int = 30):
-    """
-    🏆 מונדיאל 2026 — כל המשחקים: חיים עכשיו + לוח הימים הקרובים,
-    עם חיזויים מלאים. Cache: לוח 6 שעות, לייב 2 דקות.
-    """
-    today  = datetime.now().strftime("%Y-%m-%d")
-    to_day = (datetime.now() + timedelta(days=min(days, 14))).strftime("%Y-%m-%d")
-
-    # ─── 1. לוח המשחקים הקרוב (cache ארוך) ───────────────────────────
-    sched_key = f"wc:fixtures:{today}:{to_day}"
-    scheduled = await cache_get(sched_key, "fixtures")
-    if scheduled is None:
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                r = await client.get(
-                    f"{API_FOOTBALL_BASE}/fixtures",
-                    headers={"x-apisports-key": API_FOOTBALL_KEY},
-                    params={"league": 1, "season": 2026, "from": today, "to": to_day},
-                )
-                scheduled = r.json().get("response", [])
-                await cache_set(sched_key, scheduled, "fixtures")
-            except Exception as e:
-                logger.warning(f"WC fixtures fetch failed: {e}")
-                scheduled = []
-
-    # ─── 2. חיים עכשיו (אותו cache קצר של הפיד הכללי) ────────────────
-    live = await cache_get("fixtures:live:all", "live")
-    if live is None:
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                r = await client.get(
-                    f"{API_FOOTBALL_BASE}/fixtures",
-                    headers={"x-apisports-key": API_FOOTBALL_KEY},
-                    params={"live": "all"},
-                )
-                live = r.json().get("response", [])
-                await cache_set("fixtures:live:all", live, "live")
-            except Exception:
-                live = []
-    live_wc = [f for f in (live or []) if f.get("league", {}).get("id") == 1]
-
-    # ─── מיזוג: לייב גובר על הלוח לפי fixture id ─────────────────────
-    LIVE_CODES     = ("1H", "2H", "HT", "ET", "BT", "P", "LIVE")
-    FINISHED_CODES = ("FT", "AET", "PEN")
-    by_id: dict = {}
-    for f in scheduled or []:
-        st = f.get("fixture", {}).get("status", {}).get("short", "NS")
-        f["_status"] = "live" if st in LIVE_CODES else ("finished" if st in FINISHED_CODES else "scheduled")
-        f["_league_name"] = f.get("league", {}).get("name", "")
-        by_id[f.get("fixture", {}).get("id")] = f
-    for f in live_wc:
-        f["_status"] = "live"
-        f["_league_name"] = f.get("league", {}).get("name", "")
-        by_id[f.get("fixture", {}).get("id")] = f
-
-    fixtures = list(by_id.values())
-    if not fixtures:
-        return {"status": "no_matches", "message": "אין משחקי מונדיאל בטווח הקרוב",
-                "tournament": "FIFA World Cup 2026", "matches": [], "count": 0}
-
-    # חיים → מתוכננים → שנגמרו, לפי תאריך
-    order = {"live": 0, "scheduled": 1, "finished": 2}
-    fixtures.sort(key=lambda f: (order.get(f.get("_status"), 3), f.get("fixture", {}).get("date", "")))
-    fixtures = fixtures[:min(limit, 40)]
-
-    # ─── odds מרוכז + ניתוח מלא עם team stats (cached 6h) ─────────────
-    all_odds = await fetch_all_odds()
-    if isinstance(all_odds, Exception):
-        all_odds = []
-
-    _sem = asyncio.Semaphore(5)
-
-    async def _analyze_wc(f: dict) -> dict | None:
-        async with _sem:
-            try:
-                return await build_match_analysis(f, all_odds)
-            except Exception as e:
-                logger.error(f"WC analyze error {f.get('fixture', {}).get('id')}: {e}")
-                return None
-
-    wc_results = await asyncio.gather(*[_analyze_wc(f) for f in fixtures])
-    matches = [r for r in wc_results if r]
-
-    background_tasks.add_task(_save_predictions_bg, matches)
-
-    live_count = sum(1 for m in matches if m.get("_status") == "live")
-    return {
-        "status":     "success",
-        "tournament": "FIFA World Cup 2026",
-        "count":      len(matches),
-        "live_count": live_count,
-        "matches":    matches,
-    }
 
 
 @router.get("/matches/{fixture_id}")

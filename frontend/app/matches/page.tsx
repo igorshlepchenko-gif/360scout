@@ -11,12 +11,12 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 const API = "/api/backend";
 
 // Tier 1 & Tier 2 whitelist — API-Football IDs (mirrors backend WHITELISTED_LEAGUE_IDS)
-const MAJOR_LEAGUE_IDS = [1, 2, 3, 4, 9, 39, 40, 61, 78, 88, 94, 135, 140, 253, 271, 307, 848];
+const MAJOR_LEAGUE_IDS = [2, 3, 4, 9, 39, 40, 61, 78, 88, 94, 135, 140, 253, 271, 307, 848];
 const MAJOR_LEAGUE_KEYWORDS = [
   "champions", "premier", "liga", "serie a", "bundesliga", "ligue 1",
-  "world cup", "europa", "conference", "eredivisie", "primeira",
+  "europa", "conference", "eredivisie", "primeira",
   "championship", "saudi", "mls", "ligat",
-  "מונדיאל", "אלופות", "פרמייר", "אירופאית",
+  "אלופות", "פרמייר", "אירופאית",
 ];
 
 interface Match {
