@@ -12,6 +12,8 @@ from typing import Optional
 import httpx
 from dotenv import load_dotenv
 
+from app.cache import get as cache_get, set as cache_set
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -88,8 +90,57 @@ async def fetch_team_stats(team_id: int, league_id: int, season: int) -> dict:
             return {}
 
 
-async def fetch_injuries(fixture_id: int) -> list:
-    """Fetch injury reports for a fixture"""
+async def league_supports_injuries(league_id: int, season: int) -> bool:
+    """
+    Check API-Football's coverage.injuries flag for a league/season before
+    spending a call on /injuries. Some leagues (esp. lower-tier ones) never
+    collect injury data, and /injuries returns [] for them — indistinguishable
+    from "no injuries reported" unless checked here first.
+
+    Cache: 7 days per league/season (coverage doesn't change intra-season).
+    Fails open (assumes covered) on any lookup error — a wrongly-skipped real
+    injuries call is worse than one wasted API call.
+    """
+    cache_key = f"league_coverage:{league_id}:{season}"
+    cached = await cache_get(cache_key, "league_coverage")
+    if cached is not None:
+        return cached
+
+    supported = True
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            resp = await client.get(
+                f"{API_FOOTBALL_BASE}/leagues",
+                headers={"x-apisports-key": API_FOOTBALL_KEY},
+                params={"id": league_id, "season": season},
+            )
+            resp.raise_for_status()
+            leagues = resp.json().get("response", [])
+            seasons = leagues[0].get("seasons", []) if leagues else []
+            match   = next((s for s in seasons if s.get("year") == season), None)
+            if match is not None:
+                supported = bool(match.get("coverage", {}).get("injuries", True))
+        except Exception as e:
+            logger.warning(f"Coverage lookup failed for league {league_id}/{season}: {e}")
+
+    await cache_set(cache_key, supported, "league_coverage")
+    return supported
+
+
+async def fetch_injuries(fixture_id: int, league_id: Optional[int] = None, season: Optional[int] = None) -> list:
+    """
+    Fetch injury reports for a fixture.
+
+    When league_id/season are given, checks league_supports_injuries() first
+    and skips the call for leagues API-Football doesn't track injuries for.
+    Without them (caller has no league context), falls back to calling
+    /injuries directly, same as before.
+    """
+    if league_id is not None and season is not None:
+        if not await league_supports_injuries(league_id, season):
+            logger.info(f"No injury coverage for league {league_id}/{season} — skipping fixture {fixture_id}")
+            return []
+
     async with httpx.AsyncClient(timeout=30) as client:
         try:
             resp = await client.get(
@@ -418,7 +469,7 @@ async def run_daily_pipeline() -> dict:
 
                 # Fetch parallel data
                 weather_task  = fetch_weather(city, fix.get("date", ""))
-                injuries_task = fetch_injuries(fix.get("id", 0))
+                injuries_task = fetch_injuries(fix.get("id", 0), league["id"], league["season"])
                 odds_task     = fetch_odds(home["name"], away["name"])
                 home_stats_task = fetch_team_stats(home["id"], league["id"], league["season"])
                 away_stats_task = fetch_team_stats(away["id"], league["id"], league["season"])

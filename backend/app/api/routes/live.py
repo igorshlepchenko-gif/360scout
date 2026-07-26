@@ -33,11 +33,15 @@ from app.engine.handicap_engine import (
 from app.engine.data_ingestion import (
     fetch_referee_stats, classify_team_playstyle, calculate_tactical_matchup,
 )
+from app.tasks.data_fetcher import fetch_injuries
 
 # store ידני של overrides לפי fixture_id — נמחק עם restart
 _manual_adjustments: dict[int, dict] = {}
 from app.cache import get as cache_get, set as cache_set, stats as cache_stats, clear_all as cache_clear_all
-from app.db.repository import save_match_prediction, get_track_record, update_match_result
+from app.db.repository import (
+    save_match_prediction, get_track_record, update_match_result,
+    get_locked_snapshots, apply_locked_snapshot,
+)
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/live", tags=["live"], dependencies=[Depends(get_current_user)])
@@ -225,6 +229,25 @@ async def fetch_todays_fixtures(days_ahead: int = 1) -> list:
     ]
     logger.info(f"Whitelist filter: {_before_wl} → {len(all_fixtures)} Tier1/2 fixtures")
 
+    # Dedupe — the same fixture can appear twice (e.g. once from the "live" fetch,
+    # once from a still-cached "scheduled" bucket for a match that has since kicked
+    # off) with contradictory _status tags. Keep whichever tag is most up-to-date:
+    # live > finished > scheduled — a stale "scheduled" tag is the least trustworthy,
+    # and trusting it here is what let already-live/finished matches keep getting
+    # saved and re-analyzed as if still upcoming.
+    _dedup_priority = {"live": 0, "finished": 1, "scheduled": 2}
+    _by_fixture_id: dict[int, dict] = {}
+    for f in all_fixtures:
+        fid = f.get("fixture", {}).get("id")
+        if fid is None:
+            continue
+        existing = _by_fixture_id.get(fid)
+        if existing is None or _dedup_priority.get(f.get("_status"), 3) < _dedup_priority.get(existing.get("_status"), 3):
+            _by_fixture_id[fid] = f
+    if len(_by_fixture_id) != len(all_fixtures):
+        logger.info(f"Dedup: {len(all_fixtures)} → {len(_by_fixture_id)} fixtures (removed stale duplicates)")
+    all_fixtures = list(_by_fixture_id.values())
+
     # מיין סופי: חיים → מתוכננים → אחרונים
     status_order = {"live": 0, "scheduled": 1, "finished": 2}
     all_fixtures.sort(key=lambda f: (
@@ -250,19 +273,6 @@ async def fetch_team_form(team_id: int, league_id: int, season: int) -> dict:
             return resp if isinstance(resp, dict) else {}
         except Exception:
             return {}
-
-
-async def fetch_injuries(fixture_id: int) -> list:
-    async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            r = await client.get(
-                f"{API_FOOTBALL_BASE}/injuries",
-                headers={"x-apisports-key": API_FOOTBALL_KEY},
-                params={"fixture": fixture_id}
-            )
-            return r.json().get("response", [])
-        except Exception:
-            return []
 
 
 async def fetch_weather_for_city(city: str) -> dict:
@@ -814,6 +824,7 @@ def build_match_analysis_sync(
     ref_data: dict | None = None,
     home_playstyle: dict | None = None,
     away_playstyle: dict | None = None,
+    injuries: list | None = None,
 ) -> dict:
     """
     ניתוח מהיר ללא קריאות API נוספות — משתמש בנתוני ה-fixture עצמו.
@@ -879,9 +890,9 @@ def build_match_analysis_sync(
             xg_away = 1.1
         form_away = 0.4 if away.get("winner") is True else (-0.3 if away.get("winner") is False else 0.0)
 
-    home_injury = 0.0
-    away_injury = 0.0
-    injuries    = []
+    injuries    = injuries if isinstance(injuries, list) else []
+    home_injury = calculate_injury_impact(injuries, home.get("id", 0))
+    away_injury = calculate_injury_impact(injuries, away.get("id", 0))
     city        = fix.get("venue", {}).get("city", "") or ""
 
     # ── Lineup processing ────────────────────────────────────────────────────
@@ -893,15 +904,17 @@ def build_match_analysis_sync(
         home_lineup_data = next((t for t in lineups if t.get("team", {}).get("id") == home_id_fix), None)
         away_lineup_data = next((t for t in lineups if t.get("team", {}).get("id") == away_id_fix), None)
 
-        # Rotation signal: if confirmed startXI has fewer than 9 players something is unusual
+        # Rotation signal: confirmed startXI below 9 named players is unusual.
+        # Take the stronger of this and the /injuries-derived impact rather than
+        # summing — both signals often point at the same missing players.
         if home_lineup_data:
             n = len(home_lineup_data.get("startXI", []))
             if 0 < n < 9:
-                home_injury = min(0.4, (11 - n) * 0.1)
+                home_injury = max(home_injury, min(0.4, (11 - n) * 0.1))
         if away_lineup_data:
             n = len(away_lineup_data.get("startXI", []))
             if 0 < n < 9:
-                away_injury = min(0.4, (11 - n) * 0.1)
+                away_injury = max(away_injury, min(0.4, (11 - n) * 0.1))
 
     # If both teams got extract_xg's fallback (1.2) — stats exist but no real xG data
     # (e.g. national teams at WC, new season) — recalibrate via Option B.
@@ -1284,10 +1297,10 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
 
     referee_name = fix.get("referee") or ""
 
-    # משוך הכל במקביל: סטטיסטיקות + H2H + מזג אוויר + יחסים + שופט
+    # משוך הכל במקביל: סטטיסטיקות + H2H + מזג אוויר + יחסים + שופט + פציעות
     (
         home_stats, away_stats, h2h_matches, weather,
-        fixture_odds, lineups, ref_data,
+        fixture_odds, lineups, ref_data, injuries,
     ) = await asyncio.gather(
         fetch_team_stats_cached(home_id, league_id, season),
         fetch_team_stats_cached(away_id, league_id, season),
@@ -1296,6 +1309,7 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
         fetch_odds_apisports(fix.get("id", 0)),
         fetch_live_lineups(fix.get("id", 0)),
         fetch_referee_stats(referee_name, API_FOOTBALL_KEY, API_FOOTBALL_BASE),
+        fetch_injuries(fix.get("id", 0), league_id, season),
     )
 
     home_stats   = home_stats   if isinstance(home_stats,   dict) else {}
@@ -1305,6 +1319,7 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
     fixture_odds = fixture_odds if isinstance(fixture_odds, dict) else None
     lineups      = lineups      if isinstance(lineups,      list) else None
     ref_data     = ref_data     if isinstance(ref_data,     dict) else None
+    injuries     = injuries     if isinstance(injuries,     list) else []
 
     # Classify playstyle from already-fetched team stats (no extra API calls)
     home_playstyle = classify_team_playstyle(home_stats)
@@ -1316,6 +1331,7 @@ async def build_match_analysis(fixture: dict, all_odds: list) -> dict:
         ref_data=ref_data,
         home_playstyle=home_playstyle,
         away_playstyle=away_playstyle,
+        injuries=injuries,
     )
 
 
@@ -1364,6 +1380,13 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
 
     results = await asyncio.gather(*[_analyze(f) for f in fixtures])
     matches = [r for r in results if r]
+
+    # Freeze splice — override with the locked pre-match snapshot for any match
+    # that's already live/finished, so this response can never drift from what
+    # was recommended before kickoff, or disagree with what track record shows.
+    _locked = await get_locked_snapshots([m.get("fixture_id") for m in matches if m.get("fixture_id")])
+    for m in matches:
+        apply_locked_snapshot(m, _locked.get(m.get("fixture_id")))
 
     # ── Odds threshold filter ────────────────────────────────────────────────
     # Remove near-certainties: any match where the market's cheapest outcome
@@ -1421,6 +1444,12 @@ async def get_match_details(fixture_id: int):
 
     all_odds = await fetch_all_odds()
     result   = await build_match_analysis(fixtures[0], all_odds)
+
+    # Freeze splice — same as get_live_matches, so this detail view can never
+    # disagree with the list view or track record for the same fixture.
+    _locked = await get_locked_snapshots([fixture_id])
+    apply_locked_snapshot(result, _locked.get(fixture_id))
+
     return {"status": "success", "match": result}
 
 
