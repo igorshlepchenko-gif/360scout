@@ -38,10 +38,7 @@ from app.tasks.data_fetcher import fetch_injuries
 # store ידני של overrides לפי fixture_id — נמחק עם restart
 _manual_adjustments: dict[int, dict] = {}
 from app.cache import get as cache_get, set as cache_set, stats as cache_stats, clear_all as cache_clear_all
-from app.db.repository import (
-    save_match_prediction, get_track_record, update_match_result,
-    get_locked_snapshots, apply_locked_snapshot,
-)
+from app.db.repository import save_match_prediction, get_track_record, update_match_result
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/live", tags=["live"], dependencies=[Depends(get_current_user)])
@@ -1381,13 +1378,6 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
     results = await asyncio.gather(*[_analyze(f) for f in fixtures])
     matches = [r for r in results if r]
 
-    # Freeze splice — override with the locked pre-match snapshot for any match
-    # that's already live/finished, so this response can never drift from what
-    # was recommended before kickoff, or disagree with what track record shows.
-    _locked = await get_locked_snapshots([m.get("fixture_id") for m in matches if m.get("fixture_id")])
-    for m in matches:
-        apply_locked_snapshot(m, _locked.get(m.get("fixture_id")))
-
     # ── Odds threshold filter ────────────────────────────────────────────────
     # Remove near-certainties: any match where the market's cheapest outcome
     # (the favourite) sits below MIN_MARKET_ODDS has no meaningful value for
@@ -1444,12 +1434,6 @@ async def get_match_details(fixture_id: int):
 
     all_odds = await fetch_all_odds()
     result   = await build_match_analysis(fixtures[0], all_odds)
-
-    # Freeze splice — same as get_live_matches, so this detail view can never
-    # disagree with the list view or track record for the same fixture.
-    _locked = await get_locked_snapshots([fixture_id])
-    apply_locked_snapshot(result, _locked.get(fixture_id))
-
     return {"status": "success", "match": result}
 
 
