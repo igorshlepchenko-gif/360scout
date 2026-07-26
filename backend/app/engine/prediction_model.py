@@ -619,6 +619,7 @@ def get_recommendation(
                 "reason":         f"Draw prob {round(prob_draw * 100, 1)}% exceeds threshold — home stronger",
                 "draw_prob":      round(prob_draw, 3),
                 "edge":           None,
+                "hedge_outcomes": ["home", "draw"],
             }
         elif prob_away > prob_home:
             return {
@@ -627,6 +628,7 @@ def get_recommendation(
                 "reason":         f"Draw prob {round(prob_draw * 100, 1)}% exceeds threshold — away stronger",
                 "draw_prob":      round(prob_draw, 3),
                 "edge":           None,
+                "hedge_outcomes": ["draw", "away"],
             }
         else:
             return {

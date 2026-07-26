@@ -12,8 +12,11 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 const API = "/api/backend";
 
-const OUTCOME_HE:  Record<string, string> = { home: "ניצחון בית", draw: "תיקו", away: "ניצחון חוץ" };
-const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2" };
+const OUTCOME_HE:  Record<string, string> = {
+  home: "ניצחון בית", draw: "תיקו", away: "ניצחון חוץ",
+  "1X": "ביטוח כפול — בית/תיקו", "X2": "ביטוח כפול — תיקו/חוץ",
+};
+const OUTCOME_12X: Record<string, string> = { home: "1", draw: "X", away: "2", "1X": "1X", "X2": "X2" };
 
 // ── League tier classification ────────────────────────────────────────────────
 // Tier 1: always visible, premium badge
@@ -104,6 +107,15 @@ interface TrackRow {
   final_prob_away: number | null;
   confidence_score: number | null;
   status: "finished" | "pending";
+  // קפוא ברגע תחילת המשחק — קיים רק אחרי שהמשחק כבר יצא לדרך. ראה
+  // backend/app/db/repository.py::_lock_prediction_snapshot.
+  locked_snapshot?: {
+    recommendation?: {
+      status?: string;
+      outcome?: "home" | "draw" | "away" | null;
+      hedge_outcomes?: ("home" | "draw" | "away")[];
+    };
+  } | null;
 }
 
 interface Summary {
@@ -113,9 +125,30 @@ interface Summary {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function pickOf(r: TrackRow): "home" | "draw" | "away" | null {
-  if (r.predicted_outcome === "home" || r.predicted_outcome === "draw" || r.predicted_outcome === "away")
+function pickOf(r: TrackRow): "home" | "draw" | "away" | "1X" | "X2" | null {
+  // נגמר — predicted_outcome כבר סופי (מה שבאמת נשפט), כולל "1X"/"X2" לביטוח
+  // כפול, או null אם לא ניתנה המלצה בכלל (FILTERED_SYMMETRIC).
+  if (
+    r.predicted_outcome === "home" || r.predicted_outcome === "draw" ||
+    r.predicted_outcome === "away" || r.predicted_outcome === "1X" ||
+    r.predicted_outcome === "X2"
+  ) {
     return r.predicted_outcome;
+  }
+
+  // Pending — אם המשחק כבר יצא לדרך וקפא, מציגים את ההמלצה הקפואה (זהה למה
+  // שדף האותות מציג). אחרת — תצוגה מקדימה בלבד מהסתברויות שעוד מתעדכנות.
+  const rec = r.locked_snapshot?.recommendation;
+  if (rec) {
+    if (rec.status === "APPROVED" || rec.status === "DRAW_VALUE") {
+      if (rec.outcome === "home" || rec.outcome === "draw" || rec.outcome === "away") return rec.outcome;
+    } else if (rec.status === "DOUBLE_CHANCE") {
+      return (rec.hedge_outcomes ?? []).includes("home") ? "1X" : "X2";
+    } else if (rec.status === "FILTERED_SYMMETRIC") {
+      return null;
+    }
+  }
+
   if (r.final_prob_home == null) return null;
   const probs = { home: r.final_prob_home ?? 0, draw: r.final_prob_draw ?? 0, away: r.final_prob_away ?? 0 };
   return (Object.entries(probs).sort((a, b) => b[1] - a[1])[0][0]) as "home" | "draw" | "away";
@@ -123,7 +156,7 @@ function pickOf(r: TrackRow): "home" | "draw" | "away" | null {
 
 function oddsOf(r: TrackRow): number | null {
   const p = pickOf(r);
-  if (!p) return null;
+  if (p !== "home" && p !== "draw" && p !== "away") return null; // "1X"/"X2"/null — no single price applies
   const o = p === "home" ? r.odds_home : p === "draw" ? r.odds_draw : r.odds_away;
   return o && o > 1 ? o : null;
 }

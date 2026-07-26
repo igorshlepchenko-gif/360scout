@@ -50,7 +50,9 @@ async def job_fetch_live_matches():
         logger.info(f"[Scheduler] fetch_live_matches — {datetime.now(ISRAEL_TZ).strftime('%H:%M:%S')}")
         import httpx
         from app.cache import set as cache_set
-        from app.db.repository import save_match_prediction
+        from app.db.repository import (
+            save_match_prediction, get_locked_snapshots, apply_locked_snapshot,
+        )
         from app.api.routes.live import (
             fetch_todays_fixtures, fetch_all_odds, fetch_odds_apisports,
             fetch_weather_for_city, build_match_analysis_sync,
@@ -111,6 +113,13 @@ async def job_fetch_live_matches():
             for i, city in enumerate(cities)
         }
 
+        # Freeze splice — batch-fetch once for the whole tick. Any fixture that's
+        # already live/finished gets its recommendation/final/monte_carlo/value_bets
+        # overridden with the pre-match snapshot, before OLBG enrichment, saving,
+        # or the Telegram primary_winner check below — so alerts and the DB both
+        # only ever see what was actually recommended before kickoff.
+        _locked_snapshots = await get_locked_snapshots(valid_ids)
+
         saved       = 0
         alerts_sent = 0
         for f in fixtures:
@@ -127,6 +136,8 @@ async def job_fetch_live_matches():
                     result["xg_away"] = live_xg["xg_away"]
                     result["xg_source"] = "api_football_live"
                 if result is not None:
+                    apply_locked_snapshot(result, _locked_snapshots.get(fid))
+
                     # OLBG consensus enrichment — אם הסלוג נמצא, מחליף ALGORITHM_ONLY
                     try:
                         from app.tasks.olbg_scraper import (

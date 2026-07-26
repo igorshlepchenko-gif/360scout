@@ -217,6 +217,41 @@ CREATE TABLE IF NOT EXISTS prediction_results (
     archived_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── Backported from database/migrations/002_add_matrix_columns.sql + 003 ──────
+-- These were applied by hand to production but never reflected here, so a
+-- fresh database bootstrapped from this file alone was missing them.
+ALTER TABLE match_predictions
+    ADD COLUMN IF NOT EXISTS pre_match_matrix  JSONB DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS halftime_matrix   JSONB DEFAULT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'analysts_name_unique'
+    ) THEN
+        ALTER TABLE analysts ADD CONSTRAINT analysts_name_unique UNIQUE (name);
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'analyst_predictions_match_analyst_unique'
+    ) THEN
+        ALTER TABLE analyst_predictions
+            ADD CONSTRAINT analyst_predictions_match_analyst_unique
+            UNIQUE (match_id, analyst_id);
+    END IF;
+END
+$$;
+
+-- ── 004: Locked prediction snapshot — frozen at kickoff, never overwritten ────
+ALTER TABLE match_predictions
+    ADD COLUMN IF NOT EXISTS locked_snapshot JSONB DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS locked_odds     JSONB DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS locked_at       TIMESTAMPTZ DEFAULT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_matches_date   ON matches(match_date);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_matches_league ON matches(league_id);

@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 
+def _parse_jsonb(field):
+    """asyncpg מחזיר עמודות JSONB כ-str גולמי (אין type codec רשום) — פענח ל-dict/list."""
+    if field is None:
+        return None
+    if isinstance(field, str):
+        return json.loads(field)
+    if isinstance(field, (bytes, bytearray)):
+        return json.loads(field.decode())
+    return field
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # שמירת ניבוי
 # ────────────────────────────────────────────────────────────────────────────
@@ -64,8 +75,7 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                     SET home_team_name = EXCLUDED.home_team_name,
                         away_team_name = EXCLUDED.away_team_name,
                         league_name    = EXCLUDED.league_name,
-                        match_date     = EXCLUDED.match_date,
-                        status         = EXCLUDED.status
+                        match_date     = EXCLUDED.match_date
                 RETURNING id
             """,
                 fixture_id,
@@ -82,52 +92,73 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
             if not match_uuid:
                 return None
 
-            # 2. Upsert לטבלת match_predictions
-            await conn.execute("""
-                INSERT INTO match_predictions (
-                    match_id,
-                    prob_home_stats,  prob_away_stats,  prob_draw_stats,
-                    prob_home_env,    prob_away_env,    prob_draw_env,
-                    prob_home_human,  prob_away_human,  prob_draw_human,
-                    final_prob_home,  final_prob_away,  final_prob_draw,
-                    monte_carlo_home, monte_carlo_away, monte_carlo_draw,
-                    simulations_run,  confidence_score,
-                    key_factors,      calculated_at
-                ) VALUES (
-                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-                    $11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20
-                )
-                ON CONFLICT (match_id) DO UPDATE
-                    SET final_prob_home  = EXCLUDED.final_prob_home,
-                        final_prob_away  = EXCLUDED.final_prob_away,
-                        final_prob_draw  = EXCLUDED.final_prob_draw,
-                        confidence_score = EXCLUDED.confidence_score,
-                        key_factors      = EXCLUDED.key_factors,
-                        calculated_at    = NOW()
-            """,
-                match_uuid,
-                by_module.get("stats",       {}).get("home"),
-                by_module.get("stats",       {}).get("away"),
-                by_module.get("stats",       {}).get("draw"),
-                by_module.get("environment", {}).get("home"),
-                by_module.get("environment", {}).get("away"),
-                by_module.get("environment", {}).get("draw"),
-                by_module.get("human",       {}).get("home"),
-                by_module.get("human",       {}).get("away"),
-                by_module.get("human",       {}).get("draw"),
-                final.get("home"),
-                final.get("away"),
-                final.get("draw"),
-                mc.get("home"),
-                mc.get("away"),
-                mc.get("draw"),
-                mc.get("simulations", 10000),
-                prediction.get("confidence"),
-                json.dumps(prediction.get("key_factors", [])),
-                datetime.utcnow(),
-            )
+            # 2. Upsert לטבלת match_predictions — אבל לא אם המשחק כבר ננעל (locked_at).
+            # _status מגיע מ-fetch_todays_fixtures דרך build_match_analysis(_sync):
+            # "scheduled" | "live" | "finished".
+            _status = match_data.get("_status", "scheduled")
+            existing_pred = await conn.fetchrow("""
+                SELECT locked_at, final_prob_home, final_prob_draw, final_prob_away,
+                       monte_carlo_home, monte_carlo_draw, monte_carlo_away, simulations_run
+                FROM match_predictions WHERE match_id = $1
+            """, match_uuid)
 
-            # 3. Upsert יחסים — תמיד מעדכן אם כבר קיים (מונע שמירת יחסים ישנים)
+            if existing_pred and existing_pred["locked_at"] is not None:
+                # כבר ננעל — אין נגיעה בהמלצה/הסתברויות. שקט, לא כותבים כלום.
+                pass
+            elif _status in ("live", "finished"):
+                if existing_pred is not None and existing_pred["final_prob_home"] is not None:
+                    # רגע הנעילה — קופאים על המספרים האחרונים לפני המשחק (השורה
+                    # הקיימת), לעולם לא על מה שהתקבל עכשיו ב-match_data (כבר לייב).
+                    await _lock_prediction_snapshot(conn, match_uuid, existing_pred, match_data)
+                # else: אין baseline לפני-משחק אמיתי (המשחק נראה לראשונה כבר לייב/גמור)
+                # — לא ממציאים אחד מנתוני-לייב, פשוט מדלגים.
+            else:
+                await conn.execute("""
+                    INSERT INTO match_predictions (
+                        match_id,
+                        prob_home_stats,  prob_away_stats,  prob_draw_stats,
+                        prob_home_env,    prob_away_env,    prob_draw_env,
+                        prob_home_human,  prob_away_human,  prob_draw_human,
+                        final_prob_home,  final_prob_away,  final_prob_draw,
+                        monte_carlo_home, monte_carlo_away, monte_carlo_draw,
+                        simulations_run,  confidence_score,
+                        key_factors,      calculated_at
+                    ) VALUES (
+                        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+                        $11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20
+                    )
+                    ON CONFLICT (match_id) DO UPDATE
+                        SET final_prob_home  = EXCLUDED.final_prob_home,
+                            final_prob_away  = EXCLUDED.final_prob_away,
+                            final_prob_draw  = EXCLUDED.final_prob_draw,
+                            confidence_score = EXCLUDED.confidence_score,
+                            key_factors      = EXCLUDED.key_factors,
+                            calculated_at    = NOW()
+                """,
+                    match_uuid,
+                    by_module.get("stats",       {}).get("home"),
+                    by_module.get("stats",       {}).get("away"),
+                    by_module.get("stats",       {}).get("draw"),
+                    by_module.get("environment", {}).get("home"),
+                    by_module.get("environment", {}).get("away"),
+                    by_module.get("environment", {}).get("draw"),
+                    by_module.get("human",       {}).get("home"),
+                    by_module.get("human",       {}).get("away"),
+                    by_module.get("human",       {}).get("draw"),
+                    final.get("home"),
+                    final.get("away"),
+                    final.get("draw"),
+                    mc.get("home"),
+                    mc.get("away"),
+                    mc.get("draw"),
+                    mc.get("simulations", 10000),
+                    prediction.get("confidence"),
+                    json.dumps(prediction.get("key_factors", [])),
+                    datetime.utcnow(),
+                )
+
+            # 3. Upsert יחסים — תמיד מעדכן אם כבר קיים (מונע שמירת יחסים ישנים).
+            # ממשיך לעדכן גם אחרי נעילה — יחסי השוק הנוכחיים עדיין רלוונטיים כמידע.
             if odds and odds.get("odds_home"):
                 home_vb = (value_bets.get("home") or {})
                 draw_vb = (value_bets.get("draw") or {})
@@ -214,6 +245,148 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
         return None
 
 
+async def _lock_prediction_snapshot(conn, match_uuid, existing_pred, match_data: dict) -> None:
+    """
+    קפיאה חד-פעמית של ההמלצה + ההסתברויות + מונטה קרלו + הימורי ערך, ברגע שהמשחק
+    נצפה לראשונה כ-live/finished. הבנייה מתבססת אך ורק על existing_pred (המספרים
+    האחרונים שנשמרו לפני המשחק) ועל יחסי bookmaker_odds הקיימים — לא על match_data
+    של הקריאה הנוכחית, שכבר לייב. ה-UPDATE מותנה ב-locked_at IS NULL כדי להיות
+    בטוח תחת קריאות מקבילות (scheduler + web) בלי טרנזקציה מפורשת.
+    """
+    from app.engine.prediction_model import get_recommendation, calculate_value
+
+    final_snapshot = {
+        "home": existing_pred["final_prob_home"],
+        "draw": existing_pred["final_prob_draw"],
+        "away": existing_pred["final_prob_away"],
+    }
+    mc_snapshot = {
+        "home":        existing_pred["monte_carlo_home"],
+        "draw":        existing_pred["monte_carlo_draw"],
+        "away":        existing_pred["monte_carlo_away"],
+        "simulations": existing_pred["simulations_run"],
+    }
+
+    existing_odds = await conn.fetchrow(
+        "SELECT odds_home, odds_draw, odds_away FROM bookmaker_odds WHERE match_id = $1 LIMIT 1",
+        match_uuid,
+    )
+
+    odds_snapshot = None
+    value_bets_snapshot = {}
+    if existing_odds and existing_odds["odds_home"]:
+        odds_snapshot = {
+            "home": existing_odds["odds_home"],
+            "draw": existing_odds["odds_draw"],
+            "away": existing_odds["odds_away"],
+        }
+        recommendation = get_recommendation(
+            final_snapshot,
+            match_data.get("home_team", ""),
+            match_data.get("away_team", ""),
+            bookmaker_odds=odds_snapshot,
+        )
+        for outcome in ("home", "draw", "away"):
+            odd = odds_snapshot.get(outcome)
+            prob = final_snapshot.get(outcome)
+            if odd and prob is not None:
+                vb = calculate_value(prob, odd)
+                if vb["is_value_bet"]:
+                    value_bets_snapshot[outcome] = vb
+    else:
+        recommendation = get_recommendation(
+            final_snapshot,
+            match_data.get("home_team", ""),
+            match_data.get("away_team", ""),
+        )
+
+    snapshot = {
+        "recommendation":    recommendation,
+        "final":             final_snapshot,
+        "monte_carlo":       mc_snapshot,
+        "value_bets":        value_bets_snapshot,
+        # consensus.master == prediction.final whenever there's no analyst
+        # consensus for this match yet (the common case) — freeze in step.
+        "consensus_master":  final_snapshot,
+    }
+
+    result = await conn.execute("""
+        UPDATE match_predictions
+        SET locked_snapshot = $2::jsonb,
+            locked_odds     = $3::jsonb,
+            locked_at       = NOW()
+        WHERE match_id = $1 AND locked_at IS NULL
+    """,
+        match_uuid,
+        json.dumps(snapshot),
+        json.dumps(odds_snapshot) if odds_snapshot else None,
+    )
+    if result == "UPDATE 1":
+        logger.info(f"Locked prediction snapshot for match {match_uuid}: {recommendation.get('recommendation')}")
+
+
+async def get_locked_snapshots(fixture_ids: list) -> dict:
+    """
+    שליפה מרוכזת (query אחד) של locked_snapshot/locked_odds לכל ה-fixture_ids
+    שכבר ננעלו. Keyed by fixture_id (api_football_id). לשימוש ב-serving path —
+    כדי להחליף בתגובה מה שחושב מחדש (ואולי כבר סטה מהמשחק) בערך שקפא ברגע
+    הנעילה. fixture_ids ריק/None מחזיר {} בלי לגעת ב-DB.
+    """
+    if not fixture_ids:
+        return {}
+    pool = await get_db()
+    if pool is None:
+        return {}
+    try:
+        rows = await pool.fetch("""
+            SELECT m.api_football_id AS fixture_id,
+                   mp.locked_snapshot, mp.locked_odds
+            FROM matches m
+            JOIN match_predictions mp ON mp.match_id = m.id
+            WHERE m.api_football_id = ANY($1::int[])
+              AND mp.locked_at IS NOT NULL
+        """, list(fixture_ids))
+        return {
+            row["fixture_id"]: {
+                "snapshot": _parse_jsonb(row["locked_snapshot"]),
+                "odds":     _parse_jsonb(row["locked_odds"]),
+            }
+            for row in rows
+        }
+    except Exception as e:
+        logger.error(f"get_locked_snapshots failed: {e}")
+        return {}
+
+
+def apply_locked_snapshot(result: dict, locked: Optional[dict]) -> None:
+    """
+    דורס את result במקום (in place) לפי locked snapshot, אם קיים —
+    prediction.recommendation / prediction.final / prediction.monte_carlo /
+    value_bets / consensus.master. לא נוגע בשדות live בלבד (score/elapsed/
+    _status) ולא ביחסי השוק הנוכחיים (result["odds"]) — אלה ממשיכים להתעדכן
+    כמידע חי, רק החיזוי/ההמלצה עצמם קפואים.
+    """
+    if not locked or not locked.get("snapshot"):
+        return
+    snap = locked["snapshot"]
+
+    prediction = result.get("prediction")
+    if isinstance(prediction, dict):
+        if "recommendation" in snap:
+            prediction["recommendation"] = snap["recommendation"]
+        if "final" in snap:
+            prediction["final"] = snap["final"]
+        if "monte_carlo" in snap:
+            prediction["monte_carlo"] = snap["monte_carlo"]
+
+    if "value_bets" in snap:
+        result["value_bets"] = snap["value_bets"]
+
+    consensus = result.get("consensus")
+    if isinstance(consensus, dict) and "consensus_master" in snap:
+        consensus["master"] = snap["consensus_master"]
+
+
 _last_save_error: Optional[str] = None
 
 
@@ -238,10 +411,12 @@ async def get_track_record(limit: int = 50) -> dict:
 
     try:
         async with pool.acquire() as conn:
-            # סטטיסטיקה כללית — רק מניבויים שנגמרו
+            # סטטיסטיקה כללית — רק מניבויים שנגמרו.
+            # predicted_outcome IS NULL = FILTERED_SYMMETRIC ("No Bet") — לא ניתנה
+            # המלצה בכלל, אז לא נכלל במכנה של total (לא טעות, לא הצלחה).
             summary = await conn.fetchrow("""
                 SELECT
-                    COUNT(*)                                                    AS total,
+                    COUNT(*) FILTER (WHERE pr.predicted_outcome IS NOT NULL)   AS total,
                     COUNT(*) FILTER (WHERE pr.was_correct)                     AS correct,
                     COUNT(*) FILTER (WHERE bo.is_value_bet)                    AS value_bets,
                     COUNT(*) FILTER (WHERE bo.is_value_bet AND pr.was_correct) AS vb_correct
@@ -269,6 +444,8 @@ async def get_track_record(limit: int = 50) -> dict:
                     mp.final_prob_draw,
                     mp.final_prob_away,
                     mp.confidence_score,
+                    mp.locked_snapshot,
+                    mp.locked_at,
                     'finished'         AS status
                 FROM prediction_results pr
                 JOIN matches m ON m.id = pr.match_id
@@ -297,6 +474,8 @@ async def get_track_record(limit: int = 50) -> dict:
                     mp.final_prob_draw,
                     mp.final_prob_away,
                     mp.confidence_score,
+                    mp.locked_snapshot,
+                    mp.locked_at,
                     'pending'          AS status
                 FROM match_predictions mp
                 JOIN matches m ON m.id = mp.match_id
@@ -316,8 +495,8 @@ async def get_track_record(limit: int = 50) -> dict:
             league_rows = await conn.fetch("""
                 SELECT
                     m.league_name,
-                    COUNT(*)                                   AS total,
-                    COUNT(*) FILTER (WHERE pr.was_correct)    AS correct
+                    COUNT(*) FILTER (WHERE pr.predicted_outcome IS NOT NULL) AS total,
+                    COUNT(*) FILTER (WHERE pr.was_correct)                  AS correct
                 FROM prediction_results pr
                 JOIN matches m ON m.id = pr.match_id
                 GROUP BY m.league_name
@@ -335,6 +514,8 @@ async def get_track_record(limit: int = 50) -> dict:
 
             # מיין: ניבויים שנגמרו קודם, אחר כך pending
             recent = [dict(r) for r in resolved] + [dict(r) for r in pending]
+            for r in recent:
+                r["locked_snapshot"] = _parse_jsonb(r.get("locked_snapshot"))
 
             return {
                 "summary": {
@@ -672,7 +853,8 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
         async with pool.acquire() as conn:
             # מצא את המשחק
             row = await conn.fetchrow("""
-                SELECT m.id, m.status, mp.final_prob_home, mp.final_prob_draw, mp.final_prob_away
+                SELECT m.id, mp.final_prob_home, mp.final_prob_draw, mp.final_prob_away,
+                       mp.locked_snapshot
                 FROM matches m
                 LEFT JOIN match_predictions mp ON mp.match_id = m.id
                 WHERE m.api_football_id = $1
@@ -681,26 +863,46 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
             if not row:
                 return False
 
-            match_uuid       = row["id"]
-            already_finished = row["status"] == "finished"
+            match_uuid = row["id"]
+            locked     = _parse_jsonb(row["locked_snapshot"])
 
-            # קבע prediction — הסתברות הגבוהה ביותר
-            probs = {
-                "home": row["final_prob_home"] or 0,
-                "draw": row["final_prob_draw"] or 0,
-                "away": row["final_prob_away"] or 0,
-            }
-            predicted = max(probs, key=probs.get)
-            was_correct = (predicted == actual)
-
-            # בדוק value bet
-            vb_hit = False
-            vb_row = await conn.fetchrow(
-                "SELECT is_value_bet FROM bookmaker_odds WHERE match_id = $1 LIMIT 1",
-                match_uuid
-            )
-            if vb_row and vb_row["is_value_bet"]:
-                vb_hit = was_correct
+            if locked and locked.get("recommendation"):
+                # דרך תקנית — נגד ה-recommendation שקפא ברגע הנעילה, לא נגד
+                # highest-probability גולמי (מתעלם מ-Double Chance / No Bet).
+                rec    = locked["recommendation"]
+                status = rec.get("status")
+                if status in ("APPROVED", "DRAW_VALUE"):
+                    predicted_outcome = rec.get("outcome")
+                    was_correct       = (predicted_outcome == actual)
+                elif status == "DOUBLE_CHANCE":
+                    hedge             = rec.get("hedge_outcomes") or []
+                    predicted_outcome = "1X" if "home" in hedge else "X2"
+                    was_correct       = actual in hedge
+                elif status == "FILTERED_SYMMETRIC":
+                    # לא ניתנה המלצה — לא סופר לטובה/רעה, רק נשמר לתיעוד.
+                    predicted_outcome = None
+                    was_correct       = None
+                else:
+                    predicted_outcome = rec.get("outcome")
+                    was_correct       = (predicted_outcome == actual) if predicted_outcome else None
+                value_bets_locked = locked.get("value_bets") or {}
+                vb_hit = bool(was_correct) and predicted_outcome in value_bets_locked
+            else:
+                # שורה legacy — נוצרה לפני התיקון הזה, או משחק שנצפה לראשונה כבר
+                # לייב/גמור (אין baseline לפני-משחק לקפוא עליו). ה-fallback הישן:
+                # highest-probability גולמי מתוך final_prob_*.
+                probs = {
+                    "home": row["final_prob_home"] or 0,
+                    "draw": row["final_prob_draw"] or 0,
+                    "away": row["final_prob_away"] or 0,
+                }
+                predicted_outcome = max(probs, key=probs.get)
+                was_correct       = (predicted_outcome == actual)
+                vb_row = await conn.fetchrow(
+                    "SELECT is_value_bet FROM bookmaker_odds WHERE match_id = $1 LIMIT 1",
+                    match_uuid
+                )
+                vb_hit = bool(vb_row and vb_row["is_value_bet"] and was_correct)
 
             # upsert תוצאה
             await conn.execute("""
@@ -714,19 +916,23 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
                         algorithm_was_correct = EXCLUDED.algorithm_was_correct,
                         value_bet_hit        = EXCLUDED.value_bet_hit,
                         archived_at          = NOW()
-            """, match_uuid, predicted, actual, was_correct, was_correct, vb_hit)
+            """, match_uuid, predicted_outcome, actual, was_correct, was_correct, vb_hit)
 
-            # עדכן סטטוס ותוצאה ב-matches
-            await conn.execute("""
+            # עדכן סטטוס ותוצאה ב-matches — אטומי: רק אם עדיין לא 'finished'.
+            # זה מה שמונע ניקוד כפול של אנליסטים — לפני התיקון, save_match_prediction
+            # היה מאפס בטעות את הסטטוס בחזרה ל-'scheduled' אחרי שכבר סומן 'finished',
+            # מה שגרם למשחק הזה להיבחר שוב ע"י auto_results ולהיספר פעמיים.
+            newly_finished = await conn.fetchval("""
                 UPDATE matches
                 SET status = 'finished', home_score = $2, away_score = $3
-                WHERE id = $1
+                WHERE id = $1 AND status != 'finished'
+                RETURNING id
             """, match_uuid, home_score, away_score)
 
             # ── ניקוד אנליסטים אמיתי — פעם אחת בלבד למשחק (idempotent) ──
             # total_predictions כבר נספר בהזנה; כאן מעדכנים correct_predictions
             # ומחשבים מחדש win_rate = דיוק אמיתי (correct/total).
-            if not already_finished:
+            if newly_finished is not None:
                 scored = await conn.execute("""
                     UPDATE analysts a SET
                         correct_predictions = a.correct_predictions + sub.correct_count,
@@ -745,7 +951,7 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
                 """, match_uuid, actual)
                 logger.info(f"Analyst scoring: {scored} (fixture={fixture_id}, actual={actual})")
 
-        logger.info(f"Result saved: fixture={fixture_id} | predicted={predicted} actual={actual} correct={was_correct}")
+        logger.info(f"Result saved: fixture={fixture_id} | predicted={predicted_outcome} actual={actual} correct={was_correct}")
         return True
 
     except Exception as e:
