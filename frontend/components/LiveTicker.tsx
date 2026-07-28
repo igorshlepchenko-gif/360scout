@@ -67,7 +67,7 @@ export default function LiveTicker({
         direction: "rtl",
         height: 40,
         alignItems: "center",
-        borderBottom: "2px solid #38bdf8",
+        borderBottom: "2px solid var(--scan-500)",
         overflow: "hidden",
         position: "fixed",
         top: 0, left: 0,

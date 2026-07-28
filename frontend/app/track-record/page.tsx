@@ -9,6 +9,7 @@ import {
   Filter, Calendar, Zap, EyeOff,
 } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import RadarMark from "@/components/RadarMark";
 
 const API = "/api/backend";
 
@@ -245,16 +246,21 @@ export default function TrackRecordPage() {
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 24px" }}>
 
         {/* ── Hero ── */}
-        <div className="mb-8">
-          <div className="mb-2 flex items-center gap-3">
-            <h1 className="m-0 text-2xl font-black text-white">ביצועים היסטוריים 📊</h1>
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
-              שקיפות מלאה
-            </span>
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-3">
+              <h1 className="m-0 text-2xl font-bold text-white">ביצועים היסטוריים 📊</h1>
+              <span className="rounded-full border border-[var(--scan-500)]/30 bg-[var(--scan-500)]/10 px-2.5 py-1 text-[11px] font-bold text-[var(--scan-500)]">
+                שקיפות מלאה
+              </span>
+            </div>
+            <p className="m-0 text-sm text-slate-500">
+              כל ניבוי מתועד אוטומטית — כולל המחדלים.
+            </p>
           </div>
-          <p className="m-0 text-sm text-slate-500">
-            כל ניבוי מתועד אוטומטית — כולל המחדלים.
-          </p>
+          <div className="hero-radar flex-shrink-0">
+            <RadarMark size={56} />
+          </div>
         </div>
 
         {/* ── 4 stat cards ── */}
@@ -457,11 +463,11 @@ export default function TrackRecordPage() {
                       </td>
 
                       {/* Prediction */}
-                      <td className="p-3.5 font-medium text-sky-400">
+                      <td className="p-3.5 font-medium text-[var(--scan-500)]">
                         {pick
                           ? <>{OUTCOME_12X[pick]} <span className="text-[10px] text-slate-500">({OUTCOME_HE[pick]})</span></>
                           : "—"}
-                        {r.value_bet_hit && <Zap size={11} className="mr-1 inline text-cyan-400" />}
+                        {r.value_bet_hit && <Zap size={11} className="mr-1 inline text-[var(--scan-500)]" />}
                       </td>
 
                       {/* Odds */}

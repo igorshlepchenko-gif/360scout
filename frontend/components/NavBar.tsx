@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import RadarMark from "@/components/RadarMark";
 
 const NAV_ITEMS = [
   { label: "סיגנלים חמים",      href: "/" },
@@ -44,10 +45,13 @@ export default function NavBar() {
           {/* Logo — first in RTL = visually RIGHT */}
           <a
             href="/"
-            style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.5px", textDecoration: "none", direction: "ltr", flexShrink: 0 }}
+            style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 20, letterSpacing: "-0.3px", textDecoration: "none", direction: "ltr", flexShrink: 0 }}
           >
-            <span style={{ color: "#10b981" }}>ANALYST</span>
-            <span style={{ color: "white" }}>365</span>
+            <RadarMark size={24} />
+            <span>
+              <span style={{ color: "var(--scan-500)" }}>ANALYST</span>
+              <span style={{ color: "white" }}>365</span>
+            </span>
           </a>
 
           {/* Desktop links — hidden on mobile via CSS */}
@@ -99,7 +103,7 @@ export default function NavBar() {
                     <a href="/login" style={{ color: "#64748b", fontSize: 14, textDecoration: "none", whiteSpace: "nowrap" }}>
                       התחברות
                     </a>
-                    <a href="/register" style={{ color: "#10b981", fontSize: 14, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+                    <a href="/register" style={{ color: "var(--scan-500)", fontSize: 14, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
                       הרשמה
                     </a>
                   </>
@@ -168,7 +172,7 @@ export default function NavBar() {
                 }}
               >
                 {isActive(item.href) && (
-                  <span style={{ width: 3, height: 20, background: "#10b981", borderRadius: 99, display: "inline-block", flexShrink: 0 }} />
+                  <span style={{ width: 3, height: 20, background: "var(--scan-500)", borderRadius: 99, display: "inline-block", flexShrink: 0 }} />
                 )}
                 {item.label}
               </a>
@@ -227,7 +231,7 @@ export default function NavBar() {
                     href="/register"
                     onClick={() => setOpen(false)}
                     style={{
-                      color: "#10b981", fontSize: 16, fontWeight: 700,
+                      color: "var(--scan-500)", fontSize: 16, fontWeight: 700,
                       textDecoration: "none", padding: "13px 0",
                     }}
                   >

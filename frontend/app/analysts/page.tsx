@@ -205,11 +205,11 @@ export default function AnalystsPage() {
         {/* ── Header ── */}
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-sky-500/10 p-3 text-sky-400">
+            <div className="rounded-xl bg-[rgba(34,211,238,0.1)] p-3 text-[var(--scan-500)]">
               <Users size={26} />
             </div>
             <div>
-              <h1 className="m-0 mb-1 text-2xl font-black text-white">צוות האנליסטים של Analyst365</h1>
+              <h1 className="m-0 mb-1 text-2xl font-bold text-white">צוות האנליסטים של Analyst365</h1>
               <p className="m-0 text-sm text-slate-500">
                 הצלבת חישובי האלגוריתם עם ניתוח אנושי — קונסנזוס בין מכונה לאדם.
               </p>
@@ -254,7 +254,7 @@ export default function AnalystsPage() {
         {/* ── Team cards ── */}
         <div className="mb-12">
           <div className="mb-5 flex items-center gap-2">
-            <div className="h-4 w-1 rounded-full bg-sky-500" />
+            <div className="h-4 w-1 rounded-full bg-[var(--scan-500)]" />
             <h2 className="m-0 text-base font-bold text-slate-200">הצוות ({analysts.length})</h2>
             <span className="text-[11px] text-slate-600">· לחץ על כרטיס כדי לבחור אנליסט להזנת ניבוי</span>
           </div>
@@ -281,13 +281,13 @@ export default function AnalystsPage() {
                     <div>
                       <div className="mb-4 flex items-center gap-3.5">
                         {/* initials avatar — no fake photos */}
-                        <div className="grid h-14 w-14 place-items-center rounded-full border-2 border-slate-700 bg-slate-800 text-base font-black text-slate-200">
+                        <div className="grid h-14 w-14 place-items-center rounded-full border-2 border-slate-700 bg-slate-800 text-base font-bold text-slate-200">
                           {initialsOf(a.name)}
                         </div>
                         <div>
                           <h3 className="m-0 flex items-center gap-1 text-sm font-bold text-slate-100">
                             {a.name}
-                            <ShieldCheck size={14} className="text-sky-400" />
+                            <ShieldCheck size={14} className="text-[var(--scan-500)]" />
                           </h3>
                           <p className="m-0 mt-0.5 text-[11px] text-slate-500">
                             {a.expertise_league || "אנליסט כללי"}
@@ -370,7 +370,7 @@ export default function AnalystsPage() {
                   <div className="flex w-full items-center justify-around gap-4 rounded-lg border border-slate-800/80 bg-[#0F1318] p-3 text-xs md:w-80">
                     <div className="text-center">
                       <span className="mb-0.5 block text-[10px] text-slate-500">🤖 אלגוריתם</span>
-                      <span className="font-bold text-sky-400">
+                      <span className="font-bold text-[var(--scan-500)]">
                         {OUTCOME_12X[lock.algo_pick]} ({OUTCOME_HE[lock.algo_pick]}) · {Math.round(lock.algo_prob * 100)}%
                       </span>
                     </div>
@@ -482,7 +482,7 @@ export default function AnalystsPage() {
                 <div className="mb-4">
                   <div className="mb-1.5 flex justify-between text-xs">
                     <span className="text-slate-400">רמת ביטחון</span>
-                    <span className="font-bold text-white">{confidence}/10</span>
+                    <span className="font-bold text-white" style={{ fontFamily: "var(--font-mono), monospace" }}>{confidence}/10</span>
                   </div>
                   <input
                     type="range" min={1} max={10} value={confidence}
@@ -502,7 +502,7 @@ export default function AnalystsPage() {
                 <button
                   onClick={handleSubmitPrediction}
                   disabled={!outcome || !selectedAnalyst || submitting}
-                  className="w-full rounded-lg bg-emerald-500 py-3 text-sm font-extrabold text-[#0B0E14] transition disabled:opacity-30"
+                  className="w-full rounded-lg bg-emerald-500 py-3 text-sm font-semibold text-[#0B0E14] transition disabled:opacity-30"
                 >
                   {submitting ? "שומר..." : "שלח ניבוי"}
                 </button>

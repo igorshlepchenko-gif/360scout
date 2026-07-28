@@ -4,10 +4,20 @@
   --bg-primary: #0B0E14;
   --bg-card: #0F1318;
   --border: rgba(255,255,255,0.08);
+
+  /* semantic — value/outcome signals only. Never use these for pure decoration. */
   --green: #10b981;
   --amber: #f59e0b;
   --red: #ef4444;
   --text-muted: #64748b;
+
+  /* brand — the 360° scan accent: identity, chrome, precision-data (never win/loss signals) */
+  --scan-300: #A7F0FC;
+  --scan-500: #22D3EE;
+  --scan-700: #0E6E82;
+
+  --font-sans: var(--font-plex-sans-hebrew), 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Arial Hebrew', sans-serif;
+  --font-mono: var(--font-plex-mono), 'SFMono-Regular', Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -15,7 +25,7 @@
 body {
   background: var(--bg-primary);
   color: white;
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Arial Hebrew', sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   direction: rtl;
 }
@@ -31,9 +41,9 @@ body {
   right: 16px;
   z-index: 99999;
   padding: 10px 20px;
-  background: #10b981;
+  background: var(--scan-500);
   color: #0B0E14;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 15px;
   border-radius: 0 0 10px 10px;
   text-decoration: none;
@@ -61,7 +71,7 @@ body {
 
 /* Keyboard focus ring — applies when navigating with Tab */
 :focus-visible {
-  outline: 2px solid #10b981;
+  outline: 2px solid var(--scan-500);
   outline-offset: 3px;
   border-radius: 4px;
 }
@@ -73,9 +83,9 @@ body {
 
 /* ── ARIA tab pattern — selected state visual cue ── */
 [role="tab"][aria-selected="true"] {
-  background: rgba(16,185,129,0.12);
-  border-color: rgba(16,185,129,0.4);
-  color: #10b981;
+  background: rgba(34,211,238,0.12);
+  border-color: rgba(34,211,238,0.4);
+  color: var(--scan-500);
   font-weight: 700;
 }
 [role="tab"][aria-selected="false"]:hover {
@@ -113,6 +123,17 @@ body {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.4; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   RADAR MARK — 360° scan signature motif (NavBar + hero)
+══════════════════════════════════════════════════════════ */
+@keyframes radar-sweep {
+  to { transform: rotate(360deg); }
+}
+.radar-sweep {
+  animation: radar-sweep 6s linear infinite;
+  transform-origin: 32px 32px;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -163,9 +184,9 @@ body {
 }
 
 .tab-btn.active {
-  background: rgba(16,185,129,0.12);
-  border-color: rgba(16,185,129,0.4);
-  color: var(--green);
+  background: rgba(34,211,238,0.12);
+  border-color: rgba(34,211,238,0.4);
+  color: var(--scan-500);
   font-weight: 700;
 }
 
@@ -219,6 +240,7 @@ body {
 
   /* ── Hero heading ── */
   h1 { font-size: 20px !important; }
+  .hero-radar { display: none !important; }
 
   /* ── Card: reduce side paddings ── */
   .key-factors       { padding: 0 14px 10px !important; }

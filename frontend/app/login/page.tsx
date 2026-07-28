@@ -69,7 +69,7 @@ export default function LoginPage() {
       padding: 20, direction: "rtl",
     }}>
       <form onSubmit={onSubmit} style={card}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: "#0f172a", margin: "0 0 4px" }}>
           התחברות
         </h1>
         <p style={{ color: "#64748b", fontSize: 13, margin: "0 0 20px" }}>

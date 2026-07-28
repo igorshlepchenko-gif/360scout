@@ -47,7 +47,7 @@ export default function MatchConsensus({
       {/* כותרת + סטטוס נעילה */}
       <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-sky-400" />
+          <Users className="h-5 w-5 text-[var(--scan-500)]" />
           <h3 className="m-0 text-base font-bold">הצלבת אנליסטים וקונסנזוס</h3>
         </div>
         {isConsensusLock && (
@@ -76,7 +76,7 @@ export default function MatchConsensus({
             <span className="text-sm font-semibold">
               {agreeing.length} מתוך {analysts.length} אנליסטים
             </span>
-            <span className={`font-bold ${isConsensusLock ? "text-amber-400" : "text-sky-400"}`}>
+            <span className={`font-bold ${isConsensusLock ? "text-amber-400" : "text-[var(--scan-500)]"}`}>
               {consensusPct}% קונסנזוס
             </span>
           </div>

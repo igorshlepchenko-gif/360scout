@@ -226,7 +226,7 @@ function TeamLogo({ logo, name, size = 40 }: { logo?: string; name: string; size
       borderRadius: "50%",
       background: "rgba(255,255,255,0.08)",
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.35, fontWeight: 900, color: "white",
+      fontSize: size * 0.35, fontWeight: 700, color: "white",
       border: "1px solid rgba(255,255,255,0.12)",
     }}>
       {initials}
@@ -267,7 +267,7 @@ function ConfidenceRing({ value }: { value: number }) {
           alignItems: "center", justifyContent: "center",
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 900, color }}>{value}%</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color }}>{value}%</div>
         <div style={{ fontSize: 8, color: "#64748b", marginTop: -2 }}>ביטחון</div>
       </div>
     </div>
@@ -337,13 +337,13 @@ function WinningMethodTable({
   };
   const TD: React.CSSProperties = {
     padding: "10px 12px", fontSize: 12, textAlign: "center",
-    fontFamily: "monospace", color: "#cbd5e1",
+    fontFamily: "var(--font-mono), monospace", color: "#cbd5e1",
   };
   const LABEL: React.CSSProperties = {
     padding: "10px 12px", fontSize: 11, fontWeight: 700,
     color: "#94a3b8", textAlign: "right",
   };
-  const ROW_PROB: React.CSSProperties = { background: "rgba(56,189,248,0.06)" };
+  const ROW_PROB: React.CSSProperties = { background: "rgba(34,211,238,0.06)" };
   const ROW_VALUE_ON: React.CSSProperties = { background: "rgba(74,222,128,0.08)" };
 
   const cols = [
@@ -357,8 +357,8 @@ function WinningMethodTable({
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <div style={{ height: 14, width: 3, background: "#38bdf8", borderRadius: 99 }} />
-        <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>
+        <div style={{ height: 14, width: 3, background: "var(--scan-500)", borderRadius: 99 }} />
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#cbd5e1" }}>
           שיטת הניצחון — ניתוח מלא
         </span>
         {odds.bookmaker && (
@@ -370,7 +370,7 @@ function WinningMethodTable({
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 340 }} dir="ltr">
           <caption className="sr-only">טבלת שיטת הניצחון — הסתברויות, יחסים הוגנים ויחסי שוק</caption>
           <thead>
-            <tr style={{ borderBottom: "2px solid #38bdf8" }}>
+            <tr style={{ borderBottom: "2px solid var(--scan-500)" }}>
               <th style={{ ...TH, textAlign: "right" }}>פרמטר</th>
               {cols.map(c => (
                 <th key={c.sign} style={TH}>
@@ -396,9 +396,9 @@ function WinningMethodTable({
 
             {/* ── Probability row — blue ── */}
             <tr style={{ ...ROW_PROB, borderBottom: "1px solid #334155" }}>
-              <td style={{ ...LABEL, color: "#38bdf8" }}>📊 הסתברות</td>
+              <td style={{ ...LABEL, color: "var(--scan-500)" }}>📊 הסתברות</td>
               {cols.map(c => (
-                <td key={c.sign} style={{ ...TD, color: "#38bdf8", fontWeight: 700, fontSize: 14 }}>
+                <td key={c.sign} style={{ ...TD, color: "var(--scan-500)", fontWeight: 700, fontSize: 14 }}>
                   {(c.prob * 100).toFixed(1)}%
                 </td>
               ))}
@@ -475,13 +475,13 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
 
   const TH: React.CSSProperties = {
     padding: "6px 8px", fontSize: 9, fontWeight: 700,
-    color: "#00ffcc", textAlign: "center",
+    color: "var(--scan-500)", textAlign: "center",
     background: "rgba(11,11,22,0.9)",
     whiteSpace: "nowrap",
   };
   const TD: React.CSSProperties = {
     padding: "6px 8px", fontSize: 11, textAlign: "center",
-    fontFamily: "monospace", color: "#a0a0b8",
+    fontFamily: "var(--font-mono), monospace", color: "#a0a0b8",
   };
   const LABEL: React.CSSProperties = {
     padding: "6px 8px", fontSize: 11, fontWeight: 700,
@@ -491,8 +491,8 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <div style={{ height: 12, width: 3, background: "#00ffcc", borderRadius: 99 }} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: "#a0a0b8" }}>
+        <div style={{ height: 12, width: 3, background: "var(--scan-500)", borderRadius: 99 }} />
+        <span style={{ fontSize: 10, fontWeight: 600, color: "#a0a0b8" }}>
           The Winning Method — Over/Under {gs.line}
         </span>
         {gs.xg_home > 0 && gs.xg_away > 0 && (
@@ -501,11 +501,11 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
           </span>
         )}
       </div>
-      <div style={{ border: "1px solid rgba(0,255,204,0.2)", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{ border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }} dir="rtl">
           <caption className="sr-only">טבלת Over/Under — הסתברויות, יחסי שוק וערך מתמטי</caption>
           <thead>
-            <tr style={{ borderBottom: "1px solid rgba(0,255,204,0.3)" }}>
+            <tr style={{ borderBottom: "1px solid rgba(34,211,238,0.3)" }}>
               <th style={{ ...TH, textAlign: "right" }}>שוק הימורים</th>
               <th style={TH}>הסתברות המערכת</th>
               <th style={TH}>יחס עולמי</th>
@@ -519,25 +519,25 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
               const rawValue = r.edge / 100;
               return (
                 <tr key={r.label} style={{
-                  background: isValue ? "rgba(0,255,204,0.06)" : undefined,
+                  background: isValue ? "rgba(16,185,129,0.06)" : undefined,
                   borderBottom: "1px solid rgba(255,255,255,0.04)",
                 }}>
                   {/* שוק */}
                   <td style={{
                     ...LABEL,
-                    color: r.isSignal ? "#00ffcc" : isValue ? "#00ffcc" : "#a0a0b8",
+                    color: r.isSignal ? "var(--green)" : isValue ? "var(--green)" : "#a0a0b8",
                   }}>
                     {r.emoji} {r.label}
                     {r.isSignal && (
                       <span style={{
                         fontSize: 8, marginRight: 6,
-                        background: "#00ffcc", color: "#0f0f1e",
-                        borderRadius: 4, padding: "1px 5px", fontWeight: 800,
+                        background: "var(--green)", color: "#0f0f1e",
+                        borderRadius: 4, padding: "1px 5px", fontWeight: 600,
                       }}>VALUE מנצח</span>
                     )}
                   </td>
                   {/* הסתברות המערכת */}
-                  <td style={{ ...TD, color: "#00ffcc", fontWeight: 700, fontSize: 13 }}>
+                  <td style={{ ...TD, color: "var(--scan-500)", fontWeight: 700, fontSize: 13 }}>
                     {(r.prob * 100).toFixed(1)}%
                   </td>
                   {/* יחס עולמי */}
@@ -547,18 +547,18 @@ function OUWinningMethodRow({ gs }: { gs: GoalsSignal }) {
                   {/* ערך מתמטי */}
                   <td style={{
                     ...TD, fontWeight: 700,
-                    color: isValue ? "#00ffcc" : "#ff4d4d",
+                    color: isValue ? "var(--green)" : "var(--red)",
                   }}>
                     {rawValue >= 0 ? `+${rawValue.toFixed(2)}` : rawValue.toFixed(2)}
                   </td>
                   {/* סיכוי פגיעה */}
                   <td style={{ ...TD }}>
                     {isValue ? (
-                      <span style={{ color: "#00ffcc", fontWeight: 700, fontSize: 10 }}>
+                      <span style={{ color: "var(--green)", fontWeight: 700, fontSize: 10 }}>
                         🟢 פוטנציאל רווח גבוה
                       </span>
                     ) : (
-                      <span style={{ color: "#ff4d4d", opacity: 0.7, fontSize: 10 }}>
+                      <span style={{ color: "var(--red)", opacity: 0.7, fontSize: 10 }}>
                         ❌ אין ערך בשוק
                       </span>
                     )}
@@ -594,14 +594,14 @@ function RecommendationBanner({
       display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
     }}>
       <span style={{
-        fontSize: 11, fontWeight: 900, color: toneColor,
+        fontSize: 11, fontWeight: 700, color: toneColor,
         background: "rgba(255,255,255,0.06)", borderRadius: 6, padding: "3px 9px",
-        fontFamily: "monospace", flexShrink: 0,
+        fontFamily: "var(--font-mono), monospace", flexShrink: 0,
       }}>
         {d.sign}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: toneColor }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: toneColor }}>
           🎯 ההמלצה שלנו: {d.label}
         </div>
         {d.detail && (
@@ -642,7 +642,7 @@ function AsianHandicapRow({ hs }: { hs: HandicapSignal }) {
   };
   const TD: React.CSSProperties = {
     padding: "6px 8px", fontSize: 11, textAlign: "center",
-    fontFamily: "monospace", color: "#a0a0b8",
+    fontFamily: "var(--font-mono), monospace", color: "#a0a0b8",
   };
   const LABEL: React.CSSProperties = {
     padding: "6px 8px", fontSize: 11, fontWeight: 700,
@@ -656,11 +656,11 @@ function AsianHandicapRow({ hs }: { hs: HandicapSignal }) {
         flexWrap: "wrap",
       }}>
         <div style={{ height: 12, width: 3, background: "#fb923c", borderRadius: 99 }} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: "#a0a0b8" }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "#a0a0b8" }}>
           The Winning Method — Asian Handicap {hs.line}
         </span>
         <span style={{
-          fontSize: 9, fontWeight: 800, color: "#fb923c",
+          fontSize: 9, fontWeight: 600, color: "#fb923c",
           background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)",
           borderRadius: 99, padding: "1px 8px",
         }}>
@@ -703,7 +703,7 @@ function AsianHandicapRow({ hs }: { hs: HandicapSignal }) {
                   </td>
                   <td style={{
                     ...TD, fontWeight: 700,
-                    color: !hasEdge ? "#64748b" : isValue ? "#fb923c" : "#ff4d4d",
+                    color: !hasEdge ? "#64748b" : isValue ? "#fb923c" : "var(--red)",
                   }}>
                     {rawValue === null ? "—" : rawValue >= 0 ? `+${rawValue.toFixed(2)}` : rawValue.toFixed(2)}
                   </td>
@@ -748,7 +748,7 @@ function OddsStrip({ odds, valueBets }: { odds: MatchOdds; valueBets?: ValueBets
           }}>
             <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, marginBottom: 2 }}>{item.sign}</div>
             <div style={{
-              fontSize: 13, fontWeight: 800, fontFamily: "monospace",
+              fontSize: 13, fontWeight: 600, fontFamily: "var(--font-mono), monospace",
               color: isValue ? "#10b981" : item.val ? "#cbd5e1" : "#334155",
             }}>
               {item.val ? item.val.toFixed(2) : "—"}
@@ -794,7 +794,7 @@ function LineupDisplay({ lineups, homeTeam, awayTeam }: { lineups: Lineups; home
     return (
       <div style={{ flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, justifyContent: isHome ? "flex-start" : "flex-end" }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{isHome ? homeTeam : awayTeam}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: accentColor }}>{isHome ? homeTeam : awayTeam}</span>
           <span style={{
             fontSize: 9, fontWeight: 700, color: accentColor,
             background: `${accentColor}18`, border: `1px solid ${accentColor}40`,
@@ -835,7 +835,7 @@ function LineupDisplay({ lineups, homeTeam, awayTeam }: { lineups: Lineups; home
     <div style={{ marginTop: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <div style={{ height: 14, width: 3, background: "#64748b", borderRadius: 99 }} />
-        <span style={{ fontSize: 11, fontWeight: 800, color: "#cbd5e1" }}>הרכבי פתיחה</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#cbd5e1" }}>הרכבי פתיחה</span>
       </div>
       <div style={{
         border: "1px solid #1e293b", borderRadius: 10,
@@ -854,7 +854,7 @@ function LineupDisplay({ lineups, homeTeam, awayTeam }: { lineups: Lineups; home
 
 // ── Phenomenal Winning Method Panel — premium expanded O/U analysis ──────────
 // Implements the full "generate_phenomenal_ui" HTML/CSS spec in React.
-// Design: dark container #1a1a2e, teal #16a085 accent, 5-column table,
+// Design: dark container #1a1a2e, brand scan-teal accent, 5-column table,
 //         full-row green glow when edge > 0, 🟢/🔴 recommendation chips.
 function PhenomenalWinningMethodPanel({
   gs, ouEdge, homeTeam, awayTeam,
@@ -895,12 +895,12 @@ function PhenomenalWinningMethodPanel({
 
   const TH: React.CSSProperties = {
     padding: "18px 14px", fontSize: 13, fontWeight: 700,
-    color: "#00ffcc", textAlign: "center",
+    color: "var(--scan-500)", textAlign: "center",
     background: "#0b0b16", whiteSpace: "nowrap",
   };
   const TD: React.CSSProperties = {
     padding: "18px 14px", fontSize: 14, textAlign: "center",
-    fontFamily: "monospace", color: "#a0a0b8",
+    fontFamily: "var(--font-mono), monospace", color: "#a0a0b8",
   };
   const LABEL_COL: React.CSSProperties = {
     padding: "18px 14px", fontSize: 14, fontWeight: 700,
@@ -925,12 +925,12 @@ function PhenomenalWinningMethodPanel({
         padding: "15px 20px",
       }}>
         <div>
-          <span style={{ fontSize: 22, fontWeight: 900, color: "#00ffcc", letterSpacing: 1 }}>
+          <span style={{ fontSize: 22, fontWeight: 700, color: "var(--scan-500)", letterSpacing: 1 }}>
             ANALYST365
           </span>
           {" "}
           <span style={{
-            background: "#16a085", color: "white",
+            background: "var(--scan-500)", color: "#0B0E14",
             padding: "3px 10px", borderRadius: 20,
             fontSize: 11, fontWeight: 700,
           }}>
@@ -969,18 +969,18 @@ function PhenomenalWinningMethodPanel({
                 <tr
                   key={r.key}
                   style={{
-                    background: isValue ? "rgba(0,255,204,0.06)" : undefined,
+                    background: isValue ? "rgba(16,185,129,0.06)" : undefined,
                     borderBottom: "1px solid #22223b",
                     transition: "background 0.2s",
                   }}
                 >
                   {/* שוק */}
-                  <td style={{ ...LABEL_COL, color: isValue ? "#00ffcc" : "#a0a0b8" }}>
+                  <td style={{ ...LABEL_COL, color: isValue ? "var(--green)" : "#a0a0b8" }}>
                     {r.emoji} {r.label}
                     {r.isSignal && (
                       <span style={{
-                        marginRight: 8, fontSize: 11, fontWeight: 800,
-                        background: "#00ffcc", color: "#0f0f1e",
+                        marginRight: 8, fontSize: 11, fontWeight: 600,
+                        background: "var(--green)", color: "#0f0f1e",
                         padding: "3px 8px", borderRadius: 4,
                       }}>
                         VALUE מנצח
@@ -988,7 +988,7 @@ function PhenomenalWinningMethodPanel({
                     )}
                   </td>
                   {/* הסתברות */}
-                  <td style={{ ...TD, color: "#00ffcc", fontWeight: 700, fontSize: 18 }}>
+                  <td style={{ ...TD, color: "var(--scan-500)", fontWeight: 700, fontSize: 18 }}>
                     {r.prob.toFixed(1)}%
                   </td>
                   {/* יחס עולמי */}
@@ -997,8 +997,8 @@ function PhenomenalWinningMethodPanel({
                   </td>
                   {/* ערך מתמטי */}
                   <td style={{
-                    ...TD, fontWeight: 800, fontSize: 18,
-                    color: isValue ? "#00ffcc" : "#ff4d4d",
+                    ...TD, fontWeight: 600, fontSize: 18,
+                    color: isValue ? "var(--green)" : "var(--red)",
                     opacity: isValue ? 1 : 0.6,
                   }}>
                     {rawValue >= 0 ? `+${rawValue.toFixed(2)}` : rawValue.toFixed(2)}
@@ -1006,11 +1006,11 @@ function PhenomenalWinningMethodPanel({
                   {/* סיכוי פגיעה */}
                   <td style={{ ...TD }}>
                     {isValue ? (
-                      <span style={{ color: "#00ffcc", fontWeight: 700, fontSize: 13 }}>
+                      <span style={{ color: "var(--green)", fontWeight: 700, fontSize: 13 }}>
                         🟢 פוטנציאל רווח גבוה
                       </span>
                     ) : (
-                      <span style={{ color: "#ff4d4d", opacity: 0.6, fontSize: 13 }}>
+                      <span style={{ color: "var(--red)", opacity: 0.6, fontSize: 13 }}>
                         ❌ אין ערך בשוק
                       </span>
                     )}
@@ -1027,7 +1027,7 @@ function PhenomenalWinningMethodPanel({
         <div style={{
           padding: "8px 20px",
           background: "rgba(0,0,0,0.3)",
-          borderTop: "1px solid rgba(0,255,204,0.1)",
+          borderTop: "1px solid rgba(34,211,238,0.1)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: 10, color: "#64748b", direction: "ltr",
         }}>
@@ -1048,8 +1048,8 @@ function PhenomenalWinningMethodPanel({
       {signal !== "NO_SIGNAL" && (
         <div style={{
           margin: "10px 14px 0",
-          background: "rgba(0,255,204,0.07)",
-          border: "1px solid rgba(0,255,204,0.25)",
+          background: "rgba(16,185,129,0.07)",
+          border: "1px solid rgba(16,185,129,0.25)",
           borderRadius: 8, padding: "8px 16px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           direction: "ltr",
@@ -1057,7 +1057,7 @@ function PhenomenalWinningMethodPanel({
           <span style={{ fontSize: 12, color: "#a0a0b8" }}>
             🎯 {signal === "OVER" ? `Over ${line}` : `Under ${line}`} — VALUE BET
           </span>
-          <span style={{ fontSize: 14, fontWeight: 900, color: "#00ffcc" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--green)" }}>
             +{(sigEdge / 100).toFixed(2)} · {sigRat}
           </span>
         </div>
@@ -1073,9 +1073,9 @@ function PhenomenalWinningMethodPanel({
         }}>
           {mods.map((m, i) => (
             <span key={i} style={{
-              fontSize: 9, color: "#00ffcc",
-              background: "rgba(0,255,204,0.06)",
-              border: "1px solid rgba(0,255,204,0.18)",
+              fontSize: 9, color: "var(--scan-500)",
+              background: "rgba(34,211,238,0.06)",
+              border: "1px solid rgba(34,211,238,0.18)",
               borderRadius: 99, padding: "2px 7px",
             }}>
               ⚡ {m}
@@ -1234,7 +1234,7 @@ export default function MatchCard({
           <div className="team-col team-home" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TeamLogo logo={homeLogo} name={homeTeam} size={44} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.2, color: "#10b981", maxWidth: 110 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, color: "#10b981", maxWidth: 110 }}>
                 {homeTeam}
               </div>
               <div style={{ fontSize: 9, color: "#10b981", opacity: 0.7, marginTop: 2, fontWeight: 600, letterSpacing: 0.5 }}>בית</div>
@@ -1243,7 +1243,7 @@ export default function MatchCard({
 
           {/* CENTER — VS separator + confidence dot */}
           <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <div style={{ color: "#334155", fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>VS</div>
+            <div style={{ color: "#334155", fontSize: 10, fontWeight: 600, letterSpacing: 1 }}>VS</div>
             <div style={{
               display: "flex", alignItems: "center", gap: 4,
               background: "rgba(255,255,255,0.04)", borderRadius: 99, padding: "3px 9px",
@@ -1264,7 +1264,7 @@ export default function MatchCard({
           {/* AWAY — right */}
           <div className="team-col team-away" style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
             <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.2, color: "#ef4444", maxWidth: 110 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, color: "#ef4444", maxWidth: 110 }}>
                 {awayTeam}
               </div>
               <div style={{ fontSize: 9, color: "#ef4444", opacity: 0.7, marginTop: 2, fontWeight: 600, letterSpacing: 0.5 }}>אורחים</div>
@@ -1283,7 +1283,7 @@ export default function MatchCard({
             direction: "ltr",
           }}>
             <div style={{ textAlign: "left" }}>
-              <span style={{ fontSize: 16, fontWeight: 900, color: "#10b981" }}>{pct0(displayProbs.home)}</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#10b981" }}>{pct0(displayProbs.home)}</span>
               <span style={{ fontSize: 9, color: "#475569", marginLeft: 3 }}>1</span>
             </div>
             <div style={{ textAlign: "center" }}>
@@ -1292,7 +1292,7 @@ export default function MatchCard({
             </div>
             <div style={{ textAlign: "right" }}>
               <span style={{ fontSize: 9, color: "#475569", marginRight: 3 }}>2</span>
-              <span style={{ fontSize: 16, fontWeight: 900, color: "#ef4444" }}>{pct0(displayProbs.away)}</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#ef4444" }}>{pct0(displayProbs.away)}</span>
             </div>
           </div>
           {/* Proportional stacked bar — flex-grow + explicit direction:ltr on the flex container */}
@@ -1338,7 +1338,7 @@ export default function MatchCard({
           }}>
             <span style={{
               fontSize: 11,
-              fontWeight: 800, color: "#f59e0b", letterSpacing: 0.4,
+              fontWeight: 600, color: "#f59e0b", letterSpacing: 0.4,
             }}>
               🔥 נעילת קונסנזוס ({consensusData.agreeing_count} אנליסטים)
             </span>
@@ -1509,8 +1509,8 @@ export default function MatchCard({
             {bestVB && (bestVB[1]?.rating === "STRONG" || bestVB[1]?.rating === "MODERATE") && (
               <div style={{
                 marginTop: 10,
-                background: "linear-gradient(90deg, rgba(56,189,248,0.08), rgba(99,102,241,0.06))",
-                border: "1px solid rgba(56,189,248,0.2)",
+                background: "linear-gradient(90deg, rgba(34,211,238,0.08), rgba(99,102,241,0.06))",
+                border: "1px solid rgba(34,211,238,0.2)",
                 borderRadius: 8, padding: "7px 12px",
                 display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
               }}>
@@ -1518,8 +1518,8 @@ export default function MatchCard({
                   📨 הסיגנל נשלח אוטומטית לערוץ הטלגרם בעקבות זיהוי חריגת ערך
                 </span>
                 <span style={{
-                  fontSize: 9, fontWeight: 800, color: "#38bdf8",
-                  background: "rgba(56,189,248,0.12)", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap",
+                  fontSize: 9, fontWeight: 600, color: "var(--scan-500)",
+                  background: "rgba(34,211,238,0.12)", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap",
                 }}>
                   HOT VALUE 🔥
                 </span>
@@ -1537,20 +1537,20 @@ export default function MatchCard({
               }}>
                 <div>
                   <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>הניבוי שלנו</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "white" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "white" }}>
                     {PICK_HE[consensusData.our_pick] ?? consensusData.our_pick}{" "}
                     <span style={{ color: "#64748b", fontSize: 10, fontWeight: 600 }}>({consensusData.our_pick})</span>
                   </div>
                 </div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>הצלבת אנליסטים מהעולם</div>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
                     {consensusData.consensus_rate}% הסכמה
                   </div>
                 </div>
                 <div style={{ textAlign: "left" }}>
                   <div style={{ fontSize: 9, color: "#475569", marginBottom: 2 }}>תומכים</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "white" }}>{consensusData.agreeing_count}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "white" }}>{consensusData.agreeing_count}</div>
                 </div>
               </div>
             ) : consensusLoading ? (
@@ -1584,19 +1584,19 @@ export default function MatchCard({
             {/* Monte Carlo stats — first column shows the LEADING team, not always home */}
             <div className="monte-carlo-row" style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center", direction: "ltr" }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: mcLeaderColor }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: mcLeaderColor }}>
                   📈 {pct0(mcLeaderPct)}
                 </div>
                 <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>{mcLeaderLabel}</div>
               </div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444" }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: prediction.confidence > 75 ? "#10b981" : prediction.confidence > 55 ? "#f59e0b" : "#ef4444" }}>
                   🎯 {prediction.confidence}%
                 </div>
                 <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>רמת ביטחון</div>
               </div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: "white" }}>🎲 {prediction.monte_carlo.simulations.toLocaleString("he-IL")}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "white" }}>🎲 {prediction.monte_carlo.simulations.toLocaleString("he-IL")}</div>
                 <div style={{ fontSize: 9, color: "#475569", marginTop: 2 }}>סימולציות</div>
               </div>
             </div>
@@ -1648,7 +1648,7 @@ export default function MatchCard({
                 {/* Confidence comparison */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: "#64748b" }}>{crossCheck.original_confidence}%</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#64748b" }}>{crossCheck.original_confidence}%</div>
                     <div style={{ fontSize: 9, color: "#475569" }}>מקורי</div>
                   </div>
                   <div style={{ fontSize: 18, color: crossCheck.alignment_score >= 0 ? "#10b981" : "#ef4444" }}>
@@ -1656,7 +1656,7 @@ export default function MatchCard({
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{
-                      fontSize: 20, fontWeight: 900,
+                      fontSize: 20, fontWeight: 700,
                       color: crossCheck.adjusted_confidence > 75 ? "#10b981"
                            : crossCheck.adjusted_confidence > 55 ? "#f59e0b"
                            : "#ef4444",
@@ -1738,7 +1738,7 @@ export default function MatchCard({
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: consensusData.expert_advice ? 4 : 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>👥 קונסנזוס אנליסטים</span>
                     <span style={{
-                      fontSize: 11, fontWeight: 800,
+                      fontSize: 11, fontWeight: 600,
                       color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8",
                     }}>
                       {consensusData.display_badge}
@@ -1753,25 +1753,25 @@ export default function MatchCard({
                   {/* Stats row */}
                   <div className="consensus-stats-row" style={{ display: "flex", gap: 16, marginBottom: 10 }}>
                     <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 20, fontWeight: 900, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: consensusData.is_consensus_lock ? "#f59e0b" : "#94a3b8" }}>
                         {consensusData.consensus_rate}%
                       </div>
                       <div style={{ fontSize: 9, color: "#475569" }}>הסכמה</div>
                     </div>
                     <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 20, fontWeight: 900, color: "white" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: "white" }}>
                         {consensusData.agreeing_count}
                       </div>
                       <div style={{ fontSize: 9, color: "#475569" }}>תומכים/סה״כ</div>
                     </div>
                     <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 20, fontWeight: 900, color: "#10b981" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: "#10b981" }}>
                         {consensusData.avg_analysts_confidence}%
                       </div>
                       <div style={{ fontSize: 9, color: "#475569" }}>ביטחון ממוצע</div>
                     </div>
                     <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 20, fontWeight: 900, color: "#818cf8" }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: "#818cf8" }}>
                         {consensusData.our_pick}
                       </div>
                       <div style={{ fontSize: 9, color: "#475569" }}>בחירת המערכת</div>
@@ -1790,7 +1790,7 @@ export default function MatchCard({
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <span style={{ fontSize: 9, color: "#475569" }}>{a.confidence}%</span>
                           <span style={{
-                            fontSize: 11, fontWeight: 900,
+                            fontSize: 11, fontWeight: 700,
                             color: a.pick === consensusData.our_pick ? "#10b981" : "#ef4444",
                             background: a.pick === consensusData.our_pick ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.08)",
                             border: `1px solid ${a.pick === consensusData.our_pick ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.2)"}`,

@@ -243,9 +243,9 @@ function TabBtn({
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        border: active ? "1px solid rgba(16,185,129,0.5)" : "1px solid rgba(255,255,255,0.1)",
-        background: active ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.04)",
-        color: active ? "#10b981" : "#64748b",
+        border: active ? "1px solid rgba(34,211,238,0.5)" : "1px solid rgba(255,255,255,0.1)",
+        background: active ? "rgba(34,211,238,0.12)" : "rgba(255,255,255,0.04)",
+        color: active ? "var(--scan-500)" : "#64748b",
       }}
     >
       {label}

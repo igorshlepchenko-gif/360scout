@@ -41,7 +41,7 @@ function DataQualityBadge({ dq }: { dq: NonNullable<LiveMatch["data_quality"]> }
   const bg        = isReal ? "rgba(59,130,246,0.08)" : isTotals ? "rgba(245,158,11,0.08)" : "rgba(100,116,139,0.08)";
   const border    = isReal ? "rgba(59,130,246,0.2)"  : isTotals ? "rgba(245,158,11,0.2)"  : "rgba(100,116,139,0.15)";
   return (
-    <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: bg, color, border: `1px solid ${border}`, fontFamily: "monospace", letterSpacing: "0.03em" }}>
+    <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: bg, color, border: `1px solid ${border}`, fontFamily: "var(--font-mono), monospace", letterSpacing: "0.03em" }}>
       {label}
     </span>
   );
@@ -68,7 +68,7 @@ function EdgePill({ o }: { o: OutcomeEdge }) {
       <div style={{ color: "#64748b", fontSize: 10, marginBottom: 3 }}>
         {o.label12X} ({o.labelHe})
       </div>
-      <div style={{ color: "white", fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>
+      <div style={{ color: "white", fontSize: 13, fontWeight: 700, fontFamily: "var(--font-mono), monospace" }}>
         {o.marketOdds.toFixed(2)}
       </div>
       <div style={{ color: "#475569", fontSize: 10, margin: "2px 0" }}>
@@ -79,7 +79,7 @@ function EdgePill({ o }: { o: OutcomeEdge }) {
           color: color.text,
           fontSize: 11,
           fontWeight: 700,
-          fontFamily: "monospace",
+          fontFamily: "var(--font-mono), monospace",
         }}
       >
         {o.edgePct >= 0 ? `+${o.edgePct}%` : `${o.edgePct}%`}
@@ -179,7 +179,7 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
               background: "rgba(255,255,255,0.06)",
               color: "#cbd5e1",
               fontWeight: 700,
-              fontFamily: "monospace",
+              fontFamily: "var(--font-mono), monospace",
               fontSize: 13,
               padding: "3px 10px",
               borderRadius: 6,
@@ -248,7 +248,7 @@ export default function MatchLiveRow({ match: m }: { match: LiveMatch }) {
                       : "#94a3b8",
                   fontWeight: 700,
                   fontSize: 13,
-                  fontFamily: "monospace",
+                  fontFamily: "var(--font-mono), monospace",
                 }}
               >
                 {Math.round(m.prediction.confidence)}%

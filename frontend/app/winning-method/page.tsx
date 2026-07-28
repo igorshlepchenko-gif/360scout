@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireApprovedUser } from "@/lib/session";
+import RadarMark from "@/components/RadarMark";
 
 export const metadata: Metadata = {
   title: "The Winning Method — Analyst365",
@@ -67,7 +68,7 @@ const TH: React.CSSProperties = {
 };
 const TD_BASE: React.CSSProperties = {
   padding: "13px 14px", fontSize: 13, textAlign: "center",
-  fontFamily: "monospace", borderBottom: "1px solid #1e293b",
+  fontFamily: "var(--font-mono), monospace", borderBottom: "1px solid #1e293b",
 };
 const TD_LABEL: React.CSSProperties = {
   padding: "13px 16px", fontSize: 12, fontWeight: 700,
@@ -76,12 +77,12 @@ const TD_LABEL: React.CSSProperties = {
 };
 
 function rowBg(style: "default" | "prob" | "value") {
-  if (style === "prob")  return "rgba(56,189,248,0.06)";
+  if (style === "prob")  return "rgba(34,211,238,0.06)";
   if (style === "value") return "rgba(74,222,128,0.07)";
   return "transparent";
 }
 function cellColor(style: "default" | "prob" | "value", isValue: boolean) {
-  if (style === "prob")              return "#38bdf8";
+  if (style === "prob")              return "var(--scan-500)";
   if (style === "value" && isValue)  return "#4ade80";
   return "#cbd5e1";
 }
@@ -94,16 +95,19 @@ export default async function WinningMethodPage() {
 
         {/* ── Hero ── */}
         <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+            <RadarMark size={72} />
+          </div>
           <div style={{
             display: "inline-block",
-            background: "rgba(56,189,248,0.1)",
-            border: "1px solid rgba(56,189,248,0.3)",
+            background: "rgba(34,211,238,0.1)",
+            border: "1px solid rgba(34,211,238,0.3)",
             borderRadius: 8, padding: "4px 14px", fontSize: 11,
-            color: "#38bdf8", fontWeight: 700, marginBottom: 16,
+            color: "var(--scan-500)", fontWeight: 700, marginBottom: 16,
           }}>
             ANALYST365 · מתודולוגיה
           </div>
-          <h1 style={{ fontSize: 36, fontWeight: 900, margin: "0 0 12px" }}>
+          <h1 style={{ fontSize: 36, fontWeight: 700, margin: "0 0 12px" }}>
             The Winning Method
           </h1>
           <p style={{ color: "#94a3b8", fontSize: 15, maxWidth: 560, margin: "0 auto" }}>
@@ -125,10 +129,10 @@ export default async function WinningMethodPage() {
           <div style={{
             background: "linear-gradient(135deg, #1e293b, #0f172a)",
             padding: "20px 24px",
-            borderBottom: "2px solid #38bdf8",
+            borderBottom: "2px solid var(--scan-500)",
             textAlign: "center",
           }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
               📊 דוגמה: ניתוח משחק בזמן אמת
             </h2>
             <span style={{ color: "#94a3b8", fontSize: 12, display: "block", marginTop: 6 }}>
@@ -162,7 +166,7 @@ export default async function WinningMethodPage() {
                       <td style={{
                         ...TD_LABEL,
                         background: rowBg(row.rowStyle),
-                        color: row.rowStyle === "prob" ? "#38bdf8" : row.rowStyle === "value" ? "#4ade80" : "#94a3b8",
+                        color: row.rowStyle === "prob" ? "var(--scan-500)" : row.rowStyle === "value" ? "#4ade80" : "#94a3b8",
                         borderBottom: isLast ? "none" : "1px solid #1e293b",
                       }}>
                         {row.param}
@@ -187,7 +191,7 @@ export default async function WinningMethodPage() {
         </div>
 
         {/* ── Module grid ── */}
-        <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20 }}>
           🔬 מודולי הניתוח
         </h2>
         <div style={{
@@ -212,12 +216,12 @@ export default async function WinningMethodPage() {
 
         {/* ── CTA ── */}
         <div style={{
-          background: "linear-gradient(135deg, rgba(56,189,248,0.08), rgba(99,102,241,0.06))",
-          border: "1px solid rgba(56,189,248,0.2)",
+          background: "linear-gradient(135deg, rgba(34,211,238,0.08), rgba(99,102,241,0.06))",
+          border: "1px solid rgba(34,211,238,0.2)",
           borderRadius: 14, padding: "28px 32px", textAlign: "center",
         }}>
           <div style={{ fontSize: 24, marginBottom: 10 }}>📨</div>
-          <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 800 }}>
+          <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600 }}>
             קבלו Value Bet ישירות לטלגרם
           </h3>
           <p style={{ color: "#64748b", fontSize: 13, margin: "0 0 20px" }}>
@@ -229,8 +233,8 @@ export default async function WinningMethodPage() {
             rel="noopener noreferrer"
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
-              background: "#38bdf8", color: "black",
-              fontWeight: 800, fontSize: 14,
+              background: "var(--scan-500)", color: "#0B0E14",
+              fontWeight: 600, fontSize: 14,
               padding: "11px 28px", borderRadius: 8,
               textDecoration: "none",
             }}

@@ -136,7 +136,7 @@ export default function MatchesPage() {
         {/* Header */}
         <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, color: "white", margin: 0 }}>כל המשחקים ⚽</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 700, color: "white", margin: 0 }}>כל המשחקים ⚽</h1>
             <p style={{ color: "#64748b", fontSize: 13, marginTop: 6 }}>
               {matches.length} משחקים · {valueBetCount} Value Bets · {lockCount} נעילות קונסנזוס
             </p>
@@ -248,7 +248,7 @@ export default function MatchesPage() {
                               borderRadius: 6, padding: "3px 5px", minWidth: 36,
                             }}>
                               <div style={{ fontSize: 8, color: "#475569", fontWeight: 700 }}>{label}</div>
-                              <div style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", color: val ? "#cbd5e1" : "#334155" }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--font-mono), monospace", color: val ? "#cbd5e1" : "#334155" }}>
                                 {val ? val.toFixed(2) : "—"}
                               </div>
                             </div>
@@ -383,7 +383,7 @@ export default function MatchesPage() {
                               borderRadius: 8, padding: "5px 4px",
                             }}>
                               <div style={{ fontSize: 9, color: "#475569", fontWeight: 700, marginBottom: 2 }}>{label}</div>
-                              <div style={{ fontSize: 13, fontWeight: 800, fontFamily: "monospace", color: isVB ? "#10b981" : val ? "#cbd5e1" : "#334155" }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--font-mono), monospace", color: isVB ? "#10b981" : val ? "#cbd5e1" : "#334155" }}>
                                 {val ? val.toFixed(2) : "—"}
                               </div>
                             </div>
@@ -416,7 +416,7 @@ export default function MatchesPage() {
                                 border: `1px solid ${item.isSignal ? "rgba(167,139,250,0.35)" : "rgba(255,255,255,0.06)"}`,
                               }}>
                                 <div style={{ fontSize: 9, color: item.isSignal ? "#a78bfa" : "#475569", fontWeight: 700 }}>{item.label}</div>
-                                <div style={{ fontSize: 12, fontWeight: 800, fontFamily: "monospace", color: item.isSignal ? "#a78bfa" : "#64748b" }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono), monospace", color: item.isSignal ? "#a78bfa" : "#64748b" }}>
                                   {item.odds ? item.odds.toFixed(2) : "—"}
                                 </div>
                                 <div style={{ fontSize: 9, color: "#475569" }}>{Math.round(item.prob * 100)}%</div>

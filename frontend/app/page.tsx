@@ -2,6 +2,7 @@ import MatchCard from "@/components/MatchCard";
 import DashboardTabs from "@/components/DashboardTabs";
 import TelegramCTABanner from "@/components/TelegramCTABanner";
 import LiveTicker from "@/components/LiveTicker";
+import RadarMark from "@/components/RadarMark";
 import { getEnhancedMatches } from "@/lib/enhancedMatches";
 import { requireApprovedUser, backendAuthHeaders } from "@/lib/session";
 
@@ -109,14 +110,19 @@ export default async function Home() {
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px", paddingTop: hasLive ? 80 : 40 }}>
 
-        {/* Hero */}
-        <div style={{ marginBottom: 40 }}>
-          <h1 style={{ fontSize: 36, fontWeight: 900, color: "white", marginBottom: 8 }}>
-            {pageTitle}
-          </h1>
-          <p style={{ color: "#64748b", fontSize: 15 }}>
-            ניתוח 360 מעלות — xG · מזג אוויר · שופט · פציעות · פסיכולוגיה · קונסנזוס מומחים
-          </p>
+        {/* Hero — the one signature move: a literal 360° scan for a product whose entire pitch is "360° analysis" */}
+        <div style={{ marginBottom: 40, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ fontSize: 38, fontWeight: 700, color: "white", marginBottom: 8, letterSpacing: "-0.3px" }}>
+              {pageTitle}
+            </h1>
+            <p style={{ color: "var(--text-muted)", fontSize: 15, letterSpacing: "0.2px" }}>
+              ניתוח 360 מעלות — xG · מזג אוויר · שופט · פציעות · פסיכולוגיה · קונסנזוס מומחים
+            </p>
+          </div>
+          <div className="hero-radar" style={{ flexShrink: 0 }}>
+            <RadarMark size={120} />
+          </div>
         </div>
 
         {/* Stats Bar */}
@@ -133,11 +139,11 @@ export default async function Home() {
               borderRadius: 16,
               padding: "20px 24px",
             }}>
-              <div className={s.color} style={{ fontSize: 28, fontWeight: 900, direction: "ltr", textAlign: "right" }}>
+              <div className={s.color} style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-mono)", direction: "ltr", textAlign: "right" }}>
                 {s.value}
               </div>
               <div style={{ color: "white", fontSize: 13, marginTop: 4 }}>{s.label}</div>
-              <div style={{ color: "#64748b", fontSize: 11, marginTop: 4 }}>{s.sub}</div>
+              <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>{s.sub}</div>
             </div>
           ))}
         </div>

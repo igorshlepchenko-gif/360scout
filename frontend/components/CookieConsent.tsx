@@ -52,7 +52,7 @@ export default function CookieConsent() {
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 22 }} aria-hidden="true">🍪</span>
         <div>
-          <div style={{ color: "white", fontWeight: 800, fontSize: 15 }}>
+          <div style={{ color: "white", fontWeight: 600, fontSize: 15 }}>
             האתר משתמש בעוגיות (Cookies)
           </div>
           <div style={{ color: "#64748b", fontSize: 11, marginTop: 1 }}>
@@ -143,7 +143,7 @@ export default function CookieConsent() {
             background: "#10b981",
             color: "#0B0E14",
             fontSize: 13,
-            fontWeight: 800,
+            fontWeight: 600,
             cursor: "pointer",
             transition: "background 0.2s, transform 0.1s",
           }}

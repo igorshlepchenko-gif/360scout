@@ -36,7 +36,7 @@ interface Props {
 const MODULES = [
   { key: "stats",       label: "סטטיסטיקה",   sub: "xG · צורה · H2H",      weight: 40, Icon: BarChart3, color: "text-emerald-400", bar: "bg-emerald-500" },
   { key: "human",       label: "גורם אנושי",  sub: "פציעות · שופט",        weight: 25, Icon: HeartPulse, color: "text-rose-400",    bar: "bg-rose-500" },
-  { key: "environment", label: "סביבה",       sub: "מזג אוויר · גובה",     weight: 20, Icon: CloudRain,  color: "text-sky-400",     bar: "bg-sky-500" },
+  { key: "environment", label: "סביבה",       sub: "מזג אוויר · גובה",     weight: 20, Icon: CloudRain,  color: "text-[#22D3EE]",   bar: "bg-[#22D3EE]" },
   { key: "psychology",  label: "פסיכולוגיה",  sub: "קהל · לחץ · עייפות",   weight: 15, Icon: Brain,      color: "text-violet-400",  bar: "bg-violet-500" },
 ] as const;
 
@@ -98,7 +98,7 @@ function deriveFactors(p: Prediction, homeTeam: string, awayTeam: string) {
 
   // 3. weather/environment — key_factors first
   const wx =
-    factorSet.has("HEAVY_RAIN") ? { t: "גשם כבד צפוי", c: "text-sky-400" } :
+    factorSet.has("HEAVY_RAIN") ? { t: "גשם כבד צפוי", c: "text-[#22D3EE]" } :
     factorSet.has("EXTREME_HEAT") ? { t: "חום קיצוני", c: "text-amber-400" } :
     factorSet.has("HIGH_ALTITUDE") ? { t: "גובה רב מעל פני הים", c: "text-violet-400" } :
     { t: "תנאים אידיאליים · ללא משקעים", c: "text-emerald-400" };
@@ -208,7 +208,7 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-[#0F1318]/95 px-5 py-4 backdrop-blur">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-            <h2 id="modal-algo-title" className="text-sm font-extrabold text-white">איך חושב האלגוריתם?</h2>
+            <h2 id="modal-algo-title" className="text-sm font-semibold text-white">איך חושב האלגוריתם?</h2>
           </div>
           <button
             ref={closeRef}
@@ -228,15 +228,15 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
             </div>
             <div className="flex items-center gap-1.5">
               <Target className={`h-4 w-4 ${confColor(confidence)}`} />
-              <span className={`text-lg font-black ${confColor(confidence)}`}>{confidence}%</span>
+              <span className={`text-lg font-bold ${confColor(confidence)}`}>{confidence}%</span>
               <span className="text-[10px] text-slate-500">ביטחון</span>
             </div>
           </div>
 
           {/* Expert cross-check */}
-          <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.04] p-3">
+          <div className="rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/[0.04] p-3">
             <div className="mb-2.5 flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-sky-400/90">
+              <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#22D3EE]/90">
                 <ScanSearch className="h-3.5 w-3.5" /> הצלבת מומחים
                 <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-1.5 py-px text-[9px] font-semibold text-slate-400" title="כיסוי המומחים מודמה — אינו נשמר ואינו משפיע על ה-Track Record">
                   הדמיה
@@ -258,12 +258,12 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
                 {/* adjusted confidence */}
                 <div className="mb-3 flex items-center justify-center gap-3 rounded-lg bg-white/[0.03] py-2">
                   <div className="text-center">
-                    <div className="text-base font-black text-slate-400">{cross.algorithmConfidence}%</div>
+                    <div className="text-base font-bold text-slate-400">{cross.algorithmConfidence}%</div>
                     <div className="text-[9px] text-slate-600">אלגוריתם</div>
                   </div>
                   <ArrowLeft className="h-4 w-4 text-slate-600" />
                   <div className="text-center">
-                    <div className={`text-lg font-black ${confColor(cross.adjustedConfidence)}`}>{cross.adjustedConfidence}%</div>
+                    <div className={`text-lg font-bold ${confColor(cross.adjustedConfidence)}`}>{cross.adjustedConfidence}%</div>
                     <div className="text-[9px] text-slate-600">לאחר מומחים</div>
                   </div>
                   <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${
@@ -397,17 +397,17 @@ export default function AlgorithmBreakdownModal({ open, onClose, homeTeam, awayT
           <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center">
             <div>
               <Dice5 className="mx-auto mb-1 h-4 w-4 text-slate-400" />
-              <div className="text-sm font-black text-white">{monte_carlo.simulations.toLocaleString("he-IL")}</div>
+              <div className="text-sm font-bold text-white">{monte_carlo.simulations.toLocaleString("he-IL")}</div>
               <div className="text-[9px] text-slate-500">סימולציות</div>
             </div>
             <div>
               <Target className={`mx-auto mb-1 h-4 w-4 ${confColor(confidence)}`} />
-              <div className={`text-sm font-black ${confColor(confidence)}`}>{confidence}%</div>
+              <div className={`text-sm font-bold ${confColor(confidence)}`}>{confidence}%</div>
               <div className="text-[9px] text-slate-500">ביטחון סופי</div>
             </div>
             <div>
               <TrendingUp className="mx-auto mb-1 h-4 w-4 text-emerald-400" />
-              <div className="text-sm font-black text-white">{pct(Math.max(final.home, final.draw, final.away))}</div>
+              <div className="text-sm font-bold text-white">{pct(Math.max(final.home, final.draw, final.away))}</div>
               <div className="text-[9px] text-slate-500">תוצאה מובילה</div>
             </div>
           </div>

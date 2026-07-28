@@ -32,7 +32,11 @@ const inp: React.CSSProperties = {
   borderRadius: 6, boxSizing: "border-box", fontSize: 13,
   background: "#fff", color: "#334155",
 };
+// numeric-only variant — IBM Plex Mono for genuine data entry (not the Hebrew-label <select> fields)
+const inpMono: React.CSSProperties = { ...inp, fontFamily: "var(--font-mono), monospace" };
 const td: React.CSSProperties = { padding: "10px 12px", borderBottom: "1px solid #e2e8f0", fontSize: 13 };
+// numeric-only variant — for value/odds/probability cells, not the Hebrew label column
+const tdMono: React.CSSProperties = { ...td, fontFamily: "var(--font-mono), monospace" };
 const th: React.CSSProperties = {
   background: "#f8fafc", color: "#0f172a", padding: "10px 12px",
   fontWeight: 600, borderBottom: "2px solid #cbd5e1", fontSize: 13,
@@ -122,7 +126,7 @@ export default function CalculatorPage() {
 
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 28, borderBottom: "3px solid #2563eb", paddingBottom: 14 }}>
-          <h1 style={{ color: "#0f172a", margin: "0 0 6px", fontSize: 26, fontWeight: 800 }}>
+          <h1 style={{ color: "#0f172a", margin: "0 0 6px", fontSize: 26, fontWeight: 600 }}>
             מודל חיזוי משוכלל — Analyst365
           </h1>
           <p style={{ color: "#64748b", margin: 0, fontSize: 14 }}>
@@ -139,11 +143,11 @@ export default function CalculatorPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Field label="xG בסיסי — קבוצת בית">
-                <input style={inp} type="number" value={baseXgHome} step="0.1"
+                <input style={inpMono} type="number" value={baseXgHome} step="0.1"
                   onChange={e => setBaseXgHome(e.target.value)} />
               </Field>
               <Field label="xG בסיסי — קבוצת חוץ">
-                <input style={inp} type="number" value={baseXgAway} step="0.1"
+                <input style={inpMono} type="number" value={baseXgAway} step="0.1"
                   onChange={e => setBaseXgAway(e.target.value)} />
               </Field>
             </div>
@@ -225,11 +229,11 @@ export default function CalculatorPage() {
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Field label="יחס סוכן ל-Over 2.5">
-                <input style={inp} type="number" value={bookieOver} step="0.01"
+                <input style={inpMono} type="number" value={bookieOver} step="0.01"
                   onChange={e => setBookieOver(e.target.value)} />
               </Field>
               <Field label="יחס סוכן ל-Under 2.5">
-                <input style={inp} type="number" value={bookieUnder} step="0.01"
+                <input style={inpMono} type="number" value={bookieUnder} step="0.01"
                   onChange={e => setBookieUnder(e.target.value)} />
               </Field>
             </div>
@@ -259,8 +263,8 @@ export default function CalculatorPage() {
               <br />
               {output ? (
                 <span style={{ color: "#2563eb", fontSize: 14 }}>
-                  <strong>בית משוקלל:</strong> {output.xgHome.toFixed(2)} xG &nbsp;|&nbsp;
-                  <strong>חוץ משוקלל:</strong> {output.xgAway.toFixed(2)} xG
+                  <strong>בית משוקלל:</strong> <span style={{ fontFamily: "var(--font-mono), monospace" }}>{output.xgHome.toFixed(2)} xG</span> &nbsp;|&nbsp;
+                  <strong>חוץ משוקלל:</strong> <span style={{ fontFamily: "var(--font-mono), monospace" }}>{output.xgAway.toFixed(2)} xG</span>
                 </span>
               ) : (
                 <span style={{ color: "#94a3b8" }}>אנא הרץ את המודל...</span>
@@ -300,9 +304,9 @@ export default function CalculatorPage() {
                     ].map(row => (
                       <tr key={row.label}>
                         <td style={td}><strong>{row.label}</strong></td>
-                        <td style={td}>{row.prob.toFixed(1)}%</td>
-                        <td style={td}>{row.fair.toFixed(2)}</td>
-                        <td style={td}>{row.bookie.toFixed(2)}</td>
+                        <td style={tdMono}>{row.prob.toFixed(1)}%</td>
+                        <td style={tdMono}>{row.fair.toFixed(2)}</td>
+                        <td style={tdMono}>{row.bookie.toFixed(2)}</td>
                         <td style={td}>
                           {row.hasValue ? (
                             <span style={{ background: "#dcfce7", color: "#16a34a", padding: "3px 8px", borderRadius: 4, fontWeight: 700, fontSize: 11 }}>

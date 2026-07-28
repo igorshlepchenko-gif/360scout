@@ -15,7 +15,7 @@ export default async function AdminPage() {
   return (
     <div style={{ minHeight: "calc(100vh - 40px)", background: "#f1f5f9", padding: "32px 20px", direction: "rtl" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
           ניהול משתמשים
         </h1>
         <p style={{ color: "#64748b", fontSize: 14, marginBottom: 24 }}>

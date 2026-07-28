@@ -10,9 +10,9 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
     <h2
       id={`section-${title}`}
       style={{
-        fontSize: 20, fontWeight: 800, color: "#10b981",
+        fontSize: 20, fontWeight: 600, color: "var(--scan-500)",
         marginBottom: 14, paddingBottom: 8,
-        borderBottom: "1px solid rgba(16,185,129,0.2)",
+        borderBottom: "1px solid rgba(34,211,238,0.2)",
       }}
     >
       {title}
@@ -36,13 +36,13 @@ export default function AccessibilityPage() {
         <header style={{ marginBottom: 48 }}>
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 8,
-            background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)",
+            background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)",
             borderRadius: 99, padding: "4px 14px", marginBottom: 16,
           }}>
             <span style={{ fontSize: 18 }} aria-hidden="true">♿</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981" }}>הצהרת נגישות</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--scan-500)" }}>הצהרת נגישות</span>
           </div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: "white", marginBottom: 12 }}>
+          <h1 style={{ fontSize: 32, fontWeight: 700, color: "white", marginBottom: 12 }}>
             נגישות האתר — ANALYST365
           </h1>
           <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.7 }}>
@@ -56,13 +56,13 @@ export default function AccessibilityPage() {
           <p style={{ color: "#94a3b8", fontSize: 15, lineHeight: 1.8 }}>
             הנגשת האתר בוצעה בהתאם ל<strong style={{ color: "white" }}>תקנות שוויון זכויות לאנשים עם מוגבלות
             (התאמות נגישות לשירות), תשע&quot;ג-2013</strong>, המחייבות עמידה ברמה{" "}
-            <strong style={{ color: "#10b981" }}>AA של תקן WCAG 2.1</strong>{" "}
+            <strong style={{ color: "var(--scan-500)" }}>AA של תקן WCAG 2.1</strong>{" "}
             (Web Content Accessibility Guidelines — הנחיות לנגישות תוכן אינטרנט, גרסה 2.1).
           </p>
           <div style={{
             marginTop: 16,
-            background: "rgba(16,185,129,0.06)",
-            border: "1px solid rgba(16,185,129,0.18)",
+            background: "rgba(34,211,238,0.06)",
+            border: "1px solid rgba(34,211,238,0.18)",
             borderRadius: 10, padding: "14px 18px",
             display: "flex", alignItems: "center", gap: 12,
           }}>
@@ -92,7 +92,7 @@ export default function AccessibilityPage() {
             <Li>מחוון &quot;שידור חי&quot; כולל תיאור קולי לקוראי מסך</Li>
             <Li>פאנלים מתרחבים כוללים מאפיין <code>aria-expanded</code> המשקף את מצבם</Li>
             <Li>טבלאות נתונים כוללות <code>caption</code> נסתר המתאר את תוכן הטבלה לקוראי מסך</Li>
-            <Li>גופן ברור וקריא: Segoe UI / Arial Hebrew / מערכת</Li>
+            <Li>גופן ברור וקריא: IBM Plex Sans Hebrew, עם גופני מערכת כגיבוי</Li>
             <Li>גודל גופן בסיסי של 14–16px לתוכן ראשי</Li>
             <Li>תמיכה בהגדלת טקסט עד 200% ללא אובדן תוכן או פונקציונליות</Li>
             <Li>פריסה רספונסיבית המותאמת למובייל, טאבלט ושולחן עבודה</Li>
@@ -137,8 +137,8 @@ export default function AccessibilityPage() {
             נתקלתם בבעיית נגישות? זקוקים לתוכן בפורמט נגיש אחר? אנחנו כאן לעזור.
           </p>
           <div style={{
-            background: "rgba(56,189,248,0.06)",
-            border: "1px solid rgba(56,189,248,0.18)",
+            background: "rgba(34,211,238,0.06)",
+            border: "1px solid rgba(34,211,238,0.18)",
             borderRadius: 12, padding: "20px 24px",
           }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -148,7 +148,7 @@ export default function AccessibilityPage() {
                   <div style={{ color: "#64748b", fontSize: 12 }}>דוא&quot;ל לפניות נגישות</div>
                   <a
                     href="mailto:igor.shlepchenko@gmail.com"
-                    style={{ color: "#38bdf8", fontSize: 15, fontWeight: 700, textDecoration: "underline" }}
+                    style={{ color: "var(--scan-500)", fontSize: 15, fontWeight: 700, textDecoration: "underline" }}
                   >
                     igor.shlepchenko@gmail.com
                   </a>
