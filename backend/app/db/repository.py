@@ -110,52 +110,26 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                     # רגע הנעילה — קופאים על המספרים האחרונים לפני המשחק (השורה
                     # הקיימת), לעולם לא על מה שהתקבל עכשיו ב-match_data (כבר לייב).
                     await _lock_prediction_snapshot(conn, match_uuid, existing_pred, match_data)
-                # else: אין baseline לפני-משחק אמיתי (המשחק נראה לראשונה כבר לייב/גמור)
-                # — לא ממציאים אחד מנתוני-לייב, פשוט מדלגים.
+                elif final.get("home") is not None:
+                    # אין baseline לפני-משחק (המשחק נצפה לראשונה כבר לייב/גמור —
+                    # למשל המתזמן לא הגיע אליו בזמן, ראה scheduler.py fixtures[:10]).
+                    # זה כל המידע שיהיה לנו אי-פעם על המשחק הזה: שומרים אותו ונועלים
+                    # עליו מיד, במקום לדלג ולתת לדירוג ליפול ל-fallback "בית" שרירותי
+                    # (max() על שלושה אפסים) שממציא תחזית שהמנוע מעולם לא נתן בפועל.
+                    await _upsert_prediction_row(conn, match_uuid, prediction, final, mc, by_module)
+                    await _lock_prediction_snapshot(conn, match_uuid, {
+                        "final_prob_home":  final.get("home"),
+                        "final_prob_draw":  final.get("draw"),
+                        "final_prob_away":  final.get("away"),
+                        "monte_carlo_home": mc.get("home"),
+                        "monte_carlo_draw": mc.get("draw"),
+                        "monte_carlo_away": mc.get("away"),
+                        "simulations_run":  mc.get("simulations", 10000),
+                    }, match_data)
+                # else: גם match_data הנוכחי לא הצליח לחשב הסתברות (final ריק) —
+                # אין שום דבר לנעול עליו, מדלגים.
             else:
-                await conn.execute("""
-                    INSERT INTO match_predictions (
-                        match_id,
-                        prob_home_stats,  prob_away_stats,  prob_draw_stats,
-                        prob_home_env,    prob_away_env,    prob_draw_env,
-                        prob_home_human,  prob_away_human,  prob_draw_human,
-                        final_prob_home,  final_prob_away,  final_prob_draw,
-                        monte_carlo_home, monte_carlo_away, monte_carlo_draw,
-                        simulations_run,  confidence_score,
-                        key_factors,      calculated_at
-                    ) VALUES (
-                        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-                        $11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20
-                    )
-                    ON CONFLICT (match_id) DO UPDATE
-                        SET final_prob_home  = EXCLUDED.final_prob_home,
-                            final_prob_away  = EXCLUDED.final_prob_away,
-                            final_prob_draw  = EXCLUDED.final_prob_draw,
-                            confidence_score = EXCLUDED.confidence_score,
-                            key_factors      = EXCLUDED.key_factors,
-                            calculated_at    = NOW()
-                """,
-                    match_uuid,
-                    by_module.get("stats",       {}).get("home"),
-                    by_module.get("stats",       {}).get("away"),
-                    by_module.get("stats",       {}).get("draw"),
-                    by_module.get("environment", {}).get("home"),
-                    by_module.get("environment", {}).get("away"),
-                    by_module.get("environment", {}).get("draw"),
-                    by_module.get("human",       {}).get("home"),
-                    by_module.get("human",       {}).get("away"),
-                    by_module.get("human",       {}).get("draw"),
-                    final.get("home"),
-                    final.get("away"),
-                    final.get("draw"),
-                    mc.get("home"),
-                    mc.get("away"),
-                    mc.get("draw"),
-                    mc.get("simulations", 10000),
-                    prediction.get("confidence"),
-                    json.dumps(prediction.get("key_factors", [])),
-                    datetime.utcnow(),
-                )
+                await _upsert_prediction_row(conn, match_uuid, prediction, final, mc, by_module)
 
             # 3. Upsert יחסים — תמיד מעדכן אם כבר קיים (מונע שמירת יחסים ישנים).
             # ממשיך לעדכן גם אחרי נעילה — יחסי השוק הנוכחיים עדיין רלוונטיים כמידע.
@@ -243,6 +217,57 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
         _last_save_error = f"{type(e).__name__}: {e} | {traceback.format_exc()[-500:]}"
         logger.error(f"save_match_prediction failed: {_last_save_error}")
         return None
+
+
+async def _upsert_prediction_row(conn, match_uuid, prediction: dict, final: dict, mc: dict, by_module: dict) -> None:
+    """
+    כתיבת עמודות ההסתברות הגולמיות ל-match_predictions. משותף לנתיב הרגיל
+    (משחק "מתוכנן") ולנתיב ה-fallback ב-save_match_prediction (משחק שנצפה
+    לראשונה כבר לייב/גמור, בלי baseline קודם לנעול עליו).
+    """
+    await conn.execute("""
+        INSERT INTO match_predictions (
+            match_id,
+            prob_home_stats,  prob_away_stats,  prob_draw_stats,
+            prob_home_env,    prob_away_env,    prob_draw_env,
+            prob_home_human,  prob_away_human,  prob_draw_human,
+            final_prob_home,  final_prob_away,  final_prob_draw,
+            monte_carlo_home, monte_carlo_away, monte_carlo_draw,
+            simulations_run,  confidence_score,
+            key_factors,      calculated_at
+        ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+            $11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20
+        )
+        ON CONFLICT (match_id) DO UPDATE
+            SET final_prob_home  = EXCLUDED.final_prob_home,
+                final_prob_away  = EXCLUDED.final_prob_away,
+                final_prob_draw  = EXCLUDED.final_prob_draw,
+                confidence_score = EXCLUDED.confidence_score,
+                key_factors      = EXCLUDED.key_factors,
+                calculated_at    = NOW()
+    """,
+        match_uuid,
+        by_module.get("stats",       {}).get("home"),
+        by_module.get("stats",       {}).get("away"),
+        by_module.get("stats",       {}).get("draw"),
+        by_module.get("environment", {}).get("home"),
+        by_module.get("environment", {}).get("away"),
+        by_module.get("environment", {}).get("draw"),
+        by_module.get("human",       {}).get("home"),
+        by_module.get("human",       {}).get("away"),
+        by_module.get("human",       {}).get("draw"),
+        final.get("home"),
+        final.get("away"),
+        final.get("draw"),
+        mc.get("home"),
+        mc.get("away"),
+        mc.get("draw"),
+        mc.get("simulations", 10000),
+        prediction.get("confidence"),
+        json.dumps(prediction.get("key_factors", [])),
+        datetime.utcnow(),
+    )
 
 
 async def _lock_prediction_snapshot(conn, match_uuid, existing_pred, match_data: dict) -> None:
@@ -887,10 +912,22 @@ async def update_match_result(fixture_id: int, home_score: int, away_score: int)
                     was_correct       = (predicted_outcome == actual) if predicted_outcome else None
                 value_bets_locked = locked.get("value_bets") or {}
                 vb_hit = bool(was_correct) and predicted_outcome in value_bets_locked
+            elif (
+                row["final_prob_home"] is None and
+                row["final_prob_draw"] is None and
+                row["final_prob_away"] is None
+            ):
+                # אין locked_snapshot וגם אין שום הסתברות גולמית — לא נוצרה אף
+                # תחזית אמיתית למשחק הזה מעולם (למשל match_predictions לא נכתב
+                # בכלל). כמו FILTERED_SYMMETRIC: לא סופר לטובה/רעה, רק נשמר
+                # לתיעוד — במקום max() על שלושה NULL-ים שהיה מייצר "בית" שרירותי.
+                predicted_outcome = None
+                was_correct       = None
+                vb_hit            = False
             else:
-                # שורה legacy — נוצרה לפני התיקון הזה, או משחק שנצפה לראשונה כבר
-                # לייב/גמור (אין baseline לפני-משחק לקפוא עליו). ה-fallback הישן:
-                # highest-probability גולמי מתוך final_prob_*.
+                # שורה legacy — נוצרה לפני תיקון ה-locked_snapshot, אבל יש בה
+                # הסתברויות אמיתיות. ה-fallback הישן: highest-probability גולמי
+                # מתוך final_prob_*.
                 probs = {
                     "home": row["final_prob_home"] or 0,
                     "draw": row["final_prob_draw"] or 0,
