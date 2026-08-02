@@ -112,7 +112,7 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                     await _lock_prediction_snapshot(conn, match_uuid, existing_pred, match_data)
                 elif final.get("home") is not None:
                     # אין baseline לפני-משחק (המשחק נצפה לראשונה כבר לייב/גמור —
-                    # למשל המתזמן לא הגיע אליו בזמן, ראה scheduler.py fixtures[:10]).
+                    # למשל המתזמן לא הגיע אליו בזמן, ראה scheduler.py MAX_FIXTURES_PER_TICK).
                     # זה כל המידע שיהיה לנו אי-פעם על המשחק הזה: שומרים אותו ונועלים
                     # עליו מיד, במקום לדלג ולתת לדירוג ליפול ל-fallback "בית" שרירותי
                     # (max() על שלושה אפסים) שממציא תחזית שהמנוע מעולם לא נתן בפועל.

@@ -25,6 +25,18 @@ logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
 
+# Peak concurrent relevant fixtures across the 17 whitelisted leagues, not a
+# round guess: Champions/Europa/Conference League nights alone can have 8
+# simultaneous kickoffs, and Premier League + Championship both cluster at
+# 15:00 UK on Saturdays — 12-15+ overlapping fixtures is a normal peak, not
+# an edge case. A fixture cut from a tick never gets a pre-kickoff prediction
+# baseline saved (app/db/repository.py::save_match_prediction only writes one
+# when it sees the match; a later-live sighting can't reconstruct it), so it
+# grades as "no prediction" instead of a real pick. Per-fixture API calls
+# (odds, live xG) are cached 60min+, so raising this costs extra calls once
+# per newly-seen fixture, not once per 5-minute tick.
+MAX_FIXTURES_PER_TICK = 30
+
 
 def _build_jobstores() -> dict:
     """Redis jobstore — fallback ל-memory אם Redis לא זמין"""
@@ -64,7 +76,13 @@ async def job_fetch_live_matches():
             logger.info("[Scheduler] No fixtures found")
             return
 
-        fixtures = fixtures[:10]  # max 10 משחקים לחסוך קריאות
+        if len(fixtures) > MAX_FIXTURES_PER_TICK:
+            logger.warning(
+                f"[Scheduler] {len(fixtures)} relevant fixtures this tick — "
+                f"capping at {MAX_FIXTURES_PER_TICK}, "
+                f"{len(fixtures) - MAX_FIXTURES_PER_TICK} won't get analyzed this cycle"
+            )
+        fixtures = fixtures[:MAX_FIXTURES_PER_TICK]
 
         cities      = list(dict.fromkeys(
             f.get("fixture", {}).get("venue", {}).get("city") or "London"
