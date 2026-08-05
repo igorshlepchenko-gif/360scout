@@ -96,7 +96,10 @@ TEAM_NAME_MAP = {
 # with no meaningful value — skip it even when confidence is high.
 # 2026-08-03: raised 1.40 → 1.60 for a multi-day test (rollback point tagged
 # pre-confidence-odds-filter-2026-08-03).
-MIN_MARKET_ODDS: float = 1.60
+# 2026-08-05: relaxed 1.60 → 1.40 — combined with MIN_CONFIDENCE=80 the 1.60
+# floor let through 0/17 matches over 2 days (near-certainty and high-confidence
+# correlate, so stacking both was too aggressive). Confidence floor stays at 80.
+MIN_MARKET_ODDS: float = 1.40
 
 # Minimum prediction.confidence (0-100 scale, see prediction_model.py's
 # `confidence = combined * 70 + 20`) for a match to be shown at all.
