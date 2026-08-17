@@ -94,17 +94,11 @@ TEAM_NAME_MAP = {
 # Minimum decimal odds for the market's shortest-priced outcome.
 # If the heavy favourite is below this floor, the match is a near-certainty
 # with no meaningful value — skip it even when confidence is high.
-# 2026-08-03: raised 1.40 → 1.60 for a multi-day test (rollback point tagged
-# pre-confidence-odds-filter-2026-08-03).
-# 2026-08-05: relaxed 1.60 → 1.40 — combined with MIN_CONFIDENCE=80 the 1.60
-# floor let through 0/17 matches over 2 days (near-certainty and high-confidence
-# correlate, so stacking both was too aggressive). Confidence floor stays at 80.
+# 2026-08-17: sole display filter now. A combined confidence>=80% + odds test
+# ran 2026-08-03–17 and never passed a single live match at either odds floor
+# tried (1.60, then 1.40) — the confidence filter was removed as a result.
+# Rollback tag if needed: pre-confidence-odds-filter-2026-08-03.
 MIN_MARKET_ODDS: float = 1.40
-
-# Minimum prediction.confidence (0-100 scale, see prediction_model.py's
-# `confidence = combined * 70 + 20`) for a match to be shown at all.
-# 2026-08-03: introduced for the same test as MIN_MARKET_ODDS above.
-MIN_CONFIDENCE: float = 80.0
 
 
 def is_premium_league(fixture: dict) -> bool:
@@ -1407,16 +1401,6 @@ async def get_live_matches(background_tasks: BackgroundTasks, days: int = 1, lim
     logger.info(
         f"Odds filter: {before_odds_filter} → {len(matches)} matches "
         f"(removed {before_odds_filter - len(matches)} below {MIN_MARKET_ODDS}x)"
-    )
-
-    # ── Confidence threshold filter ──────────────────────────────────────────
-    # 2026-08-03 test: only show picks the engine is highly confident about.
-    # Rollback point: git tag pre-confidence-odds-filter-2026-08-03.
-    before_conf_filter = len(matches)
-    matches = [m for m in matches if (m.get("prediction", {}).get("confidence") or 0) >= MIN_CONFIDENCE]
-    logger.info(
-        f"Confidence filter: {before_conf_filter} → {len(matches)} matches "
-        f"(removed {before_conf_filter - len(matches)} below {MIN_CONFIDENCE}%)"
     )
 
     # מיין — value bets קודם, אחר כך לפי confidence
