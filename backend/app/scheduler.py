@@ -37,6 +37,34 @@ _scheduler: AsyncIOScheduler | None = None
 # per newly-seen fixture, not once per 5-minute tick.
 MAX_FIXTURES_PER_TICK = 30
 
+# save_match_prediction() freezes/grades whatever was LAST saved before a fixture
+# went live — for the common case (a pre-match row already exists) that's the
+# pre-match snapshot itself, not anything recomputed at the live transition. So
+# it's the quality of the pre-match saves, not just the live-transition save,
+# that ends up graded. Fixtures within this many minutes of kickoff (plus any
+# fixture already live/finished with no pre-match baseline at all) get the fully
+# enriched analysis (real team stats, H2H, lineups, referee data, injuries)
+# instead of the fixture+odds+weather-only path. Most of the enrichment
+# sub-fetches are cached (team stats 6h, H2H 6h, referee 24h), so repeating this
+# across the few ticks inside the window is cheap — only lineups/injuries
+# actually refetch live, which is also the freshest data available close to
+# kickoff (lineups are typically announced ~60min before).
+PRE_KICKOFF_ENRICH_MINUTES = 120
+
+
+def _minutes_to_kickoff(fixture: dict) -> float | None:
+    """Minutes from now until this fixture's kickoff, or None if unparseable."""
+    date_str = fixture.get("fixture", {}).get("date")
+    if not date_str:
+        return None
+    try:
+        kickoff = datetime.fromisoformat(date_str)
+        if kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=timezone.utc)
+        return (kickoff - datetime.now(timezone.utc)).total_seconds() / 60.0
+    except Exception:
+        return None
+
 
 def _build_jobstores() -> dict:
     """Redis jobstore — fallback ל-memory אם Redis לא זמין"""
@@ -67,7 +95,7 @@ async def job_fetch_live_matches():
         )
         from app.api.routes.live import (
             fetch_todays_fixtures, fetch_all_odds, fetch_odds_apisports,
-            fetch_weather_for_city, build_match_analysis_sync,
+            fetch_weather_for_city, build_match_analysis_sync, build_match_analysis,
             fetch_fixture_live_xg, _default_weather,
         )
 
@@ -146,7 +174,32 @@ async def job_fetch_live_matches():
                 weather      = city_weather.get(city, _default_weather())
                 fid          = f.get("fixture", {}).get("id")
                 fixture_odds = apisports_map.get(fid)
-                result       = build_match_analysis_sync(f, all_odds, weather, fixture_odds=fixture_odds)
+
+                # Decide whether this fixture's save this tick is worth full
+                # enrichment (see PRE_KICKOFF_ENRICH_MINUTES above). Already-locked
+                # fixtures never need it again — nothing written for them changes
+                # what's graded.
+                _status        = f.get("_status", "scheduled")
+                already_locked = bool(_locked_snapshots.get(fid))
+                needs_rich_enrichment = False
+                if not already_locked:
+                    if _status in ("live", "finished"):
+                        needs_rich_enrichment = True
+                    elif _status == "scheduled":
+                        _mins = _minutes_to_kickoff(f)
+                        needs_rich_enrichment = _mins is not None and 0 <= _mins <= PRE_KICKOFF_ENRICH_MINUTES
+
+                if needs_rich_enrichment:
+                    try:
+                        result = await build_match_analysis(f, all_odds)
+                    except Exception as enrich_err:
+                        logger.warning(
+                            f"[Scheduler] Rich enrichment failed for fixture {fid}, "
+                            f"falling back to lite analysis: {enrich_err}"
+                        )
+                        result = build_match_analysis_sync(f, all_odds, weather, fixture_odds=fixture_odds)
+                else:
+                    result = build_match_analysis_sync(f, all_odds, weather, fixture_odds=fixture_odds)
                 # Inject real in-match xG when available (live fixtures only)
                 live_xg = live_xg_map.get(fid)
                 if result is not None and live_xg:
