@@ -240,9 +240,22 @@ async def _upsert_prediction_row(conn, match_uuid, prediction: dict, final: dict
             $11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20
         )
         ON CONFLICT (match_id) DO UPDATE
-            SET final_prob_home  = EXCLUDED.final_prob_home,
+            SET prob_home_stats  = EXCLUDED.prob_home_stats,
+                prob_away_stats  = EXCLUDED.prob_away_stats,
+                prob_draw_stats  = EXCLUDED.prob_draw_stats,
+                prob_home_env    = EXCLUDED.prob_home_env,
+                prob_away_env    = EXCLUDED.prob_away_env,
+                prob_draw_env    = EXCLUDED.prob_draw_env,
+                prob_home_human  = EXCLUDED.prob_home_human,
+                prob_away_human  = EXCLUDED.prob_away_human,
+                prob_draw_human  = EXCLUDED.prob_draw_human,
+                final_prob_home  = EXCLUDED.final_prob_home,
                 final_prob_away  = EXCLUDED.final_prob_away,
                 final_prob_draw  = EXCLUDED.final_prob_draw,
+                monte_carlo_home = EXCLUDED.monte_carlo_home,
+                monte_carlo_away = EXCLUDED.monte_carlo_away,
+                monte_carlo_draw = EXCLUDED.monte_carlo_draw,
+                simulations_run  = EXCLUDED.simulations_run,
                 confidence_score = EXCLUDED.confidence_score,
                 key_factors      = EXCLUDED.key_factors,
                 calculated_at    = NOW()
