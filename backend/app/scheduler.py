@@ -44,12 +44,18 @@ MAX_FIXTURES_PER_TICK = 30
 # that ends up graded. Fixtures within this many minutes of kickoff (plus any
 # fixture already live/finished with no pre-match baseline at all) get the fully
 # enriched analysis (real team stats, H2H, lineups, referee data, injuries)
-# instead of the fixture+odds+weather-only path. Most of the enrichment
-# sub-fetches are cached (team stats 6h, H2H 6h, referee 24h), so repeating this
-# across the few ticks inside the window is cheap — only lineups/injuries
-# actually refetch live, which is also the freshest data available close to
-# kickoff (lineups are typically announced ~60min before).
-PRE_KICKOFF_ENRICH_MINUTES = 120
+# instead of the fixture+odds+weather-only path.
+#
+# 2026-09-14: originally 120 — turned out NOT cheap. Lineups/injuries have no
+# (or a short) cache, so every 5-min tick inside the window re-hits those APIs
+# per fixture, and this blew through API-Football's daily request quota within
+# hours of each reset (confirmed live: "request limit for the day" errors,
+# which is the SAME quota the public site's own serving path draws from).
+# Narrowed to 20min — lineups are typically announced ~60min before kickoff so
+# they're already available by then, and this still gives ~4 ticks of retry
+# margin before kickoff at the 5-min tick cadence, for a ~6x cut in enrichment
+# calls per fixture vs. 120min. Revisit once the quota picture is clearer.
+PRE_KICKOFF_ENRICH_MINUTES = 20
 
 
 def _minutes_to_kickoff(fixture: dict) -> float | None:
