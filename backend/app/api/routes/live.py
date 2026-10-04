@@ -671,6 +671,12 @@ def extract_xg(stats: dict, direction: str = "for") -> float:
 
 
 def calculate_injury_impact(injuries: list, team_id: int) -> float:
+    """
+    Count-based squad impact from API-Football /injuries. NOT wired into
+    build_match_analysis_sync since 2026-10-04: the items have no `position`, so every
+    player weighs 0.4 and 3 listed players hit the 1.0 cap. Kept only as a reference
+    for a future replacement that has player importance data and has been validated.
+    """
     POSITION_IMPACT = {"Goalkeeper": 0.7, "Defender": 0.55, "Midfielder": 0.4, "Attacker": 0.6, "Forward": 0.6}
     team_injuries = [i for i in injuries if i.get("team", {}).get("id") == team_id]
     total = sum(POSITION_IMPACT.get(i.get("player", {}).get("position", "Midfielder"), 0.35)
@@ -895,8 +901,16 @@ def build_match_analysis_sync(
         form_away = 0.4 if away.get("winner") is True else (-0.3 if away.get("winner") is False else 0.0)
 
     injuries    = injuries if isinstance(injuries, list) else []
-    home_injury = calculate_injury_impact(injuries, home.get("id", 0))
-    away_injury = calculate_injury_impact(injuries, away.get("id", 0))
+    # /injuries is reported (count in the response) but no longer fed to the engine: its
+    # items carry no position/importance, so the count-based calculate_injury_impact()
+    # saturated at 1.0 for nearly every team (36/43 sides sampled 2026-10-04) and tripped
+    # the auto squad-rotation flag for all of them (43/43). The rotation adjustment then
+    # turned the displayed recommendation into a "Draw" value pick with a phantom 20%+
+    # edge -- even for a 1.70 home favourite -- while the scheduler's frozen pick (no
+    # injuries) never saw any of it. The lineup check below can still raise these, capped
+    # at 0.4 (under the 0.5 key-injury and 0.45 rotation thresholds).
+    home_injury = 0.0
+    away_injury = 0.0
     city        = fix.get("venue", {}).get("city", "") or ""
 
     # ── Lineup processing ────────────────────────────────────────────────────
