@@ -129,7 +129,18 @@ async def save_match_prediction(match_data: dict) -> Optional[str]:
                 # else: גם match_data הנוכחי לא הצליח לחשב הסתברות (final ריק) —
                 # אין שום דבר לנעול עליו, מדלגים.
             else:
-                await _upsert_prediction_row(conn, match_uuid, prediction, final, mc, by_module)
+                # "scheduled" — but the tag can outlive the kickoff by a tick or two
+                # (fetch_todays_fixtures caches the NS list for 60 min, and the live
+                # feed lags the real kickoff). A write then would overwrite the last
+                # genuinely pre-match row — the one _lock_prediction_snapshot is about
+                # to freeze — with a post-kickoff recompute, so keep the baseline.
+                # No baseline yet (first sighting) → still write, nothing to protect.
+                _has_baseline = (
+                    existing_pred is not None and existing_pred["final_prob_home"] is not None
+                )
+                _kickoff_passed = match_date is not None and match_date <= datetime.now(ISRAEL_TZ)
+                if not (_has_baseline and _kickoff_passed):
+                    await _upsert_prediction_row(conn, match_uuid, prediction, final, mc, by_module)
 
             # 3. Upsert יחסים — תמיד מעדכן אם כבר קיים (מונע שמירת יחסים ישנים).
             # ממשיך לעדכן גם אחרי נעילה — יחסי השוק הנוכחיים עדיין רלוונטיים כמידע.
