@@ -497,8 +497,10 @@ async def job_cleanup_cache():
         if not pool:
             return
         async with pool.acquire() as conn:
+            # Postgres rejects aggregates in RETURNING, so count via a CTE.
             deleted = await conn.fetchval(
-                "DELETE FROM api_cache WHERE expires_at < NOW() RETURNING count(*)"
+                "WITH d AS (DELETE FROM api_cache WHERE expires_at < NOW() RETURNING 1) "
+                "SELECT count(*) FROM d"
             )
         logger.info(f"[Scheduler] Cleaned {deleted or 0} expired cache entries")
     except Exception as e:
