@@ -57,6 +57,18 @@ MAX_FIXTURES_PER_TICK = 30
 # calls per fixture vs. 120min. Revisit once the quota picture is clearer.
 PRE_KICKOFF_ENRICH_MINUTES = 20
 
+# 2026-10-04: rich enrichment is OFF by default. Measured on the 328 graded matches
+# locked 2026-09-02 → 10-02: fixtures whose frozen row came from the lite path hit
+# 48.0% vs 46.5% from the rich path (p=0.78) — no detectable benefit — and in lite
+# mode the engine already follows the market favourite on 91-99% of its picks.
+# Switching it back on as-is would also resurrect two known problems:
+# calculate_injury_impact() saturates at 3 listed players (API-Football's /injuries
+# items carry no `position` field, so every player weighs 0.4), and the pre-match
+# row used to be overwritten by a lite post-kickoff write (now guarded in
+# repository.save_match_prediction). Set SCHEDULER_RICH_ENRICHMENT=1 to re-enable,
+# ideally alongside a shadow comparison against the lite path.
+RICH_ENRICHMENT_ENABLED = os.getenv("SCHEDULER_RICH_ENRICHMENT", "0") == "1"
+
 
 def _minutes_to_kickoff(fixture: dict) -> float | None:
     """Minutes from now until this fixture's kickoff, or None if unparseable."""
@@ -182,13 +194,13 @@ async def job_fetch_live_matches():
                 fixture_odds = apisports_map.get(fid)
 
                 # Decide whether this fixture's save this tick is worth full
-                # enrichment (see PRE_KICKOFF_ENRICH_MINUTES above). Already-locked
-                # fixtures never need it again — nothing written for them changes
-                # what's graded.
+                # enrichment (see RICH_ENRICHMENT_ENABLED / PRE_KICKOFF_ENRICH_MINUTES
+                # above). Already-locked fixtures never need it again — nothing
+                # written for them changes what's graded.
                 _status        = f.get("_status", "scheduled")
                 already_locked = bool(_locked_snapshots.get(fid))
                 needs_rich_enrichment = False
-                if not already_locked:
+                if RICH_ENRICHMENT_ENABLED and not already_locked:
                     if _status in ("live", "finished"):
                         needs_rich_enrichment = True
                     elif _status == "scheduled":
